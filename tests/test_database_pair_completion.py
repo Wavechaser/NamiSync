@@ -17,25 +17,21 @@ from time import monotonic, sleep
 import pytest
 
 from namisync.core.planning import OperationKind
-from namisync.db.claims import hold_maintenance_claims
 from namisync.db.contracts import probe_database_file_contract
-from namisync.db.migration import migrate_database
 from namisync.db.schema import DatabaseMigrationRequired, initialize_history, initialize_ledger
-import namisync.workflows.database_pair as database_pair
 from namisync.workflows.database_pair import (
     CreatedDatabase,
     DatabasePairRefusedError,
     DatabasePairState,
-    complete_database_pair,
+    upgrade_database_pair,
     ensure_database_pair,
-    migrate_database_pair,
     validate_database_pair,
 )
 from namisync.workflows.runtime import LocalWorkflowRuntime
 
 from _child_process import WAIT_SECONDS, Child
 from _db_fixtures import NOW, file_stat, operation, plan, seed_history_run, setup_recorder
-from _released_fixture import carried_rows, copy_released_pair, copy_released_role
+from _released_fixture import carried_rows, copy_released_role
 
 
 pytestmark = pytest.mark.skipif(os.name != "nt", reason="Windows file sharing and claims")
@@ -78,7 +74,7 @@ elif stage == "image-written":
 elif stage == "published":
     stop(pair, "create_database", after=True)
 print("ready", flush=True)
-result = pair.complete_database_pair(ledger, history)
+result = pair.upgrade_database_pair(ledger, history)
 print("finished " + result.contract.state, flush=True)
 """
 _HOLD = r"""
@@ -133,10 +129,6 @@ def _instance(ledger: Path) -> str:
     return _read(ledger, "SELECT value FROM schema_metadata WHERE key = 'instance_id'")[0][0]
 
 
-def _stamps(history: Path) -> list[str | None]:
-    return [row[0] for row in _read(history, "SELECT ledger_instance_id FROM history_runs")]
-
-
 def _membership(ledger: Path, history: Path) -> dict[str, str]:
     with closing(LocalWorkflowRuntime(ledger, history)) as runtime:
         return {run.run_token: run.ledger_membership for run in runtime.list_history(50)}
@@ -161,7 +153,7 @@ def _complete_eventually(ledger: Path, history: Path):
     # A killed holder's locks and handles may outlive it briefly on Windows.
     deadline = monotonic() + WAIT_SECONDS
     while True:
-        result = complete_database_pair(ledger, history)
+        result = upgrade_database_pair(ledger, history)
         if result.contract.reason != "database-in-use" or monotonic() > deadline:
             return result
         sleep(0.05)
@@ -214,7 +206,7 @@ def test_orphan_sidecars_of_the_missing_role_stay_inconsistent(
 
     contract = validate_database_pair(ledger, history)
     assert (contract.state, contract.reason) == (DatabasePairState.REFUSED, "inconsistent-pair")
-    completion = complete_database_pair(ledger, history)
+    completion = upgrade_database_pair(ledger, history)
     assert (completion.contract, completion.created) == (contract, ())
     assert _files(tmp_path) == files
 
@@ -232,7 +224,7 @@ def test_a_lone_main_with_its_own_journal_stays_inconsistent(
 
     contract = validate_database_pair(ledger, history)
     assert (contract.state, contract.reason) == (DatabasePairState.REFUSED, "inconsistent-pair")
-    completion = complete_database_pair(ledger, history)
+    completion = upgrade_database_pair(ledger, history)
     assert (completion.contract, completion.created) == (contract, ())
     assert _files(tmp_path) == files
 
@@ -253,8 +245,26 @@ def test_a_lone_database_needing_a_reset_names_only_itself_and_where_the_other_w
     assert f"archive or delete the ledger database file {ledger} and its" in contract.guidance
     assert f"The history database is missing at {history}" in contract.guidance
     assert "both" not in contract.guidance
-    assert complete_database_pair(ledger, history).created == ()
+    assert upgrade_database_pair(ledger, history).created == ()
     assert _files(tmp_path) == files
+
+
+def test_upgrade_returns_a_fresh_or_ready_pair_unchanged_without_a_claim(tmp_path: Path) -> None:
+    fresh_ledger, fresh_history = tmp_path / "fresh" / "ledger.db", tmp_path / "fresh" / "history.db"
+    result = upgrade_database_pair(fresh_ledger, fresh_history)
+    assert (result.contract.state, result.migrated, result.created) == (
+        DatabasePairState.FRESH, (), (),
+    )
+    assert not (tmp_path / "fresh").exists()
+
+    ledger = initialize_ledger(tmp_path / "ledger.db")
+    history = initialize_history(tmp_path / "history.db")
+    before = sorted(path.name for path in tmp_path.iterdir())
+    result = upgrade_database_pair(ledger, history)
+    assert (result.contract.state, result.migrated, result.created) == (
+        DatabasePairState.READY, (), (),
+    )
+    assert sorted(path.name for path in tmp_path.iterdir()) == before
 
 
 # --- a lone ledger -------------------------------------------------------------
@@ -265,7 +275,7 @@ def test_lone_current_ledger_gains_a_history_and_is_left_as_it_was(tmp_path: Pat
     history = tmp_path / "history.db"
     before = _bytes(ledger)
 
-    result = complete_database_pair(ledger, history)
+    result = upgrade_database_pair(ledger, history)
 
     assert result.contract.state is DatabasePairState.READY
     assert (result.created, result.migrated) == ((CreatedDatabase("history", history),), ())
@@ -275,7 +285,7 @@ def test_lone_current_ledger_gains_a_history_and_is_left_as_it_was(tmp_path: Pat
     assert not any(Path(f"{history}{suffix}").exists() for suffix in ("-wal", "-journal"))
     assert _read(history, "SELECT count(*) FROM history_runs") == [(0,)]
     assert not list(tmp_path.glob("*.tmp"))
-    again = complete_database_pair(ledger, history)
+    again = upgrade_database_pair(ledger, history)
     assert (again.contract.state, again.created) == (DatabasePairState.READY, ())
 
 
@@ -287,7 +297,7 @@ def test_lone_released_ledger_migrates_and_gains_a_new_history(tmp_path: Path) -
     assert (contract.state, contract.reason) == (DatabasePairState.INCOMPLETE, "history-missing")
     assert "written by NamiSync 0.1.0 and is updated first" in contract.guidance
 
-    result = complete_database_pair(ledger, history)
+    result = upgrade_database_pair(ledger, history)
 
     assert result.contract.state is DatabasePairState.READY
     assert result.created == (CreatedDatabase("history", history),)
@@ -297,17 +307,15 @@ def test_lone_released_ledger_migrates_and_gains_a_new_history(tmp_path: Path) -
     assert (role, version) == ("ledger", 4) and backup.exists()
     assert carried_rows(ledger, tmp_path / "new", history=False) == old
     assert _INSTANCE.fullmatch(_instance(ledger))
-    # The kept ledger records no boundary, only its own migration's marker.
-    assert _read(ledger, "SELECT kind, instance_id FROM ledger_lineage") == [
-        ("migrated-released", None),
-    ]
+    # The kept ledger records no boundary.
+    assert _read(ledger, "SELECT kind, instance_id FROM ledger_lineage") == []
     assert _read(history, "SELECT count(*) FROM history_runs") == [(0,)]
 
 
 # --- a lone History ------------------------------------------------------------
 
 
-def test_lone_released_history_migrates_unstamped_beside_a_new_ledger(tmp_path: Path) -> None:
+def test_lone_released_history_migrates_then_gains_a_new_ledger(tmp_path: Path) -> None:
     data = tmp_path / "data"
     history = copy_released_role(data, history=True)
     ledger = data / "ledger.db"
@@ -317,7 +325,7 @@ def test_lone_released_history_migrates_unstamped_beside_a_new_ledger(tmp_path: 
     assert "runs are shown as belonging to an earlier ledger" in contract.guidance
     assert "written by NamiSync 0.1.0 and is updated first" in contract.guidance
 
-    result = complete_database_pair(ledger, history)
+    result = upgrade_database_pair(ledger, history)
 
     assert result.contract.state is DatabasePairState.READY, result.contract
     assert result.created == (CreatedDatabase("ledger", ledger),)
@@ -325,12 +333,11 @@ def test_lone_released_history_migrates_unstamped_beside_a_new_ledger(tmp_path: 
         ("history", 8),
     ]
     assert carried_rows(history, tmp_path / "new", history=True) == old
-    stamps = _stamps(history)
-    assert len(stamps) == 15 and set(stamps) == {None}
     _assert_new_ledger(ledger)
-    membership = _membership(ledger, history)
-    assert len(membership) == 15 and set(membership.values()) == {"earlier"}
     assert not list(data.glob("*.create-*"))
+    # The conservative reading: this call migrated no ledger, so no run joins
+    # the ledger created for it.
+    assert set(_membership(ledger, history).values()) == {"earlier"}
 
 
 def test_lone_current_history_gains_a_new_ledger_and_is_left_as_it_was(tmp_path: Path) -> None:
@@ -340,45 +347,13 @@ def test_lone_current_history_gains_a_new_ledger_and_is_left_as_it_was(tmp_path:
     ledger = tmp_path / "ledger.db"
     before = _bytes(history)
 
-    result = complete_database_pair(ledger, history)
+    result = upgrade_database_pair(ledger, history)
 
     assert result.contract.state is DatabasePairState.READY
     assert (result.created, result.migrated) == ((CreatedDatabase("ledger", ledger),), ())
     assert _bytes(history) == before
     assert _assert_new_ledger(ledger) != "a" * 32
     assert _membership(ledger, history) == {"stamped": "earlier", "unstamped": "earlier"}
-
-
-def test_a_stamp_and_no_ledger_cannot_be_combined_and_a_released_pair_is_stamped(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    ledger, history = copy_released_pair(tmp_path / "data")
-    with hold_maintenance_claims(ledger, history) as claims:
-        for keywords in (
-            {"history": True},
-            {"history": True, "without_ledger": True, "ledger_instance_id": "a" * 32},
-            {"history": False, "without_ledger": True},
-        ):
-            with pytest.raises(ValueError):
-                migrate_database(
-                    ledger if not keywords["history"] else history,
-                    claim=claims.ledger if not keywords["history"] else claims.history,
-                    **keywords,
-                )
-    calls: list[dict] = []
-    original = database_pair.migrate_database
-
-    def spy(*arguments, **keywords):
-        calls.append(keywords)
-        return original(*arguments, **keywords)
-
-    monkeypatch.setattr(database_pair, "migrate_database", spy)
-    assert migrate_database_pair(ledger, history).contract.state is DatabasePairState.READY
-    # Beside its own migrated ledger the History is stamped, not unstamped.
-    assert len(calls) == 2
-    assert calls[1]["ledger_instance_id"] == _instance(ledger)
-    assert calls[1]["without_ledger"] is False
-    assert set(_stamps(history)) == {_instance(ledger)}
 
 
 # --- refusals ------------------------------------------------------------------
@@ -404,7 +379,7 @@ def test_completion_refuses_while_another_process_holds_the_pair(
         assert child.read() == "held"
         before = _bytes(present)
         files = sorted(path.name for path in data.iterdir() if not path.name.endswith(".claim"))
-        result = complete_database_pair(ledger, history)
+        result = upgrade_database_pair(ledger, history)
         assert (result.contract.state, result.contract.reason) == (
             DatabasePairState.REFUSED, "database-in-use",
         )
@@ -429,7 +404,7 @@ def test_a_refused_claim_leaves_no_new_folder_and_a_later_call_creates_it(
     child = Child(_HOLD, "shared-claim", str(ledger))
     try:
         assert child.read() == "held"
-        result = complete_database_pair(ledger, history)
+        result = upgrade_database_pair(ledger, history)
         assert (result.contract.reason, result.created) == ("database-in-use", ())
         assert not (tmp_path / "new").exists()
     finally:
@@ -446,7 +421,7 @@ def test_a_reader_beside_a_current_lone_ledger_does_not_stop_completion(tmp_path
     child = Child(_HOLD, "sqlite-reader", str(ledger))
     try:
         assert child.read() == "held"
-        result = complete_database_pair(ledger, history)
+        result = upgrade_database_pair(ledger, history)
     finally:
         child.kill()
     assert result.contract.state is DatabasePairState.READY
@@ -467,7 +442,7 @@ def test_a_file_that_takes_the_missing_name_is_never_replaced(
         history.write_bytes(b"appeared meanwhile")
 
     monkeypatch.setattr(maintenance, "_write_new_image", write_then_occupy)
-    result = complete_database_pair(ledger, history)
+    result = upgrade_database_pair(ledger, history)
 
     assert (result.contract.reason, result.created) == ("creation-failed", ())
     assert "none was created" in result.contract.guidance
@@ -527,8 +502,6 @@ def test_killed_completion_leaves_the_database_missing_or_complete_and_a_rerun_f
         assert (contract.state, contract.reason) == (
             DatabasePairState.INCOMPLETE, f"{'ledger' if present_history else 'history'}-missing",
         )
-    if present_history:
-        assert set(_stamps(history)) == {None}
     temporaries = sorted(path.name for path in data.glob("*.create-*"))
     assert len(list(data.glob("*.create-*.tmp"))) == (
         1 if stage in ("mid-image", "image-written") else 0
@@ -542,8 +515,6 @@ def test_killed_completion_leaves_the_database_missing_or_complete_and_a_rerun_f
     assert result.contract.state is DatabasePairState.READY, result.contract
     assert carried_rows(present, tmp_path / "finished", history=present_history) == old
     if present_history:
-        assert set(_stamps(history)) == {None}
         _assert_new_ledger(ledger)
-        assert set(_membership(ledger, history).values()) == {"earlier"}
     # A crash's temporary is neither removed nor reused.
     assert sorted(path.name for path in data.glob("*.create-*")) == temporaries

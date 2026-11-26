@@ -9,11 +9,10 @@ from __future__ import annotations
 
 from contextlib import closing
 from dataclasses import replace
-from datetime import datetime, timedelta, timezone
+from datetime import timedelta
 import os
 from pathlib import Path
 import re
-import shutil
 import sqlite3
 from time import monotonic, sleep
 
@@ -34,16 +33,13 @@ from namisync.db.schema import (
 )
 from namisync.db.writer import TokenConflictError
 from namisync.core.formats import FORMAT_VERSIONS
-from namisync.db.claims import hold_maintenance_claims
-from namisync.db.migration import migrate_database
 import namisync.workflows.database_pair as database_pair
 from namisync.workflows.database_pair import (
     DatabasePairContract,
     DatabasePairRefusedError,
     DatabasePairState,
-    complete_database_pair,
+    upgrade_database_pair,
     ensure_database_pair,
-    migrate_database_pair,
     validate_database_pair,
 )
 from namisync.workflows.runtime import LocalWorkflowRuntime
@@ -110,7 +106,7 @@ elif stage == "committed":
 elif stage == "between":
     stop(pair, "migrate_database", 2, after=False)
 print("ready", flush=True)
-result = pair.migrate_database_pair(ledger, history)
+result = pair.upgrade_database_pair(ledger, history)
 print("finished " + result.contract.state, flush=True)
 """
 _HOLD = r"""
@@ -174,13 +170,13 @@ def _migrate_eventually(ledger: Path, history: Path):
     # A killed holder's locks and handles may outlive it briefly on Windows.
     deadline = monotonic() + WAIT_SECONDS
     while True:
-        result = migrate_database_pair(ledger, history)
+        result = upgrade_database_pair(ledger, history)
         if result.contract.reason != "database-in-use" or monotonic() > deadline:
             return result
         sleep(0.05)
 
 
-def _assert_migrated(ledger: Path, history: Path) -> str:
+def _assert_migrated(ledger: Path, history: Path, *, stamped: bool = True) -> str:
     assert _classify(ledger, history=False) == "current"
     assert _classify(history, history=True) == "current"
     ledger_metadata = _metadata(ledger)
@@ -196,7 +192,7 @@ def _assert_migrated(ledger: Path, history: Path) -> str:
     }
     with closing(sqlite3.connect(history.as_uri() + "?mode=ro", uri=True)) as connection:
         stamps = {row[0] for row in connection.execute("SELECT ledger_instance_id FROM history_runs")}
-    assert stamps == {instance_id}
+    assert stamps == ({instance_id} if stamped else {None})
     return instance_id
 
 
@@ -204,7 +200,7 @@ def test_released_pair_migrates_with_every_row_and_id_kept(tmp_path: Path) -> No
     ledger, history = copy_released_pair(tmp_path / "data")
     old = _rows(ledger, history, tmp_path / "old")
 
-    result = migrate_database_pair(ledger, history)
+    result = upgrade_database_pair(ledger, history)
 
     assert result.contract.state is DatabasePairState.READY
     assert sorted(path.parent for path in result.backups) == [ledger.parent] * 2
@@ -235,7 +231,7 @@ def test_released_pair_migrates_with_every_row_and_id_kept(tmp_path: Path) -> No
             )
 
     before = _entries(ledger.parent)
-    again = migrate_database_pair(ledger, history)
+    again = upgrade_database_pair(ledger, history)
     assert (again.contract.state, again.backups) == (DatabasePairState.READY, ())
     assert _entries(ledger.parent) == before
 
@@ -254,7 +250,7 @@ def test_released_pair_migrates_with_every_row_and_id_kept(tmp_path: Path) -> No
 
 def test_migrated_history_pages_and_every_stored_hash_still_verifies(tmp_path: Path) -> None:
     ledger, history = copy_released_pair(tmp_path / "data")
-    assert migrate_database_pair(ledger, history).contract.state is DatabasePairState.READY
+    assert upgrade_database_pair(ledger, history).contract.state is DatabasePairState.READY
 
     with HistoryRepository(history) as repository:
         summaries = repository.list_summaries(50)
@@ -351,7 +347,7 @@ def test_recorder_replays_existing_run_and_operation_tokens_after_migration(
     with pytest.raises(DatabaseMigrationRequired):
         probe_database_file_contract(ledger, history=False)
 
-    assert migrate_database_pair(ledger, history).contract.state is DatabasePairState.READY
+    assert upgrade_database_pair(ledger, history).contract.state is DatabasePairState.READY
     assert carried_rows(ledger, tmp_path / "migrated", history=False) == carried_rows(
         setup.recorder.path, tmp_path / "recorded-rows", history=False,
     )
@@ -404,7 +400,9 @@ def test_killed_migration_leaves_old_or_new_and_the_next_call_finishes(
     assert result.contract.state is DatabasePairState.READY
     assert all(_BACKUP.fullmatch(path.name) for path in result.backups)
     assert _rows(ledger, history, tmp_path / "finished") == old
-    _assert_migrated(ledger, history)
+    # History is stamped only by the call that migrated its ledger: a pair the
+    # kill left with the ledger done and History not finishes unstamped.
+    _assert_migrated(ledger, history, stamped=history_done or not ledger_done)
     # A crash's temporary is neither removed nor taken for a backup.
     assert sorted(path.name for path in ledger.parent.glob("*.migration-*.tmp")) == temporaries
 
@@ -427,7 +425,7 @@ def test_migration_refuses_while_another_process_holds_either_database(
     try:
         assert child.read() == "held"
         before = _bytes(ledger, history)
-        result = migrate_database_pair(ledger, history)
+        result = upgrade_database_pair(ledger, history)
         assert result.contract.state is DatabasePairState.REFUSED
         assert result.contract.reason == "database-in-use"
         assert result.contract.reset_direction is None
@@ -466,7 +464,7 @@ def test_classifying_released_and_migrated_pairs_writes_nothing(tmp_path: Path) 
         assert _entries(ledger.parent) == before
     assert not list(ledger.parent.glob("*.claim"))
 
-    assert migrate_database_pair(ledger, history).contract.state is DatabasePairState.READY
+    assert upgrade_database_pair(ledger, history).contract.state is DatabasePairState.READY
     migrated = _entries(ledger.parent)
     assert validate_database_pair(ledger, history).state is DatabasePairState.READY
     assert _entries(ledger.parent) == migrated
@@ -499,7 +497,7 @@ def test_newer_role_refuses_pair_admission_without_reset_or_change(
 
     with pytest.raises(DatabasePairRefusedError, match="newer NamiSync"):
         ensure_database_pair(ledger, history)
-    migration = migrate_database_pair(ledger, history)
+    migration = upgrade_database_pair(ledger, history)
     assert (migration.contract, migration.backups) == (contract, ())
     assert _classify(ledger, history=False) == "older"
     assert {name: value for name, value in _entries(data).items() if not name.endswith(".claim")} == before
@@ -643,21 +641,11 @@ def test_ensure_never_migrates_and_the_explicit_call_does(tmp_path: Path) -> Non
     assert not list(data.glob("*.backup-*"))
 
     old = carried_rows(history, tmp_path / "old", history=True)
-    result = migrate_database_pair(ledger, history)
+    result = upgrade_database_pair(ledger, history)
     assert result.contract.state is DatabasePairState.READY
-    assert [(database.role, database.unstamped) for database in result.migrated] == [
-        ("history", True),
-    ]
+    assert [database.role for database in result.migrated] == ["history"]
     assert ensure_database_pair(ledger, history).state is DatabasePairState.READY
     assert carried_rows(history, tmp_path / "new", history=True) == old
-    # A fresh current ledger is not this History's own (it carries no marker
-    # of its own migration from 0.1.0), so the runs stay unstamped: earlier.
-    with closing(sqlite3.connect(history.as_uri() + "?mode=ro", uri=True)) as connection:
-        assert {row[0] for row in connection.execute(
-            "SELECT ledger_instance_id FROM history_runs"
-        )} == {None}
-    with closing(LocalWorkflowRuntime(ledger, history)) as runtime:
-        assert {run.ledger_membership for run in runtime.list_history(50)} == {"earlier"}
 
 
 @pytest.mark.parametrize("released", (True, False), ids=("released", "current"))
@@ -689,133 +677,24 @@ def test_swapped_pair_is_refused_as_swapped_and_nothing_is_written(
 
 
 # --- the stamp decision -------------------------------------------------------
-# A 0.1.0 History's runs are stamped only beside its own ledger: one whose
-# lineage is exactly the marker of its own migration from 0.1.0. The kill
-# trials above cover a pair interrupted after the ledger migrated (case 2).
+# A 0.1.0 History's runs are stamped only when the same upgrade call migrated
+# its ledger from 0.1.0. The supported input is the pair in place, migrated by
+# one call; the kill trials above cover a pair interrupted between the ledger
+# and History, which finishes unstamped.
 
 
-class _Clock:
-    def now(self) -> datetime:
-        return datetime.now(timezone.utc)
-
-
-def _membership(ledger: Path, history: Path) -> set[str]:
-    with closing(LocalWorkflowRuntime(ledger, history)) as runtime:
-        return {run.ledger_membership for run in runtime.list_history(50)}
-
-
-def _stamp_decision(ledger: Path, history: Path) -> bool:
-    """What pair migration would decide for a 0.1.0 History beside this ledger."""
-
-    with hold_maintenance_claims(ledger, history) as claims:
-        return migrate_database(
-            ledger, history=False, claim=claims.ledger,
-        ).stamps_released_history
-
-
-def _put_released_history_back(history: Path) -> None:
-    for suffix in ("", "-wal", "-shm"):
-        Path(f"{history}{suffix}").unlink(missing_ok=True)
-    copy_released_role(history.parent, history=True, name=history.name)
-
-
-def test_a_released_pair_stamps_its_history_with_its_own_ledger(tmp_path: Path) -> None:
-    # Case 1: unchanged behavior.
+def test_a_released_pair_stamps_its_history_with_the_ledger_migrated_beside_it(
+    tmp_path: Path,
+) -> None:
     ledger, history = copy_released_pair(tmp_path / "data")
 
-    result = migrate_database_pair(ledger, history)
+    result = upgrade_database_pair(ledger, history)
 
     assert result.contract.state is DatabasePairState.READY
-    assert [(database.role, database.unstamped) for database in result.migrated] == [
-        ("ledger", False), ("history", False),
-    ]
+    assert [database.role for database in result.migrated] == ["ledger", "history"]
     _assert_migrated(ledger, history)
-    assert _membership(ledger, history) == {"current"}
-    assert _stamp_decision(ledger, history)
-
-
-def test_a_history_backup_put_back_beside_a_completion_ledger_stays_unstamped(
-    tmp_path: Path,
-) -> None:
-    # Case 3, the review's reproduction, and case 6 for a completion ledger.
-    data = tmp_path / "data"
-    history = copy_released_role(data, history=True)
-    ledger = data / "ledger.db"
-    assert complete_database_pair(ledger, history).contract.state is DatabasePairState.READY
-    backup = next(data.glob("history.db.backup-v8-*"))
-    for suffix in ("", "-wal", "-shm"):
-        Path(f"{history}{suffix}").unlink(missing_ok=True)
-    shutil.copyfile(backup, history)
-    contract = validate_database_pair(ledger, history)
-    assert (contract.state, contract.reason) == (
-        DatabasePairState.MIGRATION_REQUIRED, "history-older",
-    )
-
-    result = migrate_database_pair(ledger, history)
-
-    assert result.contract.state is DatabasePairState.READY, result.contract
-    assert [(database.role, database.unstamped) for database in result.migrated] == [
-        ("history", True),
-    ]
-    with closing(sqlite3.connect(history.as_uri() + "?mode=ro", uri=True)) as connection:
-        stamps = [row[0] for row in connection.execute(
-            "SELECT ledger_instance_id FROM history_runs"
-        )]
-    assert len(stamps) == 15 and set(stamps) == {None}
-    assert _membership(ledger, history) == {"earlier"}
-    assert not _stamp_decision(ledger, history)
-
-
-def test_a_restored_ledger_never_stamps_a_released_history(tmp_path: Path) -> None:
-    # Cases 5 and 6: a restore of a migrated ledger's backup keeps the marker
-    # row and adds its cut, so the stamp decision is "unstamped" even without
-    # restore's own refusal beside an older History.
-    from namisync.workflows.database_maintenance import (
-        backup_database_pair,
-        restore_database_from_backup,
-    )
-
-    ledger, history = copy_released_pair(tmp_path / "data")
-    assert migrate_database_pair(ledger, history).contract.state is DatabasePairState.READY
-    assert _stamp_decision(ledger, history)
-    backup = next(
-        item.path for item in backup_database_pair(ledger, history, clock=_Clock()).backups
-        if item.role == "ledger"
-    )
-    restored = restore_database_from_backup(ledger, history, "ledger", backup, clock=_Clock())
-    assert restored.contract.state is DatabasePairState.READY, restored.contract
-    assert [row[0] for row in _lineage(ledger)] == ["migrated-released", "backup-cut"]
-    assert not _stamp_decision(ledger, history)
-
-    # The restore workflow refuses a ledger restore beside an older History;
-    # a History put back by hand reaches pair migration anyway.
-    _put_released_history_back(history)
-    result = migrate_database_pair(ledger, history)
-    assert result.contract.state is DatabasePairState.READY, result.contract
-    assert [(database.role, database.unstamped) for database in result.migrated] == [
-        ("history", True),
-    ]
-    assert _membership(ledger, history) == {"earlier"}
-
-
-def test_only_a_ledger_whose_lineage_is_exactly_its_marker_is_eligible(
-    tmp_path: Path,
-) -> None:
-    ledger, history = copy_released_pair(tmp_path / "data")
-    assert migrate_database_pair(ledger, history).contract.state is DatabasePairState.READY
-    assert _stamp_decision(ledger, history)
-    for kind, instance_id in (("replaced-missing", None), ("backup-cut", "a" * 32)):
-        with closing(sqlite3.connect(ledger)) as connection, connection:
-            connection.execute("DELETE FROM ledger_lineage WHERE kind <> 'migrated-released'")
-            connection.execute(
-                "INSERT INTO ledger_lineage(kind, instance_id, at) VALUES (?, ?, ?)",
-                (kind, instance_id, "2026-01-01T00:00:00.000000Z"),
-            )
-        assert not _stamp_decision(ledger, history), kind
-    fresh = initialize_ledger(tmp_path / "fresh" / "ledger.db")
-    assert not _stamp_decision(fresh, initialize_history(tmp_path / "fresh" / "history.db"))
-
-
-def _lineage(ledger: Path) -> list[tuple]:
+    with closing(LocalWorkflowRuntime(ledger, history)) as runtime:
+        assert {run.ledger_membership for run in runtime.list_history(50)} == {"current"}
+    # The decision is a fact of that call; the ledger keeps no record of it.
     with closing(sqlite3.connect(ledger.as_uri() + "?mode=ro", uri=True)) as connection:
-        return connection.execute("SELECT kind, instance_id FROM ledger_lineage ORDER BY id").fetchall()
+        assert connection.execute("SELECT count(*) FROM ledger_lineage").fetchone() == (0,)

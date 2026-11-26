@@ -85,21 +85,9 @@ def test_inventory_beside_a_lone_released_history_updates_it_and_creates_a_ledge
     assert result == EXIT_SUCCESS, stderr.getvalue()
     backup = next(ledger.parent.glob("history.db.backup-v8-*"))
     assert stdout.getvalue().splitlines()[:2] == [
-        f"Updated the history (v8) database written by NamiSync 0.1.0; backup kept at: {backup}"
-        "; the history's runs are shown as belonging to an earlier ledger",
+        f"Updated the history (v8) database written by NamiSync 0.1.0; backup kept at: {backup}",
         _LEDGER_CREATED.format(ledger),
     ]
-    instance_id = _read(ledger, "SELECT value FROM schema_metadata WHERE key = 'instance_id'")[0][0]
-    stamps = [row[0] for row in _read(history, "SELECT ledger_instance_id FROM history_runs")]
-    # The released runs stay unstamped; only the new inventory run joins the ledger.
-    assert sorted(stamps, key=str) == sorted([None] * 15 + [instance_id], key=str)
-
-    stdout, stderr = io.StringIO(), io.StringIO()
-    assert main(
-        ["history", "--database", str(ledger), "--history-database", str(history)],
-        stdout=stdout, stderr=stderr,
-    ) == EXIT_SUCCESS
-    assert stdout.getvalue().count("(earlier ledger)") == 15
 
 
 def test_declined_sync_beside_a_lone_history_still_creates_the_ledger(tmp_path: Path) -> None:

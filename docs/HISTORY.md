@@ -102,10 +102,9 @@ committed run rows cannot be deleted or replaced.
 `disposition=unrun` keeps it null and validates its end against `created_at`.
 `ledger_instance_id` is the ledger's `instance_id` (32 lowercase hexadecimal
 digits) that the runtime supplies through `HistoryContext`; migration stamps
-every v0.1.0 run with the instance of its own ledger, one that itself
-migrated from 0.1.0 and was not replaced since, and otherwise (beside a
-fresh, restored or newly created ledger) with none
-([DATABASE](DATABASE.md#ledger-instance-and-ids)). It is
+every v0.1.0 run with the instance of the ledger the same pair upgrade
+migrated from 0.1.0, and otherwise (beside a ledger that was already current,
+or none) with none ([DATABASE](DATABASE.md#ledger-instance-and-ids)). It is
 outside the context hash, so no stored hash changes meaning, and a trigger
 makes it write-once. Because no hash covers it, an observer compares it
 itself: reopening a run token under a different stamp, a missing one included,

@@ -150,15 +150,13 @@ from .database_maintenance import (
     restore_database_from_backup,
 )
 from .database_pair import (
-    DatabasePairCompletion,
     DatabasePairContract,
-    DatabasePairMigration,
     DatabasePairRefusedError,
     DatabasePairState,
-    complete_database_pair,
+    DatabasePairUpgrade,
     ensure_database_pair,
     initialize_database_pair,
-    migrate_database_pair,
+    upgrade_database_pair,
     validate_database_pair,
 )
 from .models import (
@@ -430,8 +428,8 @@ class LocalWorkflowRuntime:
                 history_database=self._history_database,
             )
 
-    def migrate_database_contracts(self) -> DatabasePairMigration:
-        """Migrate an older pair under both exclusive claims; a no-op otherwise.
+    def upgrade_database_contracts(self) -> DatabasePairUpgrade:
+        """Migrate an older pair or complete an incomplete one; a no-op otherwise.
 
         Call it before this runtime opens either database: migration refuses
         while any connection, this process's included, has one open.
@@ -439,18 +437,7 @@ class LocalWorkflowRuntime:
 
         self._require_open()
         with self._database_pair_lock:
-            return migrate_database_pair(self.ledger_path, self.history_path)
-
-    def complete_database_contracts(self) -> DatabasePairCompletion:
-        """Create the missing database of an incomplete pair; a no-op otherwise.
-
-        Call it before this runtime opens either database, as for migration,
-        which it runs first when the present database is from NamiSync 0.1.0.
-        """
-
-        self._require_open()
-        with self._database_pair_lock:
-            return complete_database_pair(self.ledger_path, self.history_path)
+            return upgrade_database_pair(self.ledger_path, self.history_path)
 
     def validate_database_paths(self) -> None:
         """Refuse a database path that cannot name a local file, with ``ValueError``.

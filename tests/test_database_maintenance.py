@@ -37,9 +37,8 @@ from namisync.workflows.database_maintenance import (
 )
 from namisync.workflows.database_pair import (
     DatabasePairState,
-    complete_database_pair,
+    upgrade_database_pair,
     initialize_database_pair,
-    migrate_database_pair,
     validate_database_pair,
 )
 from namisync.workflows.runtime import LocalWorkflowRuntime
@@ -247,7 +246,7 @@ def test_backup_refuses_an_incomplete_pair_with_the_completion_direction(
 
 def test_backups_rotate_to_three_and_leave_migration_backups(tmp_path: Path) -> None:
     ledger, history = copy_released_pair(tmp_path / "data")
-    migrated = migrate_database_pair(ledger, history).backups
+    migrated = upgrade_database_pair(ledger, history).backups
     assert len(migrated) == 2
     published = []
     for minute in range(5):
@@ -396,7 +395,7 @@ def test_a_history_with_a_dangling_reference_keeps_the_ledger_backup_and_rotates
 def _refusal_sources(tmp_path: Path, ledger: Path, history: Path) -> dict[str, tuple[str, Path]]:
     released = tmp_path / "released"
     old_ledger, old_history = copy_released_pair(released)
-    migrated = migrate_database_pair(old_ledger, old_history).backups
+    migrated = upgrade_database_pair(old_ledger, old_history).backups
     v4 = next(path for path in migrated if path.name.startswith("ledger"))
     v8 = next(path for path in migrated if path.name.startswith("history"))
     backups = _backup(ledger, history)
@@ -437,7 +436,7 @@ def test_restore_refusals_leave_both_databases_byte_identical(tmp_path: Path) ->
         assert result.restore is None
         assert _bytes(ledger, history) == before, expected
         assert _files(ledger.parent) == files, expected
-    assert "way back to NamiSync 0.1.0" in restore_database_from_backup(
+    assert "way back to the version that wrote it" in restore_database_from_backup(
         ledger, history, "ledger", sources["backup-older"][1], clock=_Clock(),
     ).contract.guidance
 
@@ -797,9 +796,9 @@ def _released_runs(history: Path) -> set[str]:
     return {row[0] for row in _query(history, "SELECT run_token FROM history_runs")}
 
 
-def test_a_ledger_is_not_restored_beside_a_v0_1_0_history(tmp_path: Path) -> None:
-    # The reproduction: restoring the ledger of a released pair would let the
-    # History update stamp every 0.1.0 run with the restored ledger's id.
+def test_a_healthy_v0_1_0_pair_is_updated_before_its_ledger_is_restored(tmp_path: Path) -> None:
+    # Advice, not protection: replacing a readable 0.1.0 ledger with a
+    # current backup is almost certainly a mistake.
     ledger, history = copy_released_pair(tmp_path / "data")
     other_backup = _backup(*_pair(tmp_path / "other"))["ledger"]
     files = _files(ledger.parent)
@@ -809,16 +808,19 @@ def test_a_ledger_is_not_restored_beside_a_v0_1_0_history(tmp_path: Path) -> Non
     )
 
     assert (refused.contract.state, refused.contract.reason) == (
-        DatabasePairState.REFUSED, "history-older",
+        DatabasePairState.REFUSED, "pair-older",
     )
-    assert "Start NamiSync, or run a sync or inventory command, once" in refused.contract.guidance
+    assert (
+        "Start NamiSync, or run a sync or inventory command, once to update the pair"
+        in refused.contract.guidance
+    )
     assert "Nothing was changed" not in refused.contract.guidance
     assert (refused.restore, refused.kept) == (None, None)
     assert _files(ledger.parent) == files
 
     # Updating the pair first stamps the 0.1.0 runs with the migrated ledger;
     # after the restore they belong to an earlier ledger.
-    assert migrate_database_pair(ledger, history).contract.state is DatabasePairState.READY
+    assert upgrade_database_pair(ledger, history).contract.state is DatabasePairState.READY
     released = _released_runs(history)
     restored = restore_database_from_backup(
         ledger, history, "ledger", other_backup, clock=_Clock(),
@@ -828,6 +830,55 @@ def test_a_ledger_is_not_restored_beside_a_v0_1_0_history(tmp_path: Path) -> Non
     membership = _membership(ledger, history)
     assert set(membership) == released and len(released) == 15
     assert set(membership.values()) == {"earlier"}
+
+
+@pytest.mark.parametrize("ledger_shape", ("damaged", "missing"))
+def test_an_unusable_ledger_is_restored_beside_an_older_history(
+    tmp_path: Path, ledger_shape: str,
+) -> None:
+    ledger, history = copy_released_pair(tmp_path / "data")
+    other_backup = _backup(*_pair(tmp_path / "other"))["ledger"]
+    # v0.1.0 keeps its committed pages in the -wal, so damage reaches the main
+    # only without it.
+    for suffix in ("-wal", "-shm") if ledger_shape == "damaged" else ("", "-wal", "-shm"):
+        Path(f"{ledger}{suffix}").unlink(missing_ok=True)
+    if ledger_shape == "damaged":
+        data = bytearray(ledger.read_bytes())
+        data[100:612] = b"\xa5" * 512
+        ledger.write_bytes(bytes(data))
+
+    restored = restore_database_from_backup(
+        ledger, history, "ledger", other_backup, clock=_Clock(),
+    )
+
+    assert restored.restore is not None, restored.contract
+    assert restored.restore.kept_as == ("replaced" if ledger_shape == "damaged" else None)
+    assert (restored.contract.state, restored.contract.reason) == (
+        DatabasePairState.MIGRATION_REQUIRED, "history-older",
+    )
+    assert "At least one database of this pair" in restored.contract.guidance
+
+
+def test_with_both_roles_damaged_the_ledger_can_be_restored_first(tmp_path: Path) -> None:
+    ledger, history = _pair(tmp_path / "data")
+    backups = _backup(ledger, history)
+    for main in (ledger, history):
+        data = bytearray(main.read_bytes())
+        data[100:612] = b"\xa5" * 512
+        main.write_bytes(bytes(data))
+
+    first = restore_database_from_backup(ledger, history, "ledger", backups["ledger"], clock=_Clock())
+    assert first.restore is not None and first.restore.kept_as == "replaced", first.contract
+    assert (first.contract.state, first.contract.reason) == (
+        DatabasePairState.REFUSED, "database-damaged",
+    )
+    second = restore_database_from_backup(
+        ledger, history, "history", backups["history"], clock=_Clock(),
+    )
+    assert second.restore is not None and second.restore.kept_as == "replaced", second.contract
+    assert second.contract.state is DatabasePairState.READY, second.contract
+    checked = check_database_pair(ledger, history)
+    assert [check.state for check in checked.checks] == [DatabaseCheckState.OK] * 2
 
 
 def _history_beside(history: Path, shape: str, tmp_path: Path) -> None:
@@ -859,11 +910,11 @@ def _history_beside(history: Path, shape: str, tmp_path: Path) -> None:
 @pytest.mark.parametrize(("shape", "reason"), [
     ("newer", "history-newer"),
     ("wrong-role", "history-wrong-role"),
-    ("damaged", "history-unusable"),
-    ("sidecars-only", "history-unusable"),
+    ("damaged", None),
+    ("sidecars-only", None),
     ("missing", None),
 ])
-def test_a_ledger_restore_needs_a_current_history_or_none(
+def test_a_ledger_restore_is_refused_only_beside_a_newer_or_misplaced_history(
     tmp_path: Path, shape: str, reason: str | None,
 ) -> None:
     ledger, history = _pair(tmp_path / "data")
@@ -880,7 +931,7 @@ def test_a_ledger_restore_needs_a_current_history_or_none(
             assert (result.contract.state, result.contract.reason) == (
                 DatabasePairState.INCOMPLETE, "history-missing",
             )
-            completion = complete_database_pair(ledger, history)
+            completion = upgrade_database_pair(ledger, history)
             assert completion.contract.state is DatabasePairState.READY
             assert [database.role for database in completion.created] == ["history"]
         return
@@ -903,7 +954,7 @@ def test_history_is_restored_beside_a_v0_1_0_ledger_and_joins_nothing(tmp_path: 
     assert (result.contract.state, result.contract.reason) == (
         DatabasePairState.MIGRATION_REQUIRED, "ledger-older",
     )
-    assert migrate_database_pair(ledger, history).contract.state is DatabasePairState.READY
+    assert upgrade_database_pair(ledger, history).contract.state is DatabasePairState.READY
     assert _membership(ledger, history) == {"seeded": "earlier"}
 
 
@@ -921,7 +972,7 @@ def test_history_restored_where_the_ledger_is_missing_gains_a_new_ledger(
     assert (result.contract.state, result.contract.reason) == (
         DatabasePairState.INCOMPLETE, "ledger-missing",
     )
-    completion = complete_database_pair(ledger, history)
+    completion = upgrade_database_pair(ledger, history)
     assert completion.contract.state is DatabasePairState.READY
     assert [database.role for database in completion.created] == ["ledger"]
     assert _query(ledger, "SELECT kind, instance_id FROM ledger_lineage") == [

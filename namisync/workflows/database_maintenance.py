@@ -12,7 +12,7 @@ from pathlib import Path
 import sqlite3
 
 from namisync.core.clock import Clock
-from namisync.db.claims import DatabaseClaimRefused, hold_maintenance_claims
+from namisync.db.claims import DatabaseClaimRefused, MaintenanceClaims, hold_maintenance_claims
 from namisync.db.contracts import DATABASE_UNAVAILABLE_DIRECTION
 from namisync.db.maintenance import (
     BACKUP_KEEP,
@@ -83,22 +83,12 @@ class DatabasePairRestore:
     kept: Path | None = None
 
 
-# History states beside which a ledger may be restored. An older History is
-# a v0.1.0 one: its next migration stamps every run with the ledger beside
-# it, which after a restore is a ledger those runs were never recorded with.
-# A History whose version cannot be read (damaged, unsupported, unreadable,
-# sidecars without a main) could be such a History once repaired; a newer one
-# is beyond what this version can judge; another role means the paths are
-# wrong. Restoring History first, or updating the pair, removes each refusal.
+# History states beside which a ledger is not restored. A restored ledger
+# never stamps an older History's runs (only a ledger migrated in the same
+# pair upgrade does), so a damaged, unreadable or older History does not
+# block it, and either role can be repaired first. A newer History is beyond
+# what this version can judge; another role means the paths are wrong.
 _LEDGER_RESTORE_HISTORY = {
-    DatabaseCheckState.OLDER: (
-        "history-older",
-        "The History database beside this ledger was written by NamiSync 0.1.0 "
-        "and is not updated yet. Restoring the ledger now would let the update "
-        "attach every earlier History run to the restored ledger. Start NamiSync, "
-        "or run a sync or inventory command, once to update the pair, then restore "
-        "the ledger.",
-    ),
     DatabaseCheckState.NEWER: (
         "history-newer",
         "The History database beside this ledger was written by a newer NamiSync. "
@@ -111,23 +101,34 @@ _LEDGER_RESTORE_HISTORY = {
         "--history-database), then restore again.",
     ),
 }
-_LEDGER_RESTORE_HISTORY_UNUSABLE = (
-    "history-unusable",
-    "The History database beside this ledger cannot be read as a current History "
-    "database, so NamiSync cannot tell which ledger its runs belong to. Restore "
-    "History first, or check it, then restore the ledger.",
+# Advice, not protection: a healthy older pair needs updating, and replacing
+# its readable ledger with a current-schema backup is almost certainly a
+# mistake. It applies only when both databases check older with nothing
+# listed; any other ledger target, beside a History not refused above, goes
+# on to restore's own checks of the target and the backup.
+_LEDGER_RESTORE_OLDER_PAIR = (
+    "pair-older",
+    "The ledger and History databases were written by an earlier NamiSync and "
+    "are not updated yet, and the ledger reads cleanly. Start NamiSync, or run a "
+    "sync or inventory command, once to update the pair, then restore the ledger "
+    "if it is still needed.",
 )
 
 
-def _ledger_restore_refusal(check: DatabaseCheck) -> DatabasePairContract | None:
-    if check.state in (
-        DatabaseCheckState.OK, DatabaseCheckState.FOREIGN_KEY_VIOLATIONS,
-    ) or (check.state is DatabaseCheckState.MISSING and not check.problems):
-        return None
-    reason, guidance = _LEDGER_RESTORE_HISTORY.get(
-        check.state, _LEDGER_RESTORE_HISTORY_UNUSABLE,
-    )
-    return _refused(reason, guidance=guidance)
+def _ledger_restore_refusal(
+    ledger: Path, history: Path, claims: MaintenanceClaims,
+) -> DatabasePairContract | None:
+    beside = check_database(history, history=True, claim=claims.history)
+    refusal = _LEDGER_RESTORE_HISTORY.get(beside.state)
+    if refusal is None and _healthy_older(beside) and _healthy_older(
+        check_database(ledger, history=False, claim=claims.ledger),
+    ):
+        refusal = _LEDGER_RESTORE_OLDER_PAIR
+    return None if refusal is None else _refused(refusal[0], guidance=refusal[1])
+
+
+def _healthy_older(check: DatabaseCheck) -> bool:
+    return check.state is DatabaseCheckState.OLDER and not check.problems
 
 
 def _in_use(error: DatabaseClaimRefused) -> DatabasePairContract:
@@ -214,10 +215,12 @@ def restore_database_from_backup(
     """Restore the ledger or History from a current-schema backup.
 
     The pair need not be ready: restore also replaces a database that fails
-    admission. A ledger is restored only beside a current History or none
-    (``_LEDGER_RESTORE_HISTORY``); History is restored beside a ledger in any
-    state, since a restored History is already stamped and no later step
-    stamps it again. The returned contract is the pair's after the call.
+    admission. A ledger is not restored beside a History of another role or
+    a newer one, nor over the readable ledger of an older pair that needs
+    updating (``_ledger_restore_refusal``); History is restored beside a
+    ledger in any state, since a restored History is already stamped and no
+    later step stamps it again. The returned contract is the pair's after the
+    call.
     """
 
     if role not in ROLES:
@@ -228,9 +231,7 @@ def restore_database_from_backup(
         with hold_maintenance_claims(ledger, history) as claims:
             now = clock.now()
             if role == "ledger":
-                refusal = _ledger_restore_refusal(
-                    check_database(history, history=True, claim=claims.history),
-                )
+                refusal = _ledger_restore_refusal(ledger, history, claims)
                 if refusal is not None:
                     return DatabasePairRestore(refusal)
             restored = restore_database(

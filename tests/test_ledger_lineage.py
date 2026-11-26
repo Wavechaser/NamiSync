@@ -41,7 +41,7 @@ from namisync.workflows.database_pair import (
     DatabasePairRefusedError,
     DatabasePairState,
     ensure_database_pair,
-    migrate_database_pair,
+    upgrade_database_pair,
     validate_database_pair,
 )
 from namisync.workflows.runtime import LocalWorkflowRuntime
@@ -106,57 +106,59 @@ def test_fresh_ledger_has_the_lineage_table_and_no_rows(tmp_path: Path) -> None:
 
 
 @pytest.mark.skipif(os.name != "nt", reason="Windows file sharing and claims")
-def test_migrated_released_ledger_has_the_fresh_topology_and_only_its_marker(
+def test_migrated_released_ledger_has_the_fresh_topology_and_no_lineage(
     tmp_path: Path,
 ) -> None:
     ledger, history = copy_released_pair(tmp_path / "data")
 
-    assert migrate_database_pair(ledger, history).contract.state is DatabasePairState.READY
+    assert upgrade_database_pair(ledger, history).contract.state is DatabasePairState.READY
 
-    # Same definitions as a fresh ledger; the data differs by the one marker
-    # row the ledger's own migration from 0.1.0 wrote.
     assert _topology(ledger) == _topology(initialize_ledger(tmp_path / "fresh.db"))
-    ((row_id, kind, instance_id, at),) = _lineage_rows(ledger)
-    assert (row_id, kind, instance_id) == (1, "migrated-released", None)
-    assert len(at) == 27 and at.endswith("Z")
-    # Readers of the read rule see no cut.
-    with LedgerRepository(ledger) as repository:
-        assert repository.ledger_lineage().cuts == ()
+    assert _lineage_rows(ledger) == []
 
 
-def test_a_ledger_of_the_shape_before_the_marker_kind_is_refused_with_reset(
+@pytest.mark.skipif(os.name != "nt", reason="Windows file sharing and claims")
+def test_a_ledger_with_the_withdrawn_marker_kind_is_refused_with_reset(
     tmp_path: Path,
 ) -> None:
-    # Schema 5 was amended in place: a ledger a source-tree run created with
-    # the earlier lineage CHECK fails the exact topology check.
-    earlier = schema_module._LEDGER_STATEMENTS[-1].replace(
-        "'backup-cut', 'replaced-missing', 'migrated-released'",
+    # Schema 5 was amended in place again: a ledger a source-tree run created
+    # or migrated while the lineage CHECK allowed 'migrated-released' fails
+    # the exact topology check, marker row or not.
+    amended = schema_module._LEDGER_STATEMENTS[-1].replace(
         "'backup-cut', 'replaced-missing'",
+        "'backup-cut', 'replaced-missing', 'migrated-released'",
     )
-    assert earlier != schema_module._LEDGER_STATEMENTS[-1]
+    assert amended != schema_module._LEDGER_STATEMENTS[-1]
     ledger = tmp_path / "ledger.db"
     with closing(sqlite3.connect(ledger, isolation_level=None)) as connection:
         connection.execute("PRAGMA journal_mode = WAL")
-        for statement in (*schema_module._LEDGER_STATEMENTS[:-1], earlier):
+        for statement in (*schema_module._LEDGER_STATEMENTS[:-1], amended):
             connection.execute(statement)
         connection.executemany(
             "INSERT INTO schema_metadata(key, value) VALUES (?, ?)",
             schema_module._metadata_rows(False, new_instance_id()),
         )
+        connection.execute(
+            "INSERT INTO ledger_lineage(kind, instance_id, at) "
+            "VALUES ('migrated-released', NULL, '2026-11-25T00:00:00.000000Z')"
+        )
     history = initialize_history(tmp_path / "history.db")
+    before = _files(tmp_path)
 
     with pytest.raises(SchemaResetRequired, match="unsupported ledger schema topology"):
         probe_database_file_contract(ledger, history=False)
     contract = validate_database_pair(ledger, history)
     assert (contract.state, contract.reason) == (DatabasePairState.REFUSED, "ledger-contract")
     assert contract.reset_direction is not None
+    assert upgrade_database_pair(ledger, history).contract == contract
+    assert _files(tmp_path) == before
 
 
 @pytest.mark.parametrize(("kind", "instance_id", "at"), [
     ("other", "a" * 32, "2026-01-01T00:00:00.000000Z"),
     ("backup-cut", None, "2026-01-01T00:00:00.000000Z"),
     ("replaced-missing", "a" * 32, "2026-01-01T00:00:00.000000Z"),
-    ("migrated-released", "a" * 32, "2026-01-01T00:00:00.000000Z"),
+    ("migrated-released", None, "2026-01-01T00:00:00.000000Z"),
     ("backup-cut", "A" * 32, "2026-01-01T00:00:00.000000Z"),
     ("backup-cut", "a" * 31, "2026-01-01T00:00:00.000000Z"),
     ("backup-cut", "a" * 33, "2026-01-01T00:00:00.000000Z"),
@@ -249,7 +251,7 @@ def test_maintenance_classification_refuses_a_backup_and_migrates_nothing(
     ledger, history = backup_pair
     before = _files(tmp_path)
 
-    result = migrate_database_pair(ledger, history)
+    result = upgrade_database_pair(ledger, history)
 
     _assert_backup_refusal(result.contract)
     assert result.migrated == ()

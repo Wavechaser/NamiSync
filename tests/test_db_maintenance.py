@@ -41,7 +41,7 @@ from namisync.db.timestamps import encode_utc
 from namisync.workflows.database_pair import (
     DatabasePairState,
     initialize_database_pair,
-    migrate_database_pair,
+    upgrade_database_pair,
     validate_database_pair,
 )
 
@@ -718,7 +718,7 @@ def test_a_restore_image_that_fails_verification_restores_nothing(
 
 def test_a_migrated_pair_backs_up_and_restores(tmp_path: Path) -> None:
     ledger, history = copy_released_pair(tmp_path / "data")
-    assert migrate_database_pair(ledger, history).contract.state is DatabasePairState.READY
+    assert upgrade_database_pair(ledger, history).contract.state is DatabasePairState.READY
     backup = _backup(ledger, history)
     result = _restore(ledger, history, backup)
     assert result.kept_as == "backup"

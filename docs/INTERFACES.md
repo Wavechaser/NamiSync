@@ -315,11 +315,9 @@ The current public service surface includes:
 NamiSyncService(ledger_path, history_path, *, settings_path=None)
 validate_database_contracts() -> DatabaseContractView
 initialize_database_contracts() -> DatabaseContractView
-migrate_database_contracts()
-    -> tuple[DatabaseContractView, tuple[tuple[str, int, str, bool], ...]]
-complete_database_contracts()
-    -> tuple[DatabaseContractView, tuple[tuple[str, str], ...],
-             tuple[tuple[str, int, str, bool], ...]]
+upgrade_database_contracts()
+    -> tuple[DatabaseContractView, tuple[tuple[str, int, str], ...],
+             tuple[tuple[str, str], ...]]
 validate_database_paths() -> None   # ValueError for an invalid path
 check_databases() -> DatabasePairCheck
 backup_databases() -> DatabasePairBackup
@@ -453,14 +451,14 @@ guidance without reset advice. Its validation method is strictly read-only and
 classifies the ledger/history mains plus WAL/SHM/journal sidecars as fresh,
 ready, migration-required, incomplete (one database missing), or refused.
 Initialization is a separate call and
-never resets an existing file. Migration is another separate call, made before
-the process opens either database: it returns the resulting contract and, to
-in-process callers only, the role, source schema version and backup path of each database it migrated, and whether a History migrated with its runs unstamped (no bridge
-shape carries them). Completion is a third, made at the same point: it creates
-the missing database of an incomplete pair, migrating the present one first
-when NamiSync 0.1.0 wrote it, and returns the contract, the role and path of
-the database it created and the migrated databases, again to in-process callers
-only ([DATABASE](DATABASE.md#one-database-missing)). Check, backup and restore
+never resets an existing file. Upgrade is another separate call, made before
+the process opens either database: it migrates an older pair, or creates the
+missing database of an incomplete pair after migrating the present one when
+NamiSync 0.1.0 wrote it, and returns any other pair unchanged. It returns the
+resulting contract and, to in-process callers only, the role, source schema
+version and backup path of each database it migrated, and the role and path of each database it
+created (no bridge shape carries them;
+[DATABASE](DATABASE.md#migration)). Check, backup and restore
 are three more, also made before the process opens either database and on the
 pair as found, never migrating, completing or creating: each returns the
 workflow's result (`DatabasePairCheck`, `DatabasePairBackup`,

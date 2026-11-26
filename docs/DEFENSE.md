@@ -555,7 +555,8 @@ triaged. [DATABASE](DATABASE.md#schema-evolution) owns the mechanisms.
 designed to be migrated and was used by few people on limited data.
 
 - The supported input is the pair as v0.1.0 left it, in place, migrated by one
-  operation. Only that path has tests beyond the engine's own.
+  operation. Only that path has tests beyond the engine's own and the
+  conservative reading's.
 - The import keeps what the engine gives every migration: no loss without a
   backup, no half-migrated database, no migration under a writer, and no
   advice to destroy data that is fine.

@@ -336,9 +336,6 @@ def test_migration_requires_the_held_exclusive_claim_of_its_database(
     released.release()
     with pytest.raises(ValueError, match="exclusive maintenance claim"):
         migrate_database(released_ledger, history=False, claim=released)
-    with acquire_database_claim(released_ledger, exclusive=True) as claim:
-        with pytest.raises(ValueError, match="ledger instance id"):
-            migrate_database(released_ledger, history=False, claim=claim, ledger_instance_id="0" * 32)
     assert _bytes(released_ledger) == before
     assert not list(released_ledger.parent.glob("*.backup-*"))
 

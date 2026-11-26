@@ -809,23 +809,14 @@ def _database_refusal(
             selected_paths=selected_paths, paired=paired,
         ):
             return None
-        created: tuple[tuple[str, str], ...] = ()
-        if contract.state == "migration-required":
-            contract, migrated = service.migrate_database_contracts()
-        else:
-            contract, created, migrated = service.complete_database_contracts()
+        contract, migrated, created = service.upgrade_database_contracts()
         if migrated:
-            roles = " and ".join(f"{role} (v{version})" for role, version, _, _ in migrated)
+            roles = " and ".join(f"{role} (v{version})" for role, version, _ in migrated)
             plural = "s" if len(migrated) > 1 else ""
-            earlier = any(unstamped for _, _, _, unstamped in migrated)
             print(
                 f"Updated the {roles} database{plural} written by NamiSync 0.1.0; "
                 f"backup{plural} kept at: "
-                + ", ".join(_safe(backup) for _, _, backup, _ in migrated)
-                + (
-                    "; the history's runs are shown as belonging to an earlier ledger"
-                    if earlier else ""
-                ),
+                + ", ".join(_safe(backup) for _, _, backup in migrated),
                 file=stdout,
             )
         for role, path in created:

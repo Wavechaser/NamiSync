@@ -440,7 +440,7 @@ CREATE TABLE annotations (
 
 CREATE TABLE ledger_lineage (
     id INTEGER PRIMARY KEY,
-    kind TEXT NOT NULL CHECK(kind IN ('backup-cut', 'replaced-missing', 'migrated-released')),
+    kind TEXT NOT NULL CHECK(kind IN ('backup-cut', 'replaced-missing')),
     instance_id TEXT UNIQUE CHECK(
         instance_id IS NULL
         OR (length(instance_id) = 32 AND instance_id NOT GLOB '*[^0-9a-f]*')

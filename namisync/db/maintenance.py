@@ -717,9 +717,9 @@ def _validate_restore_source(source: Path, *, history: bool) -> _SourceFacts:
         if version != (HISTORY_SCHEMA_VERSION if history else LEDGER_SCHEMA_VERSION):
             raise _refused(
                 "backup-older",
-                f"The backup {source} is a NamiSync 0.1.0 {role} kept by the update to "
-                "this version. Restore takes only backups made by this version; that "
-                "file is the way back to NamiSync 0.1.0.",
+                f"The backup {source} is a {role} backup kept by an update from an "
+                "older NamiSync. Restore takes only backups made by this version; that "
+                "file is the way back to the version that wrote it.",
                 source,
             )
         # After classification, so a backup of another role or version is

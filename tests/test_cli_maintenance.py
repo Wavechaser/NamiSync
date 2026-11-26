@@ -32,7 +32,7 @@ from namisync.workflows.database_pair import (
     DatabasePairContract,
     DatabasePairState,
     initialize_database_pair,
-    migrate_database_pair,
+    upgrade_database_pair,
 )
 
 from _child_process import PROJECT_ROOT, WAIT_SECONDS, Child
@@ -474,10 +474,10 @@ def test_an_older_pair_is_reported_and_never_migrated(tmp_path: Path) -> None:
     # The pair's own admission refusal: its shared text speaks for itself.
     assert _closing(backed_up, ledger, history) == "No backup was written."
 
-    # A ledger is not restored beside a 0.1.0 History: update the pair first.
+    # The readable ledger of a healthy 0.1.0 pair is not restored: update the pair first.
     restored = _main(["restore", "ledger", str(backups["ledger"]), *flags])
     assert (restored.code, restored.out) == (EXIT_REFUSED, "")
-    assert restored.err.splitlines()[0] == "Database pair refused: history-older."
+    assert restored.err.splitlines()[0] == "Database pair refused: pair-older."
     assert "Start NamiSync, or run a sync or inventory command, once to update the pair" in restored.err
     assert _closing(restored, ledger, history) == "Nothing was changed."
     assert restored.err.count("Nothing was changed.") == 1
@@ -490,7 +490,7 @@ def test_a_v4_migration_backup_is_refused_as_a_restore_source(tmp_path: Path) ->
     ledger, history = _pair(tmp_path / "data")
     old_ledger, old_history = copy_released_pair(tmp_path / "released")
     v4 = next(
-        path for path in migrate_database_pair(old_ledger, old_history).backups
+        path for path in upgrade_database_pair(old_ledger, old_history).backups
         if path.name.startswith("ledger")
     )
     before = _listing(ledger.parent)
@@ -499,7 +499,7 @@ def test_a_v4_migration_backup_is_refused_as_a_restore_source(tmp_path: Path) ->
 
     assert (run.code, run.out) == (EXIT_REFUSED, "")
     assert run.err.splitlines()[0] == "Database pair refused: backup-older."
-    assert "way back to NamiSync 0.1.0" in run.err
+    assert "way back to the version that wrote it" in run.err
     assert _closing(run, ledger, history) == "Nothing was changed."
     assert run.err.count("Nothing was changed.") == 1
     assert _listing(ledger.parent) == before
@@ -683,21 +683,22 @@ def test_a_backup_of_the_wrong_role_is_refused_with_nothing_changed(tmp_path: Pa
     assert _listing(tmp_path) == before
 
 
-def test_a_ledger_is_not_restored_beside_an_older_history_and_nothing_changes(
+def test_a_ledger_is_restored_beside_an_older_history_and_the_pair_still_needs_updating(
     tmp_path: Path,
 ) -> None:
     source_ledger, source_history = _pair(tmp_path / "source")
     backup = _backup(source_ledger, source_history)["ledger"]
     ledger = _pair(tmp_path / "data")[0]
     history = copy_released_pair(tmp_path / "old")[1]
-    before = (_listing(ledger.parent), _listing(history.parent))
+    history_before = _listing(history.parent)
 
     run = _main(["restore", "ledger", str(backup), *_flags(ledger, history)])
 
-    assert (run.code, run.out) == (EXIT_REFUSED, "")
-    assert run.err.splitlines()[0] == "Database pair refused: history-older."
-    assert "Start NamiSync, or run a sync or inventory command, once to update the pair" in run.err
-    assert (_listing(ledger.parent), _listing(history.parent)) == before
+    assert (run.code, run.err) == (EXIT_SUCCESS, "")
+    assert f"Restored the ledger from {backup}." in run.out
+    assert "Note: the database pair is not ready yet (history-older)." in run.out
+    assert "Start NamiSync, or run a sync or inventory command, once" in run.out
+    assert _listing(history.parent) == history_before
 
 
 # --- usage ---------------------------------------------------------------------------

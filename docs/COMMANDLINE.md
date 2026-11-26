@@ -112,11 +112,12 @@ backups, for example:
 Updated the ledger (v4) and history (v8) databases written by NamiSync 0.1.0; backups kept at: <ledger backup>, <history backup>
 ```
 
-A 0.1.0 history joins only its own ledger, one that itself was updated from
-0.1.0 and not replaced since. Beside any other ledger (a fresh one, a restored
-one, or one created because it was missing) its runs are left as an earlier
-ledger's, and the line ends with `; the history's runs are shown as belonging
-to an earlier ledger` ([DATABASE](DATABASE.md#ledger-instance-and-ids)).
+A 0.1.0 history joins a ledger only when the same command updated that
+ledger from 0.1.0. Beside a ledger that was already current (a fresh one, a
+restored one, one created because it was missing, or one an interrupted
+update already finished) its runs are left as an earlier ledger's; `history`
+marks them `(earlier ledger)` ([DATABASE](DATABASE.md#ledger-instance-and-ids)).
+The update line does not say which case applied.
 
 A pair with one database missing (the other present with no stray sidecar of
 the missing one, which stays `inconsistent-pair`) is completed at the same
@@ -162,7 +163,7 @@ its files for inspection (migration's message for a database from NamiSync
 0.1.0 stops there, since no backup made by this version can exist for it);
 otherwise it says to check write access and free space. A ledger
 that had already migrated when History's own step failed stays migrated, and
-the next command finishes the history. A v0.1.0 main file copied without its
+the next command finishes the history, with its runs as an earlier ledger's. A v0.1.0 main file copied without its
 `-wal` migrates as the empty database it is, since v0.1.0 keeps its committed
 rows in the `-wal`. A fresh sync pair remains
 absent through planning and declined review, then is initialized together only
@@ -345,8 +346,11 @@ PowerShell and shown unescaped unless they hold control characters.
   `backup-unsupported`, `backup-older` (a v4 or v8 migration backup is the way
   back to 0.1.0, not a restore source), `backup-unstamped`), `target-wrong-role`,
   `target-inconsistent`, `backup-failed` (the pre-restore backup could not be
-  made) and the ledger pair rule (`history-older`, which directs you to update
-  the pair first, `history-newer`, `history-wrong-role`, `history-unusable`).
+  made) and the ledger pair rule (`history-newer`, `history-wrong-role`, and
+  `pair-older`, which directs you to update a healthy 0.1.0 pair before
+  replacing its readable ledger). A ledger is otherwise restored beside a
+  damaged, unreadable or 0.1.0 history, so with both damaged either can be
+  restored first.
   Exit `4` for `restore-failed` and `restore-unconfirmed`. Every refusal prints
   the workflow's own guidance, then one line decided from the result, never
   from the text: `Kept: <path>, the database as it was before this restore

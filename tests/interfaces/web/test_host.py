@@ -1754,13 +1754,9 @@ class _RecordedService:
         self._order.append("validate_databases")
         return self._service.validate_database_contracts()
 
-    def migrate_database_contracts(self):
-        self._order.append("migrate_databases")
-        return self._service.migrate_database_contracts()
-
-    def complete_database_contracts(self):
-        self._order.append("complete_databases")
-        return self._service.complete_database_contracts()
+    def upgrade_database_contracts(self):
+        self._order.append("upgrade_databases")
+        return self._service.upgrade_database_contracts()
 
     def close(self):
         self._order.append("service.close")
@@ -1795,7 +1791,7 @@ def test_startup_migrates_a_released_pair_before_binding_it(
     assert labels[start:start + 5] == [
         "create_service",
         "validate_databases",
-        "migrate_databases",
+        "upgrade_databases",
         "path_lease.bind_databases",
         "validate_databases",
     ]
@@ -1836,7 +1832,7 @@ def test_startup_completes_a_one_present_pair_before_binding_it(
     assert labels[start:start + 5] == [
         "create_service",
         "validate_databases",
-        "complete_databases",
+        "upgrade_databases",
         "path_lease.bind_databases",
         "validate_databases",
     ]
@@ -1844,7 +1840,7 @@ def test_startup_completes_a_one_present_pair_before_binding_it(
     logged = [record.getMessage() for record in caplog.records]
     created = "history" if present == "current-ledger" else "ledger"
     assert f"startup.database_created role={created} reason=missing" in logged
-    assert ("startup.databases_migrated history=v8-unstamped" in logged) == (
+    assert ("startup.databases_migrated history=v8" in logged) == (
         present == "released-history"
     )
     # Roles only: GUI logging records no paths.
@@ -1888,11 +1884,11 @@ def test_startup_surfaces_a_migration_or_newer_refusal_before_binding(
     assert "create_window" not in labels
     assert len(reports) == 1
     if refusal == "in-use":
-        assert "migrate_databases" in labels
+        assert "upgrade_databases" in labels
         assert "NamiSync database pair refused (database-in-use)" in reports[0]
         assert "is in use by NamiSync work" in reports[0]
     else:
-        assert "migrate_databases" not in labels
+        assert "upgrade_databases" not in labels
         assert "NamiSync database pair refused (history-newer)" in reports[0]
         assert "written by a newer NamiSync (schema version 10)" in reports[0]
     assert "delete" not in reports[0].lower()
@@ -1926,7 +1922,7 @@ def test_startup_refuses_a_ledger_backup_copied_into_place_before_binding(
 
     assert result == 1
     labels = [entry[0] if isinstance(entry, tuple) else entry for entry in order]
-    assert "migrate_databases" not in labels
+    assert "upgrade_databases" not in labels
     assert "path_lease.bind_databases" not in labels
     assert "create_window" not in labels
     assert len(reports) == 1
