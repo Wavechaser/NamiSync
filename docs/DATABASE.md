@@ -899,7 +899,8 @@ own database, and the pair operation supplies anything that needs both.
     filesystem change or ledger write, a different current instance is a
     commitment refusal: a fresh start ends `REFUSED+UNRUN` with “The ledger was
     replaced (restored or reset) after this plan was made, so it cannot run.
-    Plan again to review it against the current ledger.” The CLI prints it and
+    Plan again to review it against the current ledger.” The CLI prints it with
+    “Rerun the same sync command to review a new plan.” as its last sentence and
     exits 3; the desktop shows the commitment refusal (“Execution commitment is
     invalid. Restart task with Plan Again.”), since no diagnostic text crosses
     the bridge. No ledger row is written; History keeps the attempt as a

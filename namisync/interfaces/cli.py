@@ -46,6 +46,11 @@ _LAYOUT_CONTROL = re.compile(
     "[\u0000-\u001f\u007f-\u009f\u00ad\u061c\u200b\u200e-\u200f"
     "\u2028-\u202e\u2060-\u206f\ufeff\\[]"
 )
+_POWERSHELL_SINGLE_QUOTE = re.compile("['\u2018-\u201b]")
+# The workflow's replaced-ledger refusal ends with the desktop's next step; on
+# the command line the same review comes from running the command again.
+_DESKTOP_PLAN_AGAIN = "Plan again to review it against the current ledger."
+_SYNC_PLAN_AGAIN = "Rerun the same sync command to review a new plan."
 
 
 class _OutputStream:
@@ -663,6 +668,11 @@ def _run_history(
         return EXIT_SUCCESS
     except DatabaseAdmissionError as error:
         print(f"History admission refused: {_safe(error)}", file=stderr)
+        # Its direction (retry, start NamiSync, check, restore, archive) is
+        # followed with the options given here, and only those.
+        given = _given_databases(namespace, ledger, history)
+        if given is not None:
+            print(given, file=stderr)
         return EXIT_REFUSED
     except Exception as error:
         print(f"History could not be read: {_safe(error)}", file=stderr)
@@ -959,19 +969,61 @@ def _selected_databases(
     if not namespace.database and not namespace.history_database:
         return None
     return (
-        f"These databases were selected with --database {_option_path(ledger)} "
-        f"--history-database {_option_path(history)}. Add the same options to any "
+        f"These databases were selected with --database {_powershell_quoted(ledger)} "
+        f"--history-database {_powershell_quoted(history)}. Add the same options to any "
         "NamiSync command above."
     )
 
 
-def _option_path(path: Path) -> str:
-    # Meant to be pasted into PowerShell: single quotes keep $ and ` literal,
-    # and the path is shown as it is unless it holds control characters.
-    text = str(path)
+def _given_databases(
+    namespace: argparse.Namespace, ledger: Path, history: Path,
+) -> str | None:
+    """Name exactly the database options given, or None.
+
+    Unlike ``_selected_databases`` it adds none that was not given: a default
+    ledger beside ``--history-database`` alone changes how History reads. A
+    History named alone is not followed literally either: another command
+    would pair it with the default ledger, so the user is told to name its own.
+    """
+
+    if namespace.history_database and not namespace.database:
+        return (
+            f"This command was run with --history-database "
+            f"{_powershell_quoted(history)} and no --database. Any NamiSync "
+            "command above must also name this History's own ledger with "
+            "--database; otherwise it pairs this History with the default ledger."
+        )
+    options = " ".join(
+        f"{option} {_powershell_quoted(path)}"
+        for option, given, path in (
+            ("--database", namespace.database, ledger),
+            ("--history-database", namespace.history_database, history),
+        )
+        if given
+    )
+    if not options:
+        return None
+    return (
+        f"This command was run with {options}. Add the same options to any "
+        "NamiSync command above."
+    )
+
+
+def _powershell_quoted(value: object) -> str:
+    """Quote text as one literal PowerShell argument, never evaluated when pasted.
+
+    PowerShell reads U+0027 and the typographic U+2018-U+201B as single quotes.
+    Inside single quotes nothing else is special ($, backtick and every double
+    quote stay literal), and a single quote followed by any other stands for
+    that second one, so doubling each keeps it as it is (Windows PowerShell 5.1
+    and PowerShell 7 alike). Text holding control characters cannot be shown as
+    it is: its [U+XXXX] rendering is quoted instead, which names other text.
+    """
+
+    text = str(value)
     if _safe(text).replace("[[", "[") != text:
-        return f'"{_safe(text)}"'
-    return "'" + text.replace("'", "''") + "'"
+        text = _safe(text)
+    return "'" + _POWERSHELL_SINGLE_QUOTE.sub(lambda quote: quote[0] * 2, text) + "'"
 
 
 def _is_file(value: str) -> bool:
@@ -1509,7 +1561,7 @@ def _render_execution(
         f"bytes={result.bytes_done}/{result.bytes_total}",
         file=output,
     )
-    _render_phases(result, output)
+    _render_phases(result, output, _sync_wording)
     outcomes = Counter(
         item.result for item in items if item.item_type == "operation"
     )
@@ -1541,14 +1593,18 @@ def _render_execution(
                 file=output,
             )
     if details.commitment_error:
-        print(f"Refused: {_safe(details.commitment_error)}", file=errors)
+        print(f"Refused: {_safe(_sync_wording(details.commitment_error))}", file=errors)
     for refusal in details.refusals:
         path = "" if refusal.path is None else f" at {_safe(refusal.path)}"
         detail = "" if not refusal.detail else f": {_safe(refusal.detail)}"
         print(f"Refused: {refusal.code}{path}{detail}", file=errors)
     if result.error is not None:
-        print(_safe(result.error), file=errors)
+        print(_safe(_sync_wording(result.error)), file=errors)
     _render_result_warnings(result, errors)
+
+
+def _sync_wording(text: str) -> str:
+    return text.replace(_DESKTOP_PLAN_AGAIN, _SYNC_PLAN_AGAIN)
 
 
 def _render_result_summary(label: str, result, output: TextIO) -> None:
@@ -1564,7 +1620,7 @@ def _render_result_summary(label: str, result, output: TextIO) -> None:
     )
 
 
-def _render_phases(result, output: TextIO) -> None:
+def _render_phases(result, output: TextIO, wording=str) -> None:
     for phase in result.phases:
         items_total = (
             "?"
@@ -1576,7 +1632,9 @@ def _render_phases(result, output: TextIO) -> None:
             if phase.bytes_total is None
             else str(phase.bytes_total)
         )
-        error = "" if phase.error is None else f"; error={_safe(phase.error)}"
+        error = (
+            "" if phase.error is None else f"; error={_safe(wording(phase.error))}"
+        )
         print(
             f"Phase {phase.phase}: status={phase.status}; "
             f"items={phase.items_done}/{items_total}; "

@@ -1611,7 +1611,7 @@ def test_sync_refuses_execution_after_the_ledger_is_restored_at_the_prompt(
     assert list(target.iterdir()) == []
     assert (
         "Refused: The ledger was replaced (restored or reset) after this plan was "
-        "made, so it cannot run. Plan again to review it against the current ledger.\n"
+        "made, so it cannot run. Rerun the same sync command to review a new plan.\n"
     ) in stderr.getvalue()
     assert "filesystem=refused" in stdout.getvalue()
     with closing(sqlite3.connect(ledger)) as connection:

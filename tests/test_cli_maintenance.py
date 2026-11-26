@@ -8,20 +8,27 @@ closing conditions of the maintenance row with real child processes.
 
 from __future__ import annotations
 
+import base64
 from contextlib import closing
 from dataclasses import dataclass
 import io
+import json
 import os
 from pathlib import Path
 import re
+import shutil
 import sqlite3
 import subprocess
 import sys
 from time import monotonic, sleep
+from types import SimpleNamespace
 
 import pytest
 
 import namisync.db.maintenance as maintenance
+from namisync.core.session import (
+    FailureDetail, OperationResult, PhaseResult, PhaseStatus, SessionState,
+)
 import namisync.interfaces.cli as cli_module
 from namisync.interfaces.cli import (
     EXIT_FAILED, EXIT_REFUSED, EXIT_SUCCESS, EXIT_USAGE, main,
@@ -34,6 +41,8 @@ from namisync.workflows.database_pair import (
     initialize_database_pair,
     upgrade_database_pair,
 )
+from namisync.workflows.sync import LedgerInstanceChanged, require_planned_ledger
+from namisync.workflows.views import operation_result_view
 
 from _child_process import PROJECT_ROOT, WAIT_SECONDS, Child
 from _db_fixtures import NOW, seed_history_run, stored_ledger_instance
@@ -65,12 +74,152 @@ def _selected(ledger: Path, history: Path) -> str:
 
 def test_a_selected_path_is_shown_as_it_can_be_pasted() -> None:
     # Single quotes keep PowerShell from expanding $, and a bracket is not
-    # doubled as it is in other output; only control characters are escaped.
-    assert cli_module._option_path(Path(r"C:\data [x] $HOME\it's.db")) == (
+    # doubled as it is in other output; every single quote PowerShell reads is
+    # doubled, and only control characters are escaped.
+    assert cli_module._powershell_quoted(Path(r"C:\data [x] $HOME\it's.db")) == (
         r"'C:\data [x] $HOME\it''s.db'"
     )
-    assert cli_module._option_path(Path("C:\\data\x1b\\ledger.db")) == (
-        '"C:\\data[U+001B]\\ledger.db"'
+    assert cli_module._powershell_quoted(Path("C:\\data\\O\u2019Brien.db")) == (
+        "'C:\\data\\O\u2019\u2019Brien.db'"
+    )
+    assert cli_module._powershell_quoted(Path("C:\\data\x1b$x\\ledger.db")) == (
+        "'C:\\data[U+001B]$x\\ledger.db'"
+    )
+
+
+# Every character PowerShell reads as a single or double quote, the characters
+# that are live inside double quotes, and others a shell treats specially.
+_AWKWARD_NAMES = (
+    "it's", "O\u2018Brien", "O\u2019Brien", "low\u201aquote", "rev\u201bquote",
+    "\u201cdouble\u201d \u201equote", "$HOME", "$(Get-Date)", "back`tick",
+    "two  spaces", "a & b", "a; b", "[x] {y} (z)", "-dash", "emoji \U0001F600",
+)
+_PARSE_ARGUMENTS = r"""
+$cases = Get-Content -LiteralPath $env:NAMISYNC_PARSE_INPUT -Raw -Encoding utf8 | ConvertFrom-Json
+$results = foreach ($case in $cases) {
+    $tokens = $null
+    $errors = $null
+    # Parsed only: nothing in the input is evaluated.
+    $ast = [System.Management.Automation.Language.Parser]::ParseInput($case, [ref]$tokens, [ref]$errors)
+    $elements = @(foreach ($statement in $ast.EndBlock.Statements) {
+        foreach ($element in $statement.PipelineElements[0].CommandElements) {
+            if ($element -is [System.Management.Automation.Language.StringConstantExpressionAst]) {
+                @{ kind = $element.StringConstantType.ToString(); value = $element.Value }
+            } else {
+                @{ kind = $element.GetType().Name; value = $element.Extent.Text }
+            }
+        }
+    })
+    @{ errors = @($errors | ForEach-Object { $_.ErrorId }); elements = $elements }
+}
+$json = ConvertTo-Json -InputObject @($results) -Depth 5
+[System.IO.File]::WriteAllText($env:NAMISYNC_PARSE_OUTPUT, $json, [System.Text.UTF8Encoding]::new($false))
+"""
+
+
+def _parsed_by_powershell(tmp_path: Path, shell: str, sources: list[str]) -> list[dict]:
+    """How the real PowerShell parser reads each command line, in one launch."""
+
+    executable = shutil.which(shell)
+    if executable is None:
+        pytest.skip(f"{shell} is not on PATH")
+    source, parsed = tmp_path / "sources.json", tmp_path / "parsed.json"
+    source.write_text(json.dumps(sources), encoding="utf-8")
+    completed = subprocess.run(
+        [
+            executable, "-NoProfile", "-NonInteractive", "-EncodedCommand",
+            base64.b64encode(_PARSE_ARGUMENTS.encode("utf-16-le")).decode("ascii"),
+        ],
+        env={
+            **os.environ,
+            "NAMISYNC_PARSE_INPUT": str(source), "NAMISYNC_PARSE_OUTPUT": str(parsed),
+        },
+        capture_output=True, text=True, timeout=WAIT_SECONDS * 6,
+    )
+    assert completed.returncode == 0, completed.stderr
+    return json.loads(parsed.read_text(encoding="utf-8"))
+
+
+# PowerShell 7 and Windows PowerShell 5.1, which every Windows 11 has.
+@pytest.mark.parametrize("shell", ["pwsh", "powershell"])
+def test_a_selected_path_parses_back_in_powershell_as_the_same_path(
+    tmp_path: Path, shell: str,
+) -> None:
+    data = Path("C:/data")
+    cases = []
+    for name in (*_AWKWARD_NAMES, "esc\x1bname", "esc\x1b$(Get-Date) ”quote"):
+        ledger, history = data / name / "ledger.db", data / f"{name}.db"
+        line = cli_module._selected_databases(
+            SimpleNamespace(database=str(ledger), history_database=str(history)),
+            ledger, history,
+        )
+        options = line.removeprefix("These databases were selected with ").removesuffix(
+            ". Add the same options to any NamiSync command above."
+        )
+        cases.append(("namisync check " + options, str(ledger), str(history)))
+
+    parsed = _parsed_by_powershell(tmp_path, shell, [source for source, _, _ in cases])
+
+    for (source, ledger, history), result in zip(cases, parsed, strict=True):
+        if "\x1b" in ledger:
+            # Not shown as it is: its markers, quoted alike, are never run.
+            ledger, history = cli_module._safe(ledger), cli_module._safe(history)
+        assert (result["errors"], result["elements"]) == ([], [
+            {"kind": "BareWord", "value": "namisync"},
+            {"kind": "BareWord", "value": "check"},
+            {"kind": "BareWord", "value": "--database"},
+            {"kind": "SingleQuoted", "value": ledger},
+            {"kind": "BareWord", "value": "--history-database"},
+            {"kind": "SingleQuoted", "value": history},
+        ]), source
+
+
+@pytest.mark.parametrize("given", [(), ("ledger",), ("history",), ("ledger", "history")])
+def test_a_history_refusal_repeats_exactly_the_database_options_given(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, given: tuple[str, ...],
+) -> None:
+    # A 0.1.0 History is refused with direction to run another command.
+    ledger, history = copy_released_pair(tmp_path / "it's ’data")
+    monkeypatch.setattr(cli_module, "default_database_paths", lambda: (ledger, history))
+    options = {"ledger": ["--database", str(ledger)], "history": ["--history-database", str(history)]}
+
+    run = _main(["history", *(value for role in given for value in options[role])])
+
+    assert run.code == EXIT_REFUSED and run.out == ""
+    refusal, *repeated = run.err.splitlines()
+    assert refusal.startswith("History admission refused: The history database")
+    assert "run a sync or inventory command" in refusal
+    quoted = {
+        "ledger": f"--database {cli_module._powershell_quoted(ledger)}",
+        "history": f"--history-database {cli_module._powershell_quoted(history)}",
+    }
+    if given == ("history",):
+        # Followed literally, another command would pair this History with the
+        # default ledger: it is told to name its own, and is offered no path.
+        assert repeated == [
+            f"This command was run with {quoted['history']} and no --database. "
+            "Any NamiSync command above must also name this History's own ledger "
+            "with --database; otherwise it pairs this History with the default ledger."
+        ]
+        assert "--database '" not in repeated[0] and str(ledger) not in repeated[0]
+        return
+    assert repeated == ([
+        f"This command was run with {' '.join(quoted[role] for role in given)}. "
+        "Add the same options to any NamiSync command above."
+    ] if given else [])
+
+
+def test_history_output_that_directs_no_command_repeats_no_options(tmp_path: Path) -> None:
+    ledger, history = _pair(tmp_path)
+
+    listed = _main(["history", "--history-database", str(history)])
+    unknown = _main(["history", "missing-run", *_flags(ledger, history)])
+
+    assert (listed.code, listed.err) == (EXIT_SUCCESS, (
+        "Ledger membership is unknown: no ledger was given, only --history-database.\n"
+    ))
+    assert (unknown.code, unknown.err) == (
+        EXIT_USAGE, "No retained history run named missing-run.\n",
     )
 
 
@@ -952,8 +1101,50 @@ def test_a_plan_reviewed_before_a_restore_command_is_refused_at_start(tmp_path: 
     assert list(target.iterdir()) == []
     assert (
         "Refused: The ledger was replaced (restored or reset) after this plan was "
-        "made, so it cannot run. Plan again to review it against the current ledger.\n"
+        "made, so it cannot run. Rerun the same sync command to review a new plan.\n"
     ) in stderr.getvalue()
+    assert "Plan again" not in stderr.getvalue()
+
+
+@pytest.mark.parametrize("verify_after_copy", [False, True])
+def test_a_ledger_replaced_after_the_start_check_names_the_command_line_step(
+    verify_after_copy: bool,
+) -> None:
+    try:
+        require_planned_ledger(
+            SimpleNamespace(ledger_instance_id="a" * 32), lambda: "b" * 32,
+        )
+    except LedgerInstanceChanged as error:
+        message = str(error)
+    # The workflow's own text, which other adapters receive, is unchanged.
+    assert message.endswith(" Plan again to review it against the current ledger.")
+    # As a writer refuses it after the start check: the run's error, not a
+    # commitment refusal. With --verify-after-copy the execute phase carries it too.
+    failure = f"LedgerInstanceChanged: {message}"
+    phases = (
+        (PhaseResult("execute", PhaseStatus.FAILED, 0, 1, 0, 7, error=failure),)
+        if verify_after_copy else ()
+    )
+    result = operation_result_view(OperationResult(
+        SessionState.FAILED, phases=phases,
+        error=FailureDetail("LedgerInstanceChanged", message),
+    ))
+    output, errors = io.StringIO(), io.StringIO()
+
+    cli_module._render_execution(
+        SimpleNamespace(result=result),
+        SimpleNamespace(commitment_error=None, refusals=()),
+        (), output, errors,
+    )
+
+    rerun = (
+        "LedgerInstanceChanged: The ledger was replaced (restored or reset) after "
+        "this plan was made, so it cannot run. Rerun the same sync command to "
+        "review a new plan."
+    )
+    assert errors.getvalue().splitlines()[0] == rerun
+    assert ("; error=" + rerun in output.getvalue()) is verify_after_copy
+    assert "Plan again" not in output.getvalue() + errors.getvalue()
 
 
 def test_restore_runs_in_place_beside_a_desktop_that_then_reads_the_new_ledger(

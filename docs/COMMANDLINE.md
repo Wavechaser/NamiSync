@@ -179,7 +179,13 @@ It never migrates or completes a pair: a history written by NamiSync 0.1.0
 exits `3` with `History admission refused:` and direction to start NamiSync,
 or run a sync or inventory command, once, which also creates its ledger if it
 is missing. With only a ledger present it prints `No retained history runs.`
-and creates nothing.
+and creates nothing. When database options were given, a `History admission
+refused:` refusal ends with a line naming them. With `--database`, or both,
+it is `This command was run with <options>. Add the same options to any
+NamiSync command above.` With `--history-database` alone it names that option,
+says no `--database` was given, and says any command above must also name this
+History's own ledger with `--database`, since otherwise it pairs the History
+with the default ledger; it suggests no ledger path.
 
 `history` reads the ledger only to mark which runs belong to it, by the read
 rule in [DATABASE](DATABASE.md#ledger-instance-and-ids), and never refuses or
@@ -291,7 +297,10 @@ of the commands that change files) ends with
 '<history>'. Add the same options to any NamiSync command above.`, naming the
 paths in effect, because a command in the guidance run without them would
 reach the default pair. The paths are single-quoted for pasting into
-PowerShell and shown unescaped unless they hold control characters.
+PowerShell, with every quote PowerShell reads as a single quote (`'` and
+U+2018-U+201B) doubled. A path holding characters NamiSync shows as `[U+XXXX]`
+markers (controls, soft hyphen, zero-width, bidi and similar) is shown with
+those markers, which never run but do not name that path.
 
 - `check` reports each role on its own line, `ledger: ok`, then every problem
   as `  - <text>` (at most 20 in all, as the workflow returns them) and, for a
