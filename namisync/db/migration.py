@@ -55,6 +55,11 @@ class MigrationStep:
     target_version: int
     # Each source table with the columns copied unchanged, ids included.
     tables: tuple[tuple[str, tuple[str, ...]], ...]
+    # A legacy step's own operations, given the instance id of the ledger the
+    # database belongs to: ``transform`` runs after the copy, before the
+    # triggers; ``verify`` checks its result before COMMIT.
+    transform: Callable[[sqlite3.Connection, str | None], None] | None = None
+    verify: Callable[[sqlite3.Connection, str | None], None] | None = None
 
 
 _LEDGER_V4 = MigrationStep("ledger", RELEASED_LEDGER_SCHEMA_VERSION, LEDGER_SCHEMA_VERSION, (
@@ -106,6 +111,22 @@ _LEDGER_V4 = MigrationStep("ledger", RELEASED_LEDGER_SCHEMA_VERSION, LEDGER_SCHE
         "id", "entity_kind", "entity_id", "key", "value", "created_at", "updated_at",
     )),
 ))
+
+
+# v0.1.0 recorded no ledger on its runs: they take the instance id the pair
+# upgrade passes, that of the ledger it migrated in the same call, or none.
+def _stamp_v8_runs(connection: sqlite3.Connection, instance_id: str | None) -> None:
+    if instance_id is not None:
+        connection.execute("UPDATE history_runs SET ledger_instance_id = ?", (instance_id,))
+
+
+def _verify_v8_stamps(connection: sqlite3.Connection, instance_id: str | None) -> None:
+    if connection.execute(
+        "SELECT count(*) FROM history_runs WHERE ledger_instance_id IS NOT ?", (instance_id,),
+    ).fetchone()[0]:
+        raise sqlite3.DatabaseError("migrated history run stamps do not match their ledger")
+
+
 _HISTORY_V8 = MigrationStep("history", RELEASED_HISTORY_SCHEMA_VERSION, HISTORY_SCHEMA_VERSION, (
     ("history_runs", (
         "id", "run_token", "session_id", "activity_kind", "host_key", "subject_kind",
@@ -133,7 +154,7 @@ _HISTORY_V8 = MigrationStep("history", RELEASED_HISTORY_SCHEMA_VERSION, HISTORY_
         "run_id", "phase_order", "phase", "status", "items_done", "items_total",
         "bytes_done", "bytes_total", "error",
     )),
-))
+), transform=_stamp_v8_runs, verify=_verify_v8_stamps)
 # (role, source schema version) -> the step from it. Every version from the
 # oldest supported source to the current one must have an entry (tested).
 MIGRATION_STEPS: Mapping[tuple[str, int], MigrationStep] = {
@@ -186,10 +207,11 @@ def migrate_database(
     """Migrate one supported older database in place, or confirm it is current.
 
     ``claim`` must be this database's held exclusive maintenance claim. A
-    ledger receives a new instance id. History stamps every existing run with
-    the instance id it is given, which the pair operation passes only for the
-    ledger it migrated in the same call; with none, its runs are left
-    unstamped so they never join a ledger they were not recorded with.
+    ledger receives a new instance id. ``ledger_instance_id``, which the pair
+    operation passes only for the ledger it migrated in the same call, reaches
+    only a step's own operations: the v0.1.0 History step stamps every run with
+    it, and with none leaves them unstamped so they never join a ledger they
+    were not recorded with.
     """
 
     resolved = validate_database_path(path)
@@ -435,7 +457,9 @@ def _migrate(
     try:
         _rename_aside(connection, step)
         _create_tables(connection, history)
-        _copy_rows(connection, step, history=history, instance_id=instance_id)
+        _copy_rows(connection, step)
+        if step.transform is not None:
+            step.transform(connection, instance_id)
         _drop_aside(connection, step)
         _create_triggers(connection, history)
         _write_metadata(connection, history, instance_id)
@@ -475,29 +499,16 @@ def _create_tables(connection: sqlite3.Connection, history: bool) -> None:
             connection.execute(statement)
 
 
-def _copy_rows(
-    connection: sqlite3.Connection, step: MigrationStep, *, history: bool, instance_id: str | None,
-) -> None:
+def _copy_rows(connection: sqlite3.Connection, step: MigrationStep) -> None:
     for table, columns in step.tables:
-        _copy_table(connection, table, columns, stamp=instance_id if (
-            history and table == "history_runs"
-        ) else None)
+        _copy_table(connection, table, columns)
 
 
-def _copy_table(
-    connection: sqlite3.Connection, table: str, columns: tuple[str, ...], *, stamp: str | None,
-) -> None:
+def _copy_table(connection: sqlite3.Connection, table: str, columns: tuple[str, ...]) -> None:
     listed = ", ".join(columns)
-    if stamp is None:
-        connection.execute(
-            f"INSERT INTO {table}({listed}) SELECT {listed} FROM {_ASIDE_PREFIX}{table}"
-        )
-    else:
-        connection.execute(
-            f"INSERT INTO {table}({listed}, ledger_instance_id) "
-            f"SELECT {listed}, ? FROM {_ASIDE_PREFIX}{table}",
-            (stamp,),
-        )
+    connection.execute(
+        f"INSERT INTO {table}({listed}) SELECT {listed} FROM {_ASIDE_PREFIX}{table}"
+    )
 
 
 def _drop_aside(connection: sqlite3.Connection, step: MigrationStep) -> None:
@@ -537,12 +548,8 @@ def _verify(
     _validate_reader_contract(connection, history=history)
     if _row_counts(connection, counts) != counts:
         raise sqlite3.DatabaseError("migrated row counts differ from the source")
-    # Every run carries the ledger's instance, or, without a ledger, none does.
-    if history and connection.execute(
-        "SELECT count(*) FROM history_runs WHERE ledger_instance_id IS "
-        + ("NULL" if instance_id is not None else "NOT NULL")
-    ).fetchone()[0]:
-        raise sqlite3.DatabaseError("migrated history run stamps do not match their ledger")
+    if step.verify is not None:
+        step.verify(connection, instance_id)
 
 
 def _commit(connection: sqlite3.Connection) -> None:

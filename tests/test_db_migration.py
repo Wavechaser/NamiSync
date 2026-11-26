@@ -374,6 +374,87 @@ def test_failed_verification_rolls_back_and_names_its_verified_backup(
     assert _classify_cold(released_ledger, history=False) == "current"
 
 
+@pytest.mark.parametrize("supplied", ("0" * 32, None), ids=("stamped", "unstamped"))
+def test_a_released_history_stamps_every_run_with_exactly_the_id_given(
+    tmp_path: Path, supplied: str | None,
+) -> None:
+    main = copy_released_role(tmp_path / "data", history=True)
+    with acquire_database_claim(main, exclusive=True) as claim:
+        migrate_database(main, history=True, claim=claim, ledger_instance_id=supplied)
+    with closing(sqlite3.connect(main.as_uri() + "?mode=ro", uri=True)) as connection:
+        stamps = [row[0] for row in connection.execute("SELECT ledger_instance_id FROM history_runs")]
+    assert stamps and set(stamps) == {supplied}
+
+
+@pytest.mark.parametrize(("supplied", "stamp"), (
+    ("0" * 32, "f" * 32), ("0" * 32, None), (None, "f" * 32),
+), ids=("other-ledger", "one-unstamped", "stray-stamp"))
+def test_a_released_history_run_with_another_stamp_rolls_back(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, supplied: str | None, stamp: str | None,
+) -> None:
+    main = copy_released_role(tmp_path / "data", history=True)
+    old = carried_rows(main, tmp_path / "before", history=True)
+    drop_aside = migration._drop_aside
+
+    def restamp_one_run(connection, step):
+        # After the copy, before verification: one run differs from the id given.
+        connection.execute(
+            "UPDATE history_runs SET ledger_instance_id = ? "
+            "WHERE id = (SELECT min(id) FROM history_runs)",
+            (stamp,),
+        )
+        drop_aside(connection, step)
+
+    monkeypatch.setattr(migration, "_drop_aside", restamp_one_run)
+    with acquire_database_claim(main, exclusive=True) as claim:
+        with pytest.raises(DatabaseMigrationFailed, match="left unchanged") as raised:
+            migrate_database(main, history=True, claim=claim, ledger_instance_id=supplied)
+    assert "stamps do not match" in str(raised.value)
+    backup = raised.value.backup
+    assert backup is not None and backup.name.startswith("history.db.backup-v8-")
+    assert _classify_cold(main, history=True) == "older"
+    assert carried_rows(main, tmp_path / "after", history=True) == old
+    assert carried_rows(backup, tmp_path / "backup", history=True) == old
+
+
+def test_a_step_without_its_own_operations_keeps_every_runs_stamp(tmp_path: Path) -> None:
+    # The engine copies listed columns only: a later History step that lists
+    # the stamp keeps each run's own, mixed or none, whatever id the call has.
+    main = initialize_history(tmp_path / "history.db")
+    insert = (
+        "INSERT INTO history_runs(run_token, session_id, activity_kind, host_key, "
+        "ledger_instance_id, created_at, current_state, context_hash, "
+        "event_chain_hash, prefix_projection_hash) "
+        "VALUES (?, 's', 'sync', 'h', ?, '2026-01-01T00:00:00.000000Z', 'running', "
+        "x'00', x'00', zeroblob(32))"
+    )
+    stamps = {"none": None, "a": "a" * 32, "b": "b" * 32}
+    with closing(connect_history_writer(main)) as connection:
+        connection.executemany(insert, stamps.items())
+    with closing(sqlite3.connect(main)) as connection:
+        tables = tuple(
+            (table, tuple(row[1] for row in connection.execute(f"PRAGMA table_xinfo({table})")))
+            for (table,) in connection.execute(
+                "SELECT name FROM sqlite_schema WHERE type = 'table' "
+                "AND name NOT LIKE 'sqlite_%' AND name <> 'schema_metadata' ORDER BY rowid"
+            ).fetchall()
+        )
+    assert "ledger_instance_id" in dict(tables)["history_runs"]
+    step = migration.MigrationStep(
+        "history", HISTORY_SCHEMA_VERSION, HISTORY_SCHEMA_VERSION, tables,
+    )
+    connection = migration._open_exclusive(main)
+    try:
+        counts = migration._row_counts(connection, dict(tables))
+        migration._migrate(connection, step, counts, history=True, instance_id="c" * 32)
+    finally:
+        connection.close()
+    with closing(sqlite3.connect(main.as_uri() + "?mode=ro", uri=True)) as connection:
+        assert dict(connection.execute(
+            "SELECT run_token, ledger_instance_id FROM history_runs"
+        )) == stamps
+
+
 def test_backup_never_replaces_an_existing_file(
     released_ledger: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
