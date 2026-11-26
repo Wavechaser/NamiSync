@@ -1,78 +1,88 @@
-# Latest session — M2-A4 second review round, 2026-11-26
+# Latest session — M2-A4 third review round, 2026-11-26
 
-Eight findings from the user's second review of M2-A4 are fixed. Work is on
-`milestone2`; nothing is pushed. M2-A1 to M2-A4 are complete and M2-A5 is the
-next row, still proposed. [M2_PLAN](M2_PLAN.md)'s A4 row holds the decisions
-and what is open; [DATABASE](DATABASE.md#data-protection) owns the behavior.
+The five findings of the third M2-A4 review and the four items the second
+round left open are fixed. Work is on `milestone2`; nothing is pushed. M2-A1
+to M2-A4 are complete and M2-A5 is the next row, still proposed.
+[M2_PLAN](M2_PLAN.md)'s A4 row holds the decisions and what is open;
+[DATABASE](DATABASE.md#data-protection) owns the behavior.
 
 ## Changes
 
-- `4993a244`: the v0.1.0 History step owns its stamp and verifies that every
-  run carries exactly the id given. The generic engine no longer knows it.
-- `aa61dfe6`: `upgrade_database_pair` takes the caller's permission to create
-  and enforces it under both claims. A `--location-id` command never grants
-  it.
-- `007fe988`: a reset direction names only the database that needs it and
-  says to keep the other. `check` prints the pair direction for a reset.
-- `317861bc`: an admitted run's observer holds the ledger's shared claim,
-  taken before its stamp is read, until it closes. The re-read from
-  `41e020b7` is removed.
-- `129e2968`: a `history` refusal repeats exactly the database options given;
-  the replaced-ledger refusal says to rerun the same sync command; pasteable
-  paths double every PowerShell single-quote character.
-- `72176b46`: an integrity continuation keeps the ledger instance read under
-  its recorder claim, and a resume that finds another instance is refused
-  before the scan.
+- `d07cb246`: the dispatcher closes the audit observer when the event hub
+  refuses its configuration.
+- `f02624f1`: a sync run planned before any ledger existed is bound to the
+  ledger its first recorder opened; a resume after a replacement is refused
+  (finding 1).
+- `4972133c`: the inventory review labels a row from the ledger after a run
+  that failed, was canceled or was refused. The integrity context carries
+  the released run's `outcome`.
+- `57ca297a`: a database path at the other database's `.claim`, `-wal`,
+  `-shm` or `-journal` path is a configuration error (finding 3); a claim
+  refusal while creating a first pair is an admission refusal, exit `3`
+  (finding 4); the direction to discard both databases names both paths.
+- `0ce55b6f`: a role's `check` states only what was found and the pair
+  decides the recovery (finding 2); wrong-role and live-backup refusals no
+  longer say "Nothing was changed." (finding 5); a database path that cannot
+  be written as it is, to the stream in use, is described, not quoted.
 
 ## Verification
 
-- Ordinary suite on `72176b46`: 7366 passed, 4 skipped, 35 deselected, with
+- Ordinary suite on `0ce55b6f`: 7392 passed, 4 skipped, 35 deselected, with
   the seven known interpreter-bound failures; `lint-imports` 13 kept.
-- Each of the six commits had an independent adversarial review with
-  out-of-tree mutations. Three needed corrections, which the same reviewer
-  confirmed.
-- Reproduced with real child processes, before and after:
-  - `check` and `restore ledger` naming the run's ledger with another
-    History, while a run sat between its stamp and its recorder.
-  - A paused baseline, verify and rebaseline run resumed after
-    `restore ledger`, with degraded audit and with History failing mid-run.
-- The path quoting was fuzzed through the parser of PowerShell 7 and 5.1
-  (4043 lines, no failures) by its reviewer.
+- Each commit had an independent adversarial review with out-of-tree
+  mutations. `57ca297a` needed one doc correction and `0ce55b6f` three code
+  corrections, which its reviewer confirmed.
+- Reproduced with real child processes before the fix, and rerun after:
+  findings 2, 3, 4 and 5, and both marker-path cases. Finding 1 was
+  reproduced in the runtime with a real backup and `restore_database_from_backup`.
+- A 99-pair state matrix (11 ledger states by 9 History states) through
+  `check` and `inventory` showed discard advice only where the pair decision
+  gives it, and never twice.
 - Changed after review and not seen by a reviewer:
-  - In `aa61dfe6`: the ID-only refusal ends "Nothing else was changed." when
-    a database had already been updated. 173 focused tests passed.
-  - In `72176b46`: two DATABASE sentences and one code comment reworded as
-    the reviewer advised.
-  - After the gate: one assertion that a refused resume's record holds the
-    item reported before the pause exactly once. 44 tests in
-    `tests/test_inventory_runtime.py` passed; the full suite was not rerun.
-- Not run: a headed desktop launch, the installed `namisync.exe`, and the
-  headed SH-G-5 case whose expected text changed in `007fe988`.
+  - In `57ca297a`: two DATABASE sentences corrected as the reviewer required.
+  - In `0ce55b6f`: the unsupported-database next step reads "whether a reset
+    is needed and which database it discards", as the reviewer advised. 186
+    CLI tests passed.
+- Not covered by a test: which stream a selected-databases line is built
+  for at each print site (three mutants survived; the code is right today).
+- Not run: a headed desktop launch, the installed `namisync.exe`, the headed
+  SH-G-5 case, and the inventory review after a refused resume in the real
+  app (pause, `restore ledger`, resume or cancel, then a failed Refresh).
 - Review scratch under `build/a4-review-*` was deleted. No evidence record
   was promoted.
 
 ## Immediate context
 
 - Open for a user decision (also in the A4 row):
-  - The desktop inventory review labels a row from the session's item before
-    the row's own ledger state (`inventory_review.js`), so after a refused
-    integrity resume it shows rows reported before the pause as "Baselined"
-    or "Verified", which the current ledger does not attest. Keeping those
-    items in the failed record is intended and tested (user decision); the
-    defect is in that view.
-  - A paused integrity run canceled after a restore ends canceled with its
-    earlier items listed and no mention of the ledger.
-  - When both databases need a reset, the direction names no paths.
-  - A pasteable path holding characters shown as `[U+XXXX]` markers names
-    the marker text, not the path.
+  - A canceled or failed verify whose mismatch could not be recorded shows
+    it only in Details; the row shows the ledger's earlier state.
+  - While an integrity run is paused and the ledger is restored from the
+    CLI, rows keep the run's live labels until it is resumed or canceled. A
+    completed run's labels outlast a later CLI restore until Refresh. Both
+    need a ledger-identity signal on the page.
+  - Two processes creating a first pair at once: the loser exits `4` with
+    "coordinated database initialization failed", not a retryable refusal.
+- An ordinary failed or canceled integrity run now also shows ledger states
+  on its rows, with the run's result in Details; this is wider than the
+  replaced-ledger case and is intended.
 - Known limits recorded in DATABASE:
   - A session admitted with degraded audit, or whose audit degraded after
     admission, holds neither claim while paused. Sync and integrity resumes
     are checked against the ledger instance; inventory acknowledge and
     restore by row id are not (B3).
-  - If the dispatcher's `EventHub` or `_AuditPump` constructor raises a
-    configuration error, the observer is never closed and both claims stay
-    held. The service passes valid constants, so production cannot reach it.
+  - A first-use sync run paused before its first recorder opened binds on
+    resume to whatever ledger is current; nothing of it was recorded.
+  - A ledger file copied back by hand keeps its instance id, so the instance
+    checks do not see it.
+  - The path check does not see 8.3 short-name aliases.
+- Review notes from this round, left as they are:
+  - The `history` command, reading History alone, still prints the
+    single-database reset direction for an unsupported History.
+  - A completed run's item with `record_disposition` stale or conflict still
+    labels its row; only the tooltip names the disposition.
+  - The dispatcher's handler covers `ValueError` only; an out-of-range or
+    `None` setting raises another type and leaves the observer open.
+    Production passes valid constants.
 - For the first post-M2 schema step: the stamp condition is "the ledger
   migrated in this call", which equals "from 0.1.0" only while v4 and v8 are
   the sole registered steps. Deleting the v8 step leaves two unused
@@ -125,34 +135,3 @@ and what is open; [DATABASE](DATABASE.md#data-protection) owns the behavior.
   - Frozen `sh_g_8_*` artifacts must not move.
   - Keep `F:\NamiSyncExecutorBenchSource`, `H:\test_dir`, `dist/v0.1.0/` and
     `build/inventory-cold/`.
-
-## Third M2-A4 review — five additional open findings at `77746a5e`
-
-1. **High — A first-use sync can resume into a restored ledger.** A plan made
-   before either database existed carried no ledger instance. Execution wrote
-   its run to the newly created ledger. With degraded History, the run paused
-   during verification and `restore ledger` put back a pre-execution backup.
-   The run row was absent after restore. Resume recreated it and reported both
-   phases completed with degraded recording. Keep the first-start allowance and
-   bind the continuation to the ledger instance opened by its first recorder.
-2. **Medium — `check` can advise deletion when the pair decision calls for a
-   path correction.** With an empty ledger file and a real ledger at the History
-   path, `inventory` reported `history-wrong-role` and directed the user to check
-   the paths. `check` first printed the unsupported ledger's instruction to
-   archive or delete it. Report both role observations and let the pair decision
-   supply the recovery action.
-3. **Medium — `check` can create a file at the selected History main path.**
-   With both mains absent, `--database collision.db --history-database
-   collision.db.claim` created a zero-byte History main when taking the ledger
-   claim, then reported History unavailable. Check for overlap between either
-   main and the other database's claim path before opening either claim.
-4. **Low — First-use maintenance contention loses its retry guidance.** With
-   both mains absent and both exclusive claims held, a child `inventory` exited
-   `4` with “coordinated database initialization failed.” Cleanup retracted the
-   reservations. Preserve the typed claim refusal after successful cleanup so
-   this case gets the same exit `3` and retry guidance as a ready pair.
-5. **Low — A successful History restore can say “Nothing was changed.”** With
-   the ledger option pointing to another History database, `restore history`
-   restored the requested History and published its pre-restore backup. The
-   subsequent `ledger-wrong-role` message ended with “Nothing was changed.”
-   Keep the peer diagnosis and let the restore result describe what changed.

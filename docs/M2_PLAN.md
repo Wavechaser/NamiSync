@@ -277,23 +277,42 @@ Checkpoints:
       ledger for other commands.
     - A desktop startup refusal keeps its message, with paths and the
       recovery direction, in the GUI log.
-  - **Open for a user decision:**
-    - The desktop inventory review labels a row from the session's item
-      before the row's own ledger state (`inventory_review.js`). After a
-      refused integrity resume it shows rows reported before the pause as
-      "Baselined" or "Verified", which the current ledger does not attest.
-      The session record is right to keep those items (user decision,
-      2026-11-26: they are the run's account, and the message says they
-      belong to the replaced ledger); the defect is in that view.
-    - A paused integrity run canceled after a restore ends canceled with its
-      earlier items listed and no mention of the ledger.
-    - When both databases need a reset, the direction names no paths.
-    - A pasteable path holding characters shown as `[U+XXXX]` markers names
-      the marker text, not the path.
   - **Gate result (2026-11-26, `72176b46`):** 7366 ordinary tests passed, 4
     skipped, 35 deselected, with the same seven failures; 13 contracts kept.
     Each of the six commits was independently reviewed, and the two claim
     defects were reproduced with real child processes before and after.
+  - **Third review round (2026-11-26).** Five findings and the four items
+    the second round left open were fixed in `d07cb246` to `0ce55b6f`; the
+    list is in [CHANGELOG](../CHANGELOG.md). The decisions behind them:
+    - A session record keeps the items an integrity run reported before a
+      refused resume (user decision: they are the run's account). A view
+      that shows one as the row's current state is the defect.
+    - The inventory review labels a row from the ledger whenever the run
+      ended failed, canceled or refused, not only after a replaced ledger:
+      the page has no ledger identity, so the run's outcome is the rule. The
+      integrity context gained `outcome` for it
+      ([BRIDGE](BRIDGE.md) owns the shape).
+    - A first-use sync run is bound to the ledger its first recorder opened,
+      kept in the runtime for as long as the run can resume.
+    - The path check covers the other database's SQLite sidecar paths as
+      well as its claim path, because a History at the ledger's `-wal` path
+      damaged the pair in a child-process run.
+    - A role's `check` states what was found; only the pair decision
+      directs a discard.
+  - **Open for a user decision:**
+    - A canceled or failed verify whose mismatch could not be recorded
+      shows that mismatch only in Details; the row shows the ledger's
+      earlier state.
+    - While an integrity run is paused and the ledger is restored from the
+      CLI, rows keep the run's live labels until the run is resumed or
+      canceled. A completed run's labels likewise outlast a later CLI
+      restore until Refresh. Both need a ledger-identity signal on the page.
+    - Two processes creating a first pair at once: the loser ends with
+      "coordinated database initialization failed" and exit `4`, not a
+      retryable refusal.
+  - **Gate result (2026-11-26, `0ce55b6f`):** 7392 ordinary tests passed, 4
+    skipped, 35 deselected, with the same seven failures; 13 contracts kept.
+    Each of the five commits was independently reviewed.
   - At the first post-M2 schema step, the stamp condition ("the ledger
     migrated in this call") must be narrowed to the 0.1.0 step.
   - **Left open, with owners:** the desktop refusal that names a replaced

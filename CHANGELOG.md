@@ -111,6 +111,38 @@ first schema change. M2_PLAN owns checkpoint scope and gates.
   recovery direction, in the GUI log (user decision); an ordinary startup
   logs no paths.
 
+- Fixed five findings from a third review of M2-A4 and the items left open
+  by the second.
+  - A sync run planned before any ledger existed is bound to the ledger its
+    first recorder opened. A resume after that ledger was replaced is refused
+    like any other replaced-ledger plan, instead of recreating the run and
+    reporting both phases completed.
+  - A database path equal to the other database's `.claim`, `-wal`, `-shm` or
+    `-journal` path is a configuration error before any file is opened.
+    Taking a claim used to create the other main there, and a History at the
+    ledger's `-wal` path damaged the pair.
+  - A claim refusal met while creating a first pair is reported as a refusal
+    with its retry message and exit `3`, not as a failed initialization.
+  - `check` states what each database is and leaves the recovery action to
+    the pair decision, so swapped paths no longer bring advice to delete an
+    empty ledger. An unsupported database beside one that must be repaired
+    first is told so.
+  - Wrong-role and live-backup refusals no longer say "Nothing was changed.",
+    which was false after a successful restore.
+  - The direction to discard both databases names each by path.
+  - A database path that cannot be written as it is, to the stream in use, is
+    described instead of being quoted as an option to paste.
+  - The desktop inventory review labels a row from the ledger after a run
+    that failed, was canceled or was refused, including a resume refused for
+    a replaced ledger. The run's own result stays in Details, marked as the
+    run's; per-item errors and cancellations stay on the row. The integrity
+    context carries the released run's outcome for this.
+  - The dispatcher closes the audit observer when the event hub refuses its
+    configuration.
+- On `0ce55b6f`: 7392 ordinary tests pass apart from the seven known
+  failures; 13 import contracts hold. Each of the five commits had an independent review; two needed corrections, which the
+  same reviewer confirmed.
+
 #### Maintenance claim and schema migration (2026-11-25)
 
 - Delivered M2-A3. A database written by v0.1.0 now migrates to the M2 schema
