@@ -2617,6 +2617,36 @@ entries to fit a batch; use explicit record offsets/limits.
 
 ### Database artifact ownership and rollback
 
+<a id="bug-0321"></a>
+
+- MINOR - OPEN (2026-11-27). Nested database path validation gap. On first
+  use with `nested.db` as the ledger and `nested.db/history.db` as History,
+  NamiSync creates a directory at the ledger's main path and both claim
+  files, then refuses with `inconsistent-pair` and exit `4`. No database is
+  written. Cause: path validation
+  compares the two mains and each other's claim and sidecar paths, but not
+  one main used as the other's parent, so creation makes History's folder
+  before the pair is checked. It needs an invalid path combination. Expected
+  correction: a configuration error before any directory is created. Found
+  in the M2-A4 closure review and carried forward (user decision).
+
+<a id="bug-0320"></a>
+
+- MODERATE - OPEN (2026-11-27). Cold validation live-writer race. A CLI
+  command started while another process writes the same ledger can fail its
+  cold file validation although the pair is healthy. At observer admission
+  the run completes with degraded audit and exit `7`, and the closing line
+  tells the user to check the History path although the ledger was read; in
+  preparation the command exits `4` with `database-busy` or
+  `database-unavailable`. Four simultaneous inventories gave 5 exit `7` and
+  2 exit `4` in 60 rounds. Nothing is damaged and a rerun succeeds. Cause:
+  the validation reads main, `-wal` and `-shm` whole before and after the
+  schema check; a writer changes them three times running (two 10 ms waits),
+  or holds a SQLite lock on `-shm` so the read raises `PermissionError`,
+  which is not retried. Accepted for M2-A4 as bounded and harmless (user
+  decision); the misleading direction belongs with the fix. Residual of
+  [BUG-0225](#bug-0225).
+
 <a id="bug-0224"></a>
 
 - MODERATE - FIXED (2026-09-27). Admission schema-mismatch misclassification.

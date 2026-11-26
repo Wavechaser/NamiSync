@@ -1,9 +1,11 @@
-# Latest session — M2-A4 closure blocker fixed, 2026-11-27
+# Latest session — M2-A4 closed, 2026-11-27
 
-**The A4 closure blocker found at `9bfc6792` is fixed** in the commit after
-`44fdfd61`. M2-A5 is the next proposed row. [M2_PLAN](M2_PLAN.md) records the
-A4 closure criteria and [DATABASE](DATABASE.md#maintenance-claim) owns the
-maintenance contract.
+**M2-A4 is closed** (user decision). Its closure blocker is fixed in
+`1c940e60`, and two findings stay open in
+[BUGS](BUGS.md#database-artifact-ownership-and-rollback) without holding the
+row. M2-A5 is the next proposed row. [M2_PLAN](M2_PLAN.md) records the A4
+closure and [DATABASE](DATABASE.md#maintenance-claim) owns the maintenance
+contract.
 
 ## The blocker and its fix
 
@@ -13,7 +15,7 @@ admitted run with degraded audit: exit `4` when the restore named the run's
 ledger, exit `7` when it named another ledger and the same History. The cold
 History open failed before any claim was asked for.
 
-`LocalWorkflowRuntime._stamped_observer` now takes both shared claims, ledger
+Since `1c940e60`, `LocalWorkflowRuntime._stamped_observer` takes both shared claims, ledger
 first, before it opens the History store or reads the ledger's instance. Both
 cases are refused at admission with the maintenance retry message, nothing
 stored and no scan
@@ -28,36 +30,33 @@ it fails both ways on the earlier runtime).
   exit `3` rests on the test above and on the CLI's existing mapping of an
   admission refusal.
 - Not covered by a test: the order of the two claims inside the observer's
-  opening (swapping them survives).
+  opening.
 
-## The concurrent-inventory exit `7`: cause found, not fixed
+## Two open findings, recorded in BUGS
 
-It is not maintenance and predates A4. A CLI command first opens its ledger
-connection owner when the observer reads the ledger's instance. That open
-runs the cold file validation, which reads the main file, `-wal` and `-shm`
-whole before and after the schema check. Another process writing the ledger
-at that moment fails it in two ways, both traced in 60 rounds of four
-commands (55 clean, 5 exit `7`, 2 exit `4`):
+- **BUG-0320, the concurrent-inventory exit `7`.** Accepted for A4 as
+  bounded and harmless. It is not maintenance and predates A4. A CLI command
+  first opens its ledger connection owner when the observer reads the
+  ledger's instance. That open runs the cold file validation, which reads the
+  main file, `-wal` and `-shm` whole before and after the schema check.
+  Another process writing the ledger at that moment fails it in two ways,
+  both traced in 60 rounds of four commands (55 clean, 5 exit `7`, 2 exit
+  `4`):
+  - The files differ between the two reads three times in a row
+    (`DatabaseBusyError` after two 10 ms waits).
+  - Reading `-shm` meets another process's SQLite lock and raises
+    `PermissionError`, reported as `database-unavailable` at once, with no
+    retry.
 
-- The files differ between the two reads three times in a row
-  (`DatabaseBusyError` after two 10 ms waits).
-- Reading `-shm` meets another process's SQLite lock and raises
-  `PermissionError`, which is reported as `database-unavailable` at once,
-  with no retry.
-
-At observer admission either one degrades audit, so the run completes with
-exit `7` and a message naming History although the ledger was the file read.
-The same validation during preparation gives exit `4` (`database-busy` or
-`database-unavailable`). Nothing was changed: the cold probe's handling of a
-live writer is its own decision (see the cold-probe note below).
-
-## One lower-priority finding left
-
-- On first use, selecting `nested.db` as the ledger and
-  `nested.db/history.db` as History created a directory at the ledger main
-  path and left both claim files. Inventory then exited `4` with
-  `inconsistent-pair`. Reject a main used as the other main's parent during
-  path validation, before creating directories.
+  At observer admission either one degrades audit, so the run completes with
+  exit `7` and a closing line that directs the user to History although the
+  ledger was the file read. That direction is to be corrected with the race
+  fix (user decision). The same validation during preparation gives exit `4`.
+- **BUG-0321, nested custom database paths.** `nested.db` as the ledger with
+  `nested.db/history.db` as History creates a directory at the ledger's main
+  path and both claim files, then exits `4` with `inconsistent-pair`;
+  reproduced again this session, with no database written. It should be a
+  configuration error before any directory is created.
 
 ## Closure review verification
 

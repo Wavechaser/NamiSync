@@ -156,6 +156,11 @@ first schema change. M2_PLAN owns checkpoint scope and gates.
   fail the History open as an ordinary audit failure, so the run was admitted
   with degraded audit and ended with exit `4` or `7`; it is now refused at
   admission with the maintenance retry message and exit `3`.
+- Closed M2-A4 (user decision). Two findings from its closure review stay
+  open in BUGS and did not hold it: a command's cold database validation can
+  fail beside another process writing the ledger (BUG-0320), and a History
+  path inside the ledger's own path is refused only after a directory and
+  claim files are created (BUG-0321).
 
 #### Maintenance claim and schema migration (2026-11-25)
 

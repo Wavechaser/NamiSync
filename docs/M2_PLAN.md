@@ -144,8 +144,9 @@ Checkpoints:
   - **Handed to A4:** refusal at admission when maintenance holds the claim
     (in the A4 row), the read rule for runs with no or another ledger
     instance, backup rotation, and a way forward for a damaged database.
-- **M2-A4 Maintenance commands** (complete, 2026-11-26; `650110fd` to
-  `78246b75`, review fixes and the stamp revision to `e1f40f63`). Check, backup and restore run as
+- **M2-A4 Maintenance commands** (complete, closed 2026-11-27; `650110fd` to
+  `78246b75`, review fixes and the stamp revision to `e1f40f63`, review
+  rounds to `1c940e60`). Check, backup and restore run as
   maintenance sessions under A3's claim, with restore issuing a new ledger
   instance id and its lineage. Every plan, held in memory or stored, records the
   ledger instance it was planned against, and preflight refuses a mismatch, so a
@@ -316,6 +317,15 @@ Checkpoints:
     Each of the five commits was independently reviewed. The claim change
     of 2026-11-27: 7397 passed with the same seven failures, 13 contracts
     kept, independently reviewed.
+  - **Closure (user decision, 2026-11-27).** The closure review at
+    `9bfc6792` found a session admitted with degraded audit when a History
+    restore began after preparation. `1c940e60` takes both shared claims
+    before the observer opens either database, so it is refused at
+    admission: 7399 passed with the same seven failures, 13 contracts kept,
+    independently reviewed. Two findings stay open in
+    [BUGS](BUGS.md#database-artifact-ownership-and-rollback) and do not hold
+    the row: the cold validation beside a live writer (BUG-0320, accepted as
+    bounded and harmless) and nested custom database paths (BUG-0321).
   - At the first post-M2 schema step, the stamp condition ("the ledger
     migrated in this call") must be narrowed to the 0.1.0 step.
   - **Left open, with owners:** the integrity page shows no run-level
@@ -330,7 +340,7 @@ Checkpoints:
     an unconfirmed or failed restore through the CLI, an in-place restore
     stopped mid-copy by a lock, and a backup-removal failure. A cold probe
     still reports `database-unavailable` during any WAL write transaction,
-    which predates this row. Limits are in
+    which predates this row (BUG-0320). Limits are in
     [DATABASE](DATABASE.md#data-protection).
 - **M2-A5 Session progress and hold reason** (proposed). Sessions carry progress
   and hold reason, and the server derives every capability from them. Includes
