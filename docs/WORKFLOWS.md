@@ -383,7 +383,13 @@ derives immutable prior-correspondence query bounds from the current source and
 target file scans, resolves that subset through a one-snapshot read-only
 repository query, declares physical-volume resource keys, owns detached typed
 process-local checkpoints, starts ledger recording only after commitment and
-fresh preflight, and supplies the dispatcher history observer. Planning and declined review do
+fresh preflight, and supplies the dispatcher history observer. The observer's
+admission takes the ledger's shared maintenance claim, reads the ledger
+instance it stamps on the History run under that claim, then opens the observer
+(History's claim); the ledger's claim is released when the observer closes, so
+no maintenance replaces the stamped ledger while the run lives, whichever
+History it names. A refusal of either claim refuses the session at admission
+([DATABASE](DATABASE.md#maintenance-claim)). Planning and declined review do
 not create either database. Invalid database locations are rejected before the
 plan session, and an execution refusal may still create independent audit
 history while leaving managed files and ledger configuration untouched.

@@ -62,9 +62,10 @@ def replace_ledger_instance(ledger: Path) -> str:
 
     For cases that need only the new id, without a backup to restore from.
     Like a restore, this holds the ledger's claim exclusively, so it is
-    refused while any ledger writer is open, and it rewrites the id from a
-    second connection. (Restore also takes History's claim; this stand-in
-    does not, so it can reach a paused run.)
+    refused while any ledger writer or admitted run's History observer is
+    open, and it rewrites the id from a second connection. (Restore also
+    takes History's claim; this stand-in does not, so it can reach a paused
+    run admitted without an observer.)
     """
 
     replacement = new_instance_id()

@@ -913,10 +913,10 @@ own database, and the pair operation supplies anything that needs both.
     finishing) checks again after `LedgerRecorder` takes the ledger's shared
     claim and before its first write. Restore needs that claim exclusively, so
     the instance cannot change between this check and the writes. The start
-    check itself runs while the session's History observer holds History's
-    claim, which restore also needs, so this second check fires only when a
-    replacement lands after the start check without that claim (degraded
-    audit). It fails closed through the recording-open-failure path: no ledger
+    check itself runs while the session's History observer holds the ledger's
+    shared claim, taken before its stamp was read, so this second check fires
+    only when a replacement lands after the start check without that claim
+    (degraded audit). It fails closed through the recording-open-failure path: no ledger
     write, no filesystem change, `FAILED` with recording degraded and the typed
     `LedgerInstanceChanged`, CLI exit 4.
   - Inventory review's row-id actions (acknowledge, restore) are not plans and
@@ -924,8 +924,8 @@ own database, and the pair operation supplies anything that needs both.
   - The CLI case in `tests/test_cli.py` runs a real in-place restore while the
     plan waits at the prompt. The other replaced-ledger cases stand in for
     restore by rewriting the id under the ledger's exclusive claim:
-    `tests/test_bridge_resume.py` (start, paused execute and verify resumes,
-    the under-claim check) and `tests/interfaces/web/test_drain.py`.
+    `tests/test_bridge_resume.py` (start, paused execute and verify resumes of
+    a run admitted without an observer, the under-claim check) and `tests/interfaces/web/test_drain.py`.
 
 ### Migration
 
@@ -1275,36 +1275,36 @@ records are still being written to either database, in any process.
   connection opens, and releases it after that connection closes; a failed
   close keeps it until a later close or process exit, and every constructor
   failure releases it. A recorder lives for one run or one resumed stretch, so
-  a paused run holds none. Each `HistoryObserver` holds History's claim from
+  a paused run's recorder holds none. Each `HistoryObserver` holds History's claim from
   construction at admission until `close()`, across pauses and after
   `finalize`, because the History connection is shared and outlives runs;
   `close()` releases it after its final flush attempt, even a failed one, and
-  construction failures release it. `HistoryStore` holds none. A writer refused
+  construction failures release it. `HistoryStore` holds none. The runtime's
+  observer for an admitted run also holds the ledger's shared claim for that
+  lifetime: taken before History's and before the stamped ledger instance is
+  read, released when the observer closes, after History's, and by every
+  failure while opening. A writer refused
   because maintenance holds the claim fails its admission with a typed refusal;
   new runs are refused, not queued.
 
-  **Admission refuses** (M2-A4). The History claim is taken when the
-  dispatcher's audit-observer factory
-  (`LocalWorkflowRuntime.audit_observer`) opens the session's observer. A
-  `DatabaseMaintenanceActive` there becomes the core
-  `SessionAdmissionRefused`, which the dispatcher raises to the submitter
-  before anything is stored, published, attached or queued; every other
-  factory failure still degrades audit. Maintenance takes the ledger's claim before
-  History's, so refusing on History's covers the pair. A session is therefore
-  either refused at admission or admitted holding its observer's History claim,
-  and while it lives maintenance, which takes History second, is refused and
-  releases the ledger. The observer's ledger stamp is read before its claim
-  is taken, so the runtime reads the ledger instance again once the claim is
-  held; a ledger replaced in between refuses admission the same way
-  (`DatabaseMaintenanceActive`, then `SessionAdmissionRefused`), with the
-  observer closed, its claim released and no History run written, so no run
-  carries the stamp of a ledger replaced before it was admitted
-  (`tests/test_inventory_runtime.py`, for execution, inventory and integrity).
-  Sessions without an audit observer (planning) write
-  neither database and are not refused. One instant remains: an admitted run
-  whose ledger recorder opens while a maintenance attempt holds the ledger's
-  claim, before History's refuses that attempt, is refused by the recorder as
-  below.
+  **Admission refuses** (M2-A4). Both shared claims are taken when the
+  dispatcher's audit-observer factory (`LocalWorkflowRuntime.audit_observer`)
+  opens the session's observer: the ledger's first, in maintenance's order,
+  then History's. The ledger instance the observer stamps on the History run
+  is read once, under the ledger's claim. A `DatabaseMaintenanceActive` on
+  either becomes the core `SessionAdmissionRefused`, which the dispatcher
+  raises to the submitter before anything is stored, published, attached or
+  queued, with any claim already taken released; every other factory failure
+  still degrades audit. A session is therefore either refused at admission or
+  admitted holding both claims, and while its observer is open every
+  maintenance attempt naming its ledger, whichever History it names, is
+  refused (`DatabaseInUse`, `database-in-use`), so no restore replaces the
+  ledger a run's stamp names while the observer is open
+  (`tests/test_inventory_runtime.py`, for execution, inventory and integrity,
+  with maintenance naming another History). Sessions without an audit observer
+  (planning) write neither database and are not refused. A session whose
+  audit is degraded holds neither claim until its ledger recorder opens, and
+  that recorder refuses it as below.
 - **Maintenance holds it exclusively** on both databases of the pair, ledger
   first, and refuses rather than waits while any claim is held:
   `hold_maintenance_claims(ledger, history)` releases the ledger claim when
@@ -1333,7 +1333,8 @@ records are still being written to either database, in any process.
   left pending or uncertain, the task keeps its prior state, execution's
   selection is back in review, and the action can be started again once
   maintenance ends. A ledger recorder refusal
-  (the instant above, and inventory acknowledge or restore) comes before any
+  (a session admitted with degraded audit, and inventory acknowledge or
+  restore) comes before any
   scan, hash or filesystem change: inventory and integrity end failed with the
   typed error, execution takes its recording-open-failure path, and acknowledge
   or restore raises it to the caller. The CLI then prints the typed error and
@@ -1346,7 +1347,9 @@ records are still being written to either database, in any process.
   that are not refusals, recorder and observer lifetimes including failed
   closes, schema creation and the pair helper); the live-data guard's view of
   claim creation in `tests/test_live_data_guard.py`; the workflow and
-  dispatcher seam, admission and ledger-only recorder refusals included, in
+  dispatcher seam, admission refusals on either database, the observer's
+  ledger claim against maintenance naming another History and its release,
+  and the degraded-audit recorder refusal included, in
   `tests/test_inventory_runtime.py`; the dispatcher's refusal contract in
   `tests/dispatcher/test_dispatcher.py`; the CLI in `tests/test_cli.py`; the
   desktop task starts and fixed bridge error in
@@ -1357,15 +1360,21 @@ records are still being written to either database, in any process.
   connection opens without a claim; migration's own exclusive file access is
   what refuses it. `reset_databases` deletes files without holding the pair
   claim; only its re-creation takes each database's claim.
-- **Outside the gate.** Settings keep their own named mutex. A paused run holds
-  no ledger claim; contract validation at its next open is what refuses a
-  database that changed underneath it. An admitted session's History observer
-  holds History's claim from admission, across pauses, so maintenance cannot
-  run beside held, queued or paused work whose audit is healthy. A reviewed
-  plan not yet submitted, and a session admitted with degraded audit, hold no
-  claim; the ledger instance check ([above](#ledger-instance-and-ids)) covers
-  them. Refusing maintenance by naming such waiting work arrives with the Data
-  page (M2-B3).
+- **Outside the gate.** Settings keep their own named mutex. A paused run's
+  ledger recorder is closed, but an admitted session's observer holds the
+  ledger's and History's shared claims from admission until it closes,
+  across pauses, so maintenance cannot run beside held, queued or paused work
+  whose audit is healthy. A reviewed plan not yet submitted, a session
+  admitted with degraded audit, and a session whose audit degraded after
+  admission (the audit pump then closes its observer, releasing both claims,
+  while the session lives on) hold neither claim, also while paused. For
+  them only sync commitments check the ledger instance at start and resume
+  ([above](#ledger-instance-and-ids)). Integrity continuations (baseline,
+  verify, rebaseline; inventory does not pause) do not: a paused integrity
+  session holding no claim that straddles a restore reports its carried items
+  as done against the replacement ledger. That is an open known limit.
+  Refusing maintenance by naming such waiting work arrives with the Data page
+  (M2-B3).
 
 ## Data Protection
 
@@ -1413,8 +1422,9 @@ the restored-at-the-prompt case in `tests/test_cli.py`.
 - **Mechanism.** Each pair call holds both exclusive maintenance claims,
   ledger first, for its whole run, as migration does; there is no dispatcher
   session. Every db operation, rotation included, requires its database's held
-  exclusive claim. Every run holds History's shared claim from admission to
-  close, so none runs beside maintenance, new work is refused at admission,
+  exclusive claim. Every run whose audit is healthy holds the ledger's and
+  History's shared claims from admission until its observer closes, so none
+  runs beside maintenance ([limits](#maintenance-claim)), new work is refused at admission,
   and no run straddles a moment at which both claims are held. Times are read
   from the clock once both claims are held.
 - **Check** reports the pair contract and each role in any pair state. Each

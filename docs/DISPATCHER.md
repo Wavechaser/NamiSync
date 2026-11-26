@@ -408,7 +408,7 @@ observer is isolated the same way: admission continues with a degraded-audit
 sentinel, so history availability cannot decide whether domain work runs.
 The one exception is the core `SessionAdmissionRefused`, which a factory
 raises to refuse the session itself (the composition root does so only while
-database maintenance holds the History claim;
+database maintenance holds the ledger's or History's claim;
 [DATABASE](DATABASE.md#maintenance-claim) owns that policy). The factory runs before the store write, event hub,
 attachment and publication, so the dispatcher re-raises it to the submitter
 with nothing stored, attached or queued and admission capacity released.

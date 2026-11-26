@@ -1493,7 +1493,7 @@ def test_location_work_during_database_maintenance_reports_the_typed_refusal(
     assert result == EXIT_REFUSED
     assert stderr.getvalue() == (
         "Inventory refused: Database maintenance is in progress on "
-        f"{history}. New work is refused, not queued; wait for maintenance "
+        f"{ledger}. New work is refused, not queued; wait for maintenance "
         "to finish, then start this again.\n"
     )
     assert stdout.getvalue() == ""
@@ -1510,7 +1510,7 @@ def test_location_work_during_database_maintenance_reports_the_typed_refusal(
         pass
 
 
-def test_location_work_under_a_ledger_only_claim_reports_the_recorder_refusal(
+def test_location_work_under_a_ledger_only_claim_is_refused_at_admission(
     tmp_path: Path,
 ) -> None:
     root = tmp_path / "root"
@@ -1520,7 +1520,7 @@ def test_location_work_under_a_ledger_only_claim_reports_the_recorder_refusal(
     history = initialize_history(tmp_path / "history.db")
     stderr = io.StringIO()
 
-    # Admitted (History's claim is free); its ledger recorder then refuses.
+    # Refused at admission: the run's observer takes the ledger's claim first.
     with acquire_database_claim(ledger, exclusive=True):
         result = main(
             ["inventory", str(root), "--database", str(ledger), "--history-database", str(history)],
@@ -1528,12 +1528,12 @@ def test_location_work_under_a_ledger_only_claim_reports_the_recorder_refusal(
             stderr=stderr,
         )
 
-    assert result == EXIT_FAILED
-    assert (
-        "DatabaseMaintenanceActive: Database maintenance is in progress on "
-        f"{ledger}. New work is refused, not queued"
-    ) in stderr.getvalue()
-    assert "Inventory refused:" not in stderr.getvalue()
+    assert result == EXIT_REFUSED
+    assert stderr.getvalue() == (
+        "Inventory refused: Database maintenance is in progress on "
+        f"{ledger}. New work is refused, not queued; wait for maintenance "
+        "to finish, then start this again.\n"
+    )
     with hold_maintenance_claims(ledger, history):
         pass
 
@@ -1563,7 +1563,7 @@ def test_sync_execution_during_database_maintenance_is_refused_at_admission(
     assert not (target / "payload.bin").exists()
     assert stderr.getvalue() == (
         "Execution refused: Database maintenance is in progress on "
-        f"{history}. New work is refused, not queued; wait for maintenance "
+        f"{ledger}. New work is refused, not queued; wait for maintenance "
         "to finish, then start this again.\n"
     )
     assert "disposition=" not in stdout.getvalue()

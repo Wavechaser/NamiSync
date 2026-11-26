@@ -56,6 +56,7 @@ from namisync.db.repositories import (
     RecentPairSnapshot,
     RecentSyncActivitySnapshot,
 )
+from namisync.db.schema import initialize_history
 from namisync.dispatcher import (
     Dispatcher,
     InMemorySessionStore,
@@ -75,6 +76,7 @@ from namisync.workflows.inventory import (
     LocationCandidateState,
     VolumeResolutionState,
 )
+from namisync.workflows.database_maintenance import check_database_pair
 from namisync.workflows.models import PlanRequest
 from namisync.workflows.runtime import (
     BASELINE_KIND,
@@ -86,7 +88,7 @@ from namisync.workflows.runtime import (
 )
 from namisync.workflows.views import operation_result_view
 
-from _db_fixtures import FakeClock, NOW, replace_ledger_instance
+from _db_fixtures import FakeClock, NOW, replace_ledger_instance, stored_ledger_instance
 from _inventory_fixtures import (
     PROFILE,
     VOLUME_ID,
@@ -1112,8 +1114,8 @@ def test_database_maintenance_refuses_inventory_writers_without_partial_state(
                     "verify-under-maintenance", IntegrityMode.VERIFY, location_id=location_id,
                 )),
             ):
-                # The History claim is refused at admission: nothing is
-                # stored, published, attached or queued.
+                # The ledger's claim, taken first, is refused at admission:
+                # nothing is stored, published, attached or queued.
                 with pytest.raises(SessionAdmissionRefused, match="refused, not queued"):
                     dispatcher.submit(kind, request, attach=attach)
             assert dispatcher.list() == ()
@@ -1148,19 +1150,50 @@ def test_database_maintenance_refuses_inventory_writers_without_partial_state(
         runtime.close()
 
 
+def _maintenance_naming_another_history(runtime: LocalWorkflowRuntime, other_history: Path) -> tuple[str, str | None]:
+    # Maintenance that shares the run's ledger but names another History, so
+    # only the ledger's own claim can refuse it.
+    try:
+        with hold_maintenance_claims(runtime.ledger_path, other_history):
+            held = "held"
+    except DatabaseInUse:
+        held = "in-use"
+    return held, check_database_pair(runtime.ledger_path, other_history).contract.reason
+
+
+def _stamped_instance(history: Path, run_token: str) -> str:
+    connection = sqlite3.connect(history.as_uri() + "?mode=ro", uri=True)
+    try:
+        return connection.execute(
+            "SELECT ledger_instance_id FROM history_runs WHERE run_token = ?", (run_token,),
+        ).fetchone()[0]
+    finally:
+        connection.close()
+
+
 @pytest.mark.parametrize("kind", (INVENTORY_KIND, VERIFY_KIND, EXECUTION_KIND))
-def test_a_ledger_replaced_before_the_history_claim_refuses_admission(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, kind: str,
+def test_an_admitted_run_holds_the_ledger_it_stamped_until_its_observer_closes(
+    tmp_path: Path, kind: str,
 ) -> None:
     mount = tmp_path / "mount"
     (mount / "managed").mkdir(parents=True)
     scanner = _Scanner(mount, (_file("a.txt", 1),))
     runtime, location_id = _runtime(tmp_path, _Resolver(mount), scanner, {})
+    other_history = initialize_history(tmp_path / "other-history.db")
+    attempts: list[tuple[str, str | None]] = []
+
+    def admit_then_attempt_maintenance(record):
+        observer = runtime.audit_observer(record)
+        # Stamp confirmed, ledger recorder not yet opened.
+        if observer is not None:
+            attempts.append(_maintenance_naming_another_history(runtime, other_history))
+        return observer
+
     dispatcher = Dispatcher(
         _workflow_registry(runtime),
         lock_provider=InProcessResourceLockProvider(),
         clock=FakeClock(),
-        audit_observer_factory=runtime.audit_observer,
+        audit_observer_factory=admit_then_attempt_maintenance,
     )
     try:
         if kind == EXECUTION_KIND:
@@ -1180,28 +1213,33 @@ def test_a_ledger_replaced_before_the_history_claim_refuses_admission(
         else:
             token = "stamped-verify"
             request = IntegrityRequest(token, IntegrityMode.VERIFY, location_id=location_id)
-        read = runtime._ledger_instance_id
-        stamps: list[str] = []
 
-        def read_then_restore() -> str:
-            # A restore finishes right after the stamp is read, before the claim.
-            value = read()
-            if not stamps:
-                replace_ledger_instance(runtime.ledger_path)
-            stamps.append(value)
-            return value
+        session_id = dispatcher.submit(kind, request)
+        deadline = monotonic() + 10.0
+        # Its outcome is not the point (verify has no runner configured here).
+        while (record := dispatcher.get(session_id)).result is None:
+            assert monotonic() < deadline, "the session did not settle"
+            sleep(0.01)
 
-        monkeypatch.setattr(runtime, "_ledger_instance_id", read_then_restore)
-        with pytest.raises(SessionAdmissionRefused, match="replaced the ledger"):
-            dispatcher.submit(kind, request)
-        monkeypatch.undo()
-
-        assert len(stamps) == 2 and stamps[0] != stamps[1]
-        assert dispatcher.list() == ()
-        assert scanner.calls == []
-        with pytest.raises(KeyError):
-            runtime.get_history_summary(token)
-        # The observer released History's claim: maintenance runs next.
+        # The run's ledger shared claim refused both, so nothing replaced it.
+        assert attempts == [("in-use", "database-in-use")]
+        # Its recorder's own shared claim, a second handle in this process,
+        # coexisted with the observer's: the run recorded normally.
+        assert record.result.audit is RecordingStatus.OK
+        assert record.result.recording is RecordingStatus.OK
+        assert _stamped_instance(runtime.history_path, token) == stored_ledger_instance(
+            runtime.ledger_path
+        )
+        # The audit pump closes the observer just after the terminal result,
+        # releasing both claims: same-process maintenance is admitted again.
+        deadline = monotonic() + 5.0
+        while True:
+            try:
+                with hold_maintenance_claims(runtime.ledger_path, other_history):
+                    break
+            except DatabaseInUse:
+                assert monotonic() < deadline, "a finished run kept its ledger claim"
+                sleep(0.01)
         with hold_maintenance_claims(runtime.ledger_path, runtime.history_path):
             pass
     finally:
@@ -1209,34 +1247,158 @@ def test_a_ledger_replaced_before_the_history_claim_refuses_admission(
         runtime.close()
 
 
-def test_ledger_recorder_refuses_an_admitted_run_under_a_ledger_only_claim(
-    tmp_path: Path,
+def test_the_stamp_is_read_under_the_ledger_claim(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    # The instant a maintenance attempt holds the ledger before History's
-    # refusal: admission succeeds with a real observer, the recorder refuses.
     mount = tmp_path / "mount"
     (mount / "managed").mkdir(parents=True)
     scanner = _Scanner(mount, (_file("a.txt", 1),))
     runtime, location_id = _runtime(tmp_path, _Resolver(mount), scanner, {})
-    locks = InProcessResourceLockProvider()
+    read = runtime._ledger_instance_id
+    replacements: list[str] = []
+
+    def replace_then_read() -> str:
+        # A restore landing at the stamp read must already be refused.
+        try:
+            replace_ledger_instance(runtime.ledger_path)
+            replacements.append("replaced")
+        except DatabaseInUse:
+            replacements.append("refused")
+        return read()
+
+    monkeypatch.setattr(runtime, "_ledger_instance_id", replace_then_read)
     dispatcher = Dispatcher(
         _workflow_registry(runtime),
-        lock_provider=locks,
+        lock_provider=InProcessResourceLockProvider(),
         clock=FakeClock(),
         audit_observer_factory=runtime.audit_observer,
     )
-    request = InventoryRequest("ledger-claimed", location_id=location_id)
-    resources = [ResourceId(*key) for key in runtime.prepare_inventory(request).resources]
+    try:
+        session_id = dispatcher.submit(
+            INVENTORY_KIND, InventoryRequest("stamped-under-claim", location_id=location_id),
+        )
+        monkeypatch.undo()
+        record = _wait_for(dispatcher, session_id, SessionState.COMPLETED)
+
+        assert replacements == ["refused"]
+        assert record.result.audit is RecordingStatus.OK
+        assert _stamped_instance(runtime.history_path, "stamped-under-claim") == (
+            stored_ledger_instance(runtime.ledger_path)
+        )
+    finally:
+        assert dispatcher.shutdown().complete
+        runtime.close()
+
+
+def test_a_refused_or_failed_observer_admission_keeps_no_ledger_claim(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    mount = tmp_path / "mount"
+    (mount / "managed").mkdir(parents=True)
+    scanner = _Scanner(mount, (_file("a.txt", 1),))
+    runtime, location_id = _runtime(tmp_path, _Resolver(mount), scanner, {})
+    released: list[bool] = []
+
+    def open_then_probe(record):
+        try:
+            return runtime.audit_observer(record)
+        finally:
+            # Before any session work or recorder: the ledger must be free.
+            try:
+                acquire_database_claim(runtime.ledger_path, exclusive=True).release()
+                released.append(True)
+            except DatabaseInUse:
+                released.append(False)
+
+    dispatcher = Dispatcher(
+        _workflow_registry(runtime),
+        lock_provider=InProcessResourceLockProvider(),
+        clock=FakeClock(),
+        audit_observer_factory=open_then_probe,
+    )
+    try:
+        # History's claim refused after the ledger's was taken.
+        with acquire_database_claim(runtime.history_path, exclusive=True):
+            with pytest.raises(SessionAdmissionRefused, match="refused, not queued"):
+                dispatcher.submit(
+                    INVENTORY_KIND, InventoryRequest("history-held", location_id=location_id),
+                )
+        # A failure between the ledger claim and the observer degrades audit.
+        def unreadable() -> str:
+            raise OSError("ledger unreadable")
+
+        monkeypatch.setattr(runtime, "_ledger_instance_id", unreadable)
+        session_id = dispatcher.submit(
+            INVENTORY_KIND, InventoryRequest("degraded", location_id=location_id),
+        )
+        monkeypatch.undo()
+        record = _wait_for(dispatcher, session_id, SessionState.COMPLETED)
+
+        assert released == [True, True]
+        assert record.result.audit is RecordingStatus.DEGRADED
+        with pytest.raises(KeyError):
+            runtime.get_history_summary("history-held")
+    finally:
+        assert dispatcher.shutdown().complete
+        runtime.close()
+
+
+def test_maintenance_on_the_ledger_alone_refuses_admission_with_history_untouched(
+    tmp_path: Path,
+) -> None:
+    mount = tmp_path / "mount"
+    (mount / "managed").mkdir(parents=True)
+    scanner = _Scanner(mount, (_file("a.txt", 1),))
+    runtime, location_id = _runtime(tmp_path, _Resolver(mount), scanner, {})
+    store = InMemorySessionStore()
+    dispatcher = Dispatcher(
+        _workflow_registry(runtime),
+        store=store,
+        lock_provider=InProcessResourceLockProvider(),
+        clock=FakeClock(),
+        audit_observer_factory=runtime.audit_observer,
+    )
     try:
         with acquire_database_claim(runtime.ledger_path, exclusive=True):
-            # Hold the session behind its volume so its observer is observable.
-            lease = locks.acquire(resources, lambda: False)
-            try:
-                session_id = dispatcher.submit(INVENTORY_KIND, request)
-                with pytest.raises(DatabaseInUse):
-                    acquire_database_claim(runtime.history_path, exclusive=True)
-            finally:
-                lease.release()
+            for kind, request in (
+                (INVENTORY_KIND, InventoryRequest("ledger-claimed", location_id=location_id)),
+                (VERIFY_KIND, IntegrityRequest(
+                    "verify-ledger-claimed", IntegrityMode.VERIFY, location_id=location_id,
+                )),
+            ):
+                with pytest.raises(SessionAdmissionRefused, match="refused, not queued") as caught:
+                    dispatcher.submit(kind, request)
+                assert str(runtime.ledger_path) in str(caught.value)
+            # History's claim was never taken, or was released.
+            acquire_database_claim(runtime.history_path, exclusive=True).release()
+        assert dispatcher.list() == ()
+        assert store.snapshot() == ()
+        assert scanner.calls == []
+        with pytest.raises(KeyError):
+            runtime.get_history_summary("ledger-claimed")
+    finally:
+        assert dispatcher.shutdown().complete
+        runtime.close()
+
+
+def test_ledger_recorder_refuses_a_run_admitted_without_its_observer_under_a_ledger_only_claim(
+    tmp_path: Path,
+) -> None:
+    # With audit degraded the run holds no claim until its recorder opens, so
+    # the recorder is what refuses it.
+    mount = tmp_path / "mount"
+    (mount / "managed").mkdir(parents=True)
+    scanner = _Scanner(mount, (_file("a.txt", 1),))
+    runtime, location_id = _runtime(tmp_path, _Resolver(mount), scanner, {})
+    dispatcher = Dispatcher(
+        _workflow_registry(runtime),
+        lock_provider=InProcessResourceLockProvider(),
+        clock=FakeClock(),
+    )
+    request = InventoryRequest("ledger-claimed", location_id=location_id)
+    try:
+        with acquire_database_claim(runtime.ledger_path, exclusive=True):
+            session_id = dispatcher.submit(INVENTORY_KIND, request)
             record = _wait_for(dispatcher, session_id, SessionState.FAILED)
 
         assert record.result is not None and record.result.error is not None

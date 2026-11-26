@@ -149,12 +149,11 @@ direction, and running it again completes the pair.
 
 A refused pair returns exit `3` with `Database pair refused: <reason>.` and
 its guidance, then, for custom database paths, the line naming them
-([Maintenance Commands](#maintenance-commands)). While database maintenance holds the pair, sync execution and the
+([Maintenance Commands](#maintenance-commands)). While database maintenance holds either database of the pair, sync execution and the
 four location commands are refused at admission: they print
 `Execution refused:` (sync) or `<Command> refused:` with the maintenance
 message (new work is refused, not queued; wait, then start again), exit `3`
-and start no run. The same refusal follows when a restore replaced the ledger
-between the run's ledger stamp and its History claim. Planning and review still run, since they write neither
+and start no run. Planning and review still run, since they write neither
 database. A refusal at admission or because another NamiSync process, of
 any version, has either database open or holds its claim leaves every existing
 main and sidecar byte unchanged. A migration that fails after its backup was

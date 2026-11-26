@@ -23,6 +23,7 @@ from namisync.core.execution import (
     TaskRecordingIssue,
 )
 from namisync.core.evidence import RecordingStatus
+from namisync.core.events import Envelope
 from namisync.core.integrity import (
     IntegrityOutcome,
     IntegrityMode,
@@ -69,7 +70,7 @@ from namisync.core.scalars import (
     require_utf8_text,
     scalar_64_to_text,
 )
-from namisync.db.claims import DatabaseMaintenanceActive
+from namisync.db.claims import DatabaseClaim, DatabaseMaintenanceActive, acquire_database_claim
 from namisync.db.connections import validate_database_path
 from namisync.db.contracts import DatabaseConnectionOwner
 from namisync.db.history import (
@@ -961,12 +962,12 @@ class LocalWorkflowRuntime:
                 raise ValueError("copied-file scope execution binding changed")
             return successful_copied_paths(review)
 
-    def audit_observer(self, record: SessionRecord) -> HistoryObserver | None:
+    def audit_observer(self, record: SessionRecord) -> _LedgerClaimedObserver | None:
         """Open a session's History observer, or refuse it during maintenance.
 
-        Maintenance takes the ledger's claim before History's, so a refused
-        History claim covers the pair. Any other failure stays the
-        dispatcher's degraded audit.
+        The observer holds shared claims on both the ledger and History, so a
+        refusal on either means maintenance holds it. Any other failure stays
+        the dispatcher's degraded audit.
         """
         try:
             return self._open_audit_observer(record)
@@ -975,7 +976,7 @@ class LocalWorkflowRuntime:
         # Raised outside the handler, so no refused-claim frames ride along.
         raise SessionAdmissionRefused(message)
 
-    def _open_audit_observer(self, record: SessionRecord) -> HistoryObserver | None:
+    def _open_audit_observer(self, record: SessionRecord) -> _LedgerClaimedObserver | None:
         if record.checkpoint is None:
             raise ValueError("audit observer requires a nonterminal checkpoint")
         checkpoint = record.checkpoint
@@ -999,7 +1000,6 @@ class LocalWorkflowRuntime:
                     activity_kind="sync",
                     source_context=plan_value.source_root.path,
                     target_context=plan_value.target_root.path,
-                    ledger_instance_id=self._ledger_instance_id(),
                 ),
             )
         if record.kind == INVENTORY_KIND:
@@ -1028,35 +1028,30 @@ class LocalWorkflowRuntime:
                 activity_kind=activity_kind,
                 subject_kind="location",
                 subject_id=_location_subject_id(request.binding),
-                ledger_instance_id=self._ledger_instance_id(),
             ),
         )
 
     def _stamped_observer(
         self, store: HistoryStore, record: SessionRecord, context: HistoryContext,
-    ) -> HistoryObserver:
-        """Open the observer, then confirm its ledger stamp under its History claim.
+    ) -> _LedgerClaimedObserver:
+        """Open the observer stamped with the ledger read under the ledger's claim.
 
-        Maintenance cannot run while that claim is held, so the instance read
-        now is the one the run records against. A restore that finished after
-        the stamp was read and before the claim refuses admission, through the
-        same maintenance refusal, with the claim released.
+        The ledger's shared claim is taken first, in maintenance's order, and
+        held until the observer closes, so no maintenance can replace the
+        ledger the stamp names while the run lives, whichever History it
+        names. A refused claim raises ``DatabaseMaintenanceActive``; every
+        failure here releases the ledger's claim.
         """
 
-        observer = store.observer(record, context)
+        claim = acquire_database_claim(self.ledger_path, exclusive=False)
         try:
-            current = self._ledger_instance_id()
-        except BaseException:
-            observer.close()
-            raise
-        if current != context.ledger_instance_id:
-            observer.close()
-            raise DatabaseMaintenanceActive(
-                f"Database maintenance replaced the ledger {self.ledger_path} while "
-                "this work was starting, so it was not started. Start this again.",
-                self.ledger_path,
+            observer = store.observer(
+                record, replace(context, ledger_instance_id=self._ledger_instance_id()),
             )
-        return observer
+            return _LedgerClaimedObserver(observer, claim)
+        except BaseException:
+            claim.release()
+            raise
 
     def _ledger_instance_id(self) -> str:
         # The ledger a run records against; workflows is where the pair meets.
@@ -1868,6 +1863,33 @@ class LocalWorkflowRuntime:
     def _require_open(self) -> None:
         if self._closed or self._closing:
             raise RuntimeError("workflow runtime is closed")
+
+
+class _LedgerClaimedObserver:
+    """A run's History observer, holding the ledger's shared claim until close.
+
+    History holds only its own claim; the pair meets here, so the ledger's
+    claim is released with the observer, after its final History flush.
+    """
+
+    def __init__(self, observer: HistoryObserver, claim: DatabaseClaim) -> None:
+        self._observer = observer
+        self._claim = claim
+
+    def on_event(self, envelope: Envelope) -> RecordingStatus:
+        return self._observer.on_event(envelope)
+
+    def flush(self) -> None:
+        self._observer.flush()
+
+    def finalize(self, result: OperationResult) -> RecordingStatus:
+        return self._observer.finalize(result)
+
+    def close(self) -> None:
+        try:
+            self._observer.close()
+        finally:
+            self._claim.release()
 
 
 class _PlanInvocation:

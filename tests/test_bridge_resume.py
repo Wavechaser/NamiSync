@@ -29,7 +29,7 @@ from namisync.core.session import (
     RunContext,
     SessionState,
 )
-from namisync.db.claims import hold_maintenance_claims
+from namisync.db.claims import DatabaseInUse, hold_maintenance_claims
 from namisync.dispatcher import Dispatcher, InProcessResourceLockProvider
 from namisync.interfaces.service import _workflow_registry
 from namisync.workflows.models import (
@@ -620,9 +620,10 @@ def test_execution_start_refuses_a_plan_made_against_a_replaced_ledger(tmp_path)
     assert _ledger_rows(ledger, "runs", "run_token") == [("4" * 32,)]
 
 
+@pytest.mark.parametrize("audited", (False, True))
 @pytest.mark.parametrize("phase", ("execute", "verify"))
 def test_resume_refuses_a_paused_run_whose_ledger_was_replaced(
-    tmp_path, monkeypatch, phase: str,
+    tmp_path, monkeypatch, phase: str, audited: bool,
 ) -> None:
     source, target = tmp_path / "source", tmp_path / "target"
     source.mkdir()
@@ -642,11 +643,13 @@ def test_resume_refuses_a_paused_run_whose_ledger_was_replaced(
 
     if phase == "verify":
         runtime._deps = replace(runtime._deps, verifier=pause_in_verify)
+    # Without a History observer, as with degraded audit, a paused run holds
+    # no claim; with one it holds the ledger's across its pause.
     dispatcher = Dispatcher(
         _workflow_registry(runtime),
         lock_provider=InProcessResourceLockProvider(),
         clock=runtime.clock,
-        audit_observer_factory=runtime.audit_observer,
+        audit_observer_factory=runtime.audit_observer if audited else None,
     )
     if phase == "execute":
         original_run_core = dispatcher._run_core
@@ -671,6 +674,10 @@ def test_resume_refuses_a_paused_run_whose_ledger_was_replaced(
             assert monotonic() < deadline, "session did not pause"
             sleep(0.01)
         runs_before = _ledger_rows(ledger, "runs")
+        if audited:
+            with pytest.raises(DatabaseInUse):
+                replace_ledger_instance(ledger)
+            return
         replace_ledger_instance(ledger)
         assert dispatcher.resume(session_id).accepted
         record = _settled(dispatcher, session_id)
