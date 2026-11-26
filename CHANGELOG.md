@@ -84,6 +84,33 @@ first schema change. M2_PLAN owns checkpoint scope and gates.
 - On `e1f40f63`: 7326 ordinary tests pass apart from the seven known
   failures; 13 import contracts hold. Each change had an independent review.
 
+- Fixed eight further findings from the user's review of M2-A4.
+  - A reset direction names only the database that needs it, by path, and
+    says to keep the other. An empty History beside a healthy ledger no
+    longer brings advice to delete both.
+  - A run holds the ledger's shared claim, taken before its stamp is read,
+    until its observer closes. Maintenance naming the same ledger with
+    another History is refused while the run lives. This replaces the re-read
+    above.
+  - A paused baseline, verify or rebaseline run refuses to resume after the
+    ledger was replaced, with direction to start a new run, instead of
+    reporting its earlier items as done.
+  - A missing database is created only when the caller permits it, checked
+    under both claims. A `--location-id` command never creates one, even
+    when the file vanishes after its first read.
+  - The v0.1.0 History step owns its stamp and requires every run to carry
+    exactly the id given; the generic migration engine no longer knows it.
+  - A `history` refusal repeats exactly the database options given. With
+    only `--history-database`, it says a sync or inventory command must also
+    name that History's ledger.
+  - The replaced-ledger refusal tells the CLI user to rerun the same sync
+    command.
+  - Pasteable database paths double every character PowerShell reads as a
+    single quote, tested through the parser of PowerShell 7 and 5.1.
+- A desktop startup refusal keeps its message, with database paths and the
+  recovery direction, in the GUI log (user decision); an ordinary startup
+  logs no paths.
+
 #### Maintenance claim and schema migration (2026-11-25)
 
 - Delivered M2-A3. A database written by v0.1.0 now migrates to the M2 schema

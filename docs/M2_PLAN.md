@@ -256,14 +256,46 @@ Checkpoints:
     after the review fixes and the stamp revision, each independently
     reviewed: 7326 passed, 4 skipped, 35 deselected, with the same seven
     failures; 13 contracts kept.
-  - **Open for a user decision:** a `--location-id` command can create a
-    missing database if a database file vanishes between the CLI's first
-    read and the upgrade; a zero-byte History is classified with the
-    direction to archive or delete both databases; the `history` command and
-    the "Plan again" refusal do not repeat custom database options; the
-    refusal-reason mapping and reclassification under the claims have no
-    pair-level test. At the first post-M2 schema step, the stamp condition
-    ("the ledger migrated in this call") must be narrowed to the 0.1.0 step.
+  - **Second review round (user decisions, 2026-11-26).** Eight findings
+    were fixed in `4993a244` to `72176b46`; the list is in
+    [CHANGELOG](../CHANGELOG.md). The decisions behind them:
+    - An admitted run holds shared claims on both databases, ledger first,
+      until its observer closes; the stamp is read once under the ledger's
+      claim. This replaces the re-read in outcome 1's follow-up.
+    - An integrity continuation keeps the ledger instance read under the
+      recorder claim that saved its progress, and a resume that finds another
+      instance is refused before the scan. No claim is added across the
+      pause.
+    - Creating a missing database needs the caller's permission, enforced
+      under both claims. A `--location-id` command never grants it.
+    - A reset direction names only the database that needs it and says to
+      keep one that validates.
+    - The v0.1.0 History stamp and its exact verification belong to the v8
+      step, so removing that step removes them.
+    - A `history` refusal repeats only the options given; with
+      `--history-database` alone it tells the user to name that History's
+      ledger for other commands.
+    - A desktop startup refusal keeps its message, with paths and the
+      recovery direction, in the GUI log.
+  - **Open for a user decision:**
+    - The desktop inventory review labels a row from the session's item
+      before the row's own ledger state (`inventory_review.js`). After a
+      refused integrity resume it shows rows reported before the pause as
+      "Baselined" or "Verified", which the current ledger does not attest.
+      The session record is right to keep those items (user decision,
+      2026-11-26: they are the run's account, and the message says they
+      belong to the replaced ledger); the defect is in that view.
+    - A paused integrity run canceled after a restore ends canceled with its
+      earlier items listed and no mention of the ledger.
+    - When both databases need a reset, the direction names no paths.
+    - A pasteable path holding characters shown as `[U+XXXX]` markers names
+      the marker text, not the path.
+  - **Gate result (2026-11-26, `72176b46`):** 7366 ordinary tests passed, 4
+    skipped, 35 deselected, with the same seven failures; 13 contracts kept.
+    Each of the six commits was independently reviewed, and the two claim
+    defects were reproduced with real child processes before and after.
+  - At the first post-M2 schema step, the stamp condition ("the ledger
+    migrated in this call") must be narrowed to the 0.1.0 step.
   - **Left open, with owners:** the desktop refusal that names a replaced
     ledger, restore inside the desktop and its refusal naming waiting work
     (B3); inventory acknowledge and restore by row id are not covered by the

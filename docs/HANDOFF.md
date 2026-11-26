@@ -1,76 +1,82 @@
-# Latest session — M2-A4 review fixes and stamp revision, 2026-11-26
+# Latest session — M2-A4 second review round, 2026-11-26
 
-The six defects from the review at `48ab4718` are fixed, and the v0.1.0 stamp
-rule is replaced under the revised
-[DEFENSE §2.5.4](DEFENSE.md#254-migrating-a-released-database). Work is on
+Eight findings from the user's second review of M2-A4 are fixed. Work is on
 `milestone2`; nothing is pushed. M2-A1 to M2-A4 are complete and M2-A5 is the
 next row, still proposed. [M2_PLAN](M2_PLAN.md)'s A4 row holds the decisions
 and what is open; [DATABASE](DATABASE.md#data-protection) owns the behavior.
 
 ## Changes
 
-- `41e020b7`: a plan made with no ledger instance reads no ledger. A run's
-  History stamp is read again once the observer holds its claim, and
-  admission is refused if the ledger was replaced in between.
-- `c29ebe18`:
-  - Backup, restore source and restore image share one content check
-    (integrity and foreign keys). A database with foreign key violations is
-    not backed up, and restore renames it aside instead of overwriting it.
-  - Rotation never removes a live database.
-  - A restore that stops after moving only sidecars names the files moved.
-  - The CLI decides its closing lines from the result, validates paths before
-    folder checks, and repeats custom database options with its guidance.
-- `e1f40f63`:
-  - A v0.1.0 History is stamped only when the same operation migrated its
-    ledger. The `migrated-released` lineage kind, `without_ledger` and
-    `MigratedDatabase.unstamped` with its notices are gone.
-  - `upgrade_database_pair` replaces the separate migrate and complete
-    operations for the CLI and desktop startup.
-  - A ledger restore is refused only beside a swapped or newer History, or
-    over a healthy older pair (`pair-older`).
-
-Of the review's five consolidation opportunities, all are done.
+- `4993a244`: the v0.1.0 History step owns its stamp and verifies that every
+  run carries exactly the id given. The generic engine no longer knows it.
+- `aa61dfe6`: `upgrade_database_pair` takes the caller's permission to create
+  and enforces it under both claims. A `--location-id` command never grants
+  it.
+- `007fe988`: a reset direction names only the database that needs it and
+  says to keep the other. `check` prints the pair direction for a reset.
+- `317861bc`: an admitted run's observer holds the ledger's shared claim,
+  taken before its stamp is read, until it closes. The re-read from
+  `41e020b7` is removed.
+- `129e2968`: a `history` refusal repeats exactly the database options given;
+  the replaced-ledger refusal says to rerun the same sync command; pasteable
+  paths double every PowerShell single-quote character.
+- `72176b46`: an integrity continuation keeps the ledger instance read under
+  its recorder claim, and a resume that finds another instance is refused
+  before the scan.
 
 ## Verification
 
-- Ordinary suite on the bytes of `e1f40f63` before its last test assertion
-  was restored: 7326 passed, 4 skipped, 35 deselected, with the seven known
-  interpreter-bound failures; `lint-imports` 13 kept. Builder and reviewer
-  each ran it.
-- Each of the three commits had an independent adversarial review with
-  out-of-tree mutations. The reviewer could not construct a History stamped
-  with a ledger the same call did not migrate.
+- Ordinary suite on `72176b46`: 7366 passed, 4 skipped, 35 deselected, with
+  the seven known interpreter-bound failures; `lint-imports` 13 kept.
+- Each of the six commits had an independent adversarial review with
+  out-of-tree mutations. Three needed corrections, which the same reviewer
+  confirmed.
+- Reproduced with real child processes, before and after:
+  - `check` and `restore ledger` naming the run's ledger with another
+    History, while a run sat between its stamp and its recorder.
+  - A paused baseline, verify and rebaseline run resumed after
+    `restore ledger`, with degraded audit and with History failing mid-run.
+- The path quoting was fuzzed through the parser of PowerShell 7 and 5.1
+  (4043 lines, no failures) by its reviewer.
 - Changed after review and not seen by a reviewer:
-  - In `c29ebe18`: the custom-path line's quoting, the order of the
-    foreign-key and classification checks on a restore source, and a README
-    sentence. 272 focused tests passed.
-  - In `e1f40f63`: one assertion restored in
-    `test_lone_released_history_migrates_then_gains_a_new_ledger`, which pins
-    that a lone v0.1.0 History's runs stay earlier. 65 tests in the two pair
-    files passed; the full suite was not rerun after it.
-- Not run: a headed desktop launch, the installed `namisync.exe`, and a real
-  two-process race for the two admission fixes (driven by in-process hooks).
-- Review scratch under `build/a4-*` was deleted. No evidence record was
-  promoted.
+  - In `aa61dfe6`: the ID-only refusal ends "Nothing else was changed." when
+    a database had already been updated. 173 focused tests passed.
+  - In `72176b46`: two DATABASE sentences and one code comment reworded as
+    the reviewer advised.
+  - After the gate: one assertion that a refused resume's record holds the
+    item reported before the pause exactly once. 44 tests in
+    `tests/test_inventory_runtime.py` passed; the full suite was not rerun.
+- Not run: a headed desktop launch, the installed `namisync.exe`, and the
+  headed SH-G-5 case whose expected text changed in `007fe988`.
+- Review scratch under `build/a4-review-*` was deleted. No evidence record
+  was promoted.
 
 ## Immediate context
 
 - Open for a user decision (also in the A4 row):
-  - A `--location-id` command can create a missing database if a database
-    file vanishes between the CLI's first read and the upgrade. A `create`
-    argument on the operation would close it.
-  - A zero-byte History is classified with the direction to archive or
-    delete both databases. A ledger restore beside it now succeeds and then
-    prints that advice; `check` printed it before this work.
-  - The `history` command and the "Plan again" refusal do not repeat custom
-    database options.
-  - No pair-level test covers the refusal-reason mapping or reclassification
-    under the claims.
-  - The History stamp handling sits in generic engine code (`_copy_rows` and
-    `_verify` in `namisync/db/migration.py`), not in the v8 step.
+  - The desktop inventory review labels a row from the session's item before
+    the row's own ledger state (`inventory_review.js`), so after a refused
+    integrity resume it shows rows reported before the pause as "Baselined"
+    or "Verified", which the current ledger does not attest. Keeping those
+    items in the failed record is intended and tested (user decision); the
+    defect is in that view.
+  - A paused integrity run canceled after a restore ends canceled with its
+    earlier items listed and no mention of the ledger.
+  - When both databases need a reset, the direction names no paths.
+  - A pasteable path holding characters shown as `[U+XXXX]` markers names
+    the marker text, not the path.
+- Known limits recorded in DATABASE:
+  - A session admitted with degraded audit, or whose audit degraded after
+    admission, holds neither claim while paused. Sync and integrity resumes
+    are checked against the ledger instance; inventory acknowledge and
+    restore by row id are not (B3).
+  - If the dispatcher's `EventHub` or `_AuditPump` constructor raises a
+    configuration error, the observer is never closed and both claims stay
+    held. The service passes valid constants, so production cannot reach it.
 - For the first post-M2 schema step: the stamp condition is "the ledger
   migrated in this call", which equals "from 0.1.0" only while v4 and v8 are
-  the sole registered steps.
+  the sole registered steps. Deleting the v8 step leaves two unused
+  `MigrationStep` fields and the `ledger_instance_id` parameter as orphans.
 - Consequences of the foreign-key rule:
   - While either database has violations, `backup` cannot succeed; restoring
     an earlier backup is the way out.
@@ -89,9 +95,12 @@ Of the review's five consolidation opportunities, all are done.
     finish; the output tells them apart.
   - A cold probe reports `database-unavailable` during any WAL write
     transaction, which predates A4.
+  - "run a sync or inventory command, once to create a new one" is not true
+    of a `--location-id` command, whose own refusal says to use ROOT.
+  - `cli.py`'s "Resolve the listed refusals, then plan again." keeps its
+    wording.
 - For B3: the desktop still shows its generic commitment refusal for a plan
-  whose ledger was replaced, and inventory acknowledge and restore by row id
-  are not covered by the instance check.
+  whose ledger was replaced.
 - Carried over from A3: the copied-dispatcher pause, resume and cancel cases
   in `tests/interfaces/web/test_drain.py` miss their deadlines under heavy
   parallel load. For M2-R1's release notes: a v0.1.0 binary pointed at a

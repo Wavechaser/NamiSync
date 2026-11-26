@@ -943,8 +943,9 @@ own database, and the pair operation supplies anything that needs both.
   moments earlier is refused too. The workflow holds no claim across the
   pause, so restore stays available unless a healthy History observer holds
   its claims. Items reported before the pause stay in the
-  session's terminal record (the dispatcher accumulates them across stretches),
-  under the failed status and this message. Inventory does not pause. Tests:
+  session's terminal record, exactly once: they are the run's account of
+  what it did, and the message says they belong to the replaced ledger. A
+  view that presents one as the current ledger's attestation is defective. Inventory does not pause. Tests:
   the restored-ledger, audit-failed, placement and under-claim cases in
   `tests/test_inventory_runtime.py`, with a real in-place restore.
 
@@ -1098,7 +1099,7 @@ size limit is enforced or measured; this is a diagnostic statement under
 
 The desktop announces a migration only in its log, as
 `startup.databases_migrated ledger=v4 history=v8` with roles and source
-versions and no paths, since GUI logging records no filenames or paths. The
+versions and no paths, since an ordinary startup logs no filenames or paths. The
 backups sit beside the databases under the name in step 2. An in-window
 notice would need a bridge addition and is not built. The CLI prints one line
 naming the databases that migrated and their backups.
