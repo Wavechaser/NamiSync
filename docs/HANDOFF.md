@@ -125,3 +125,34 @@ and what is open; [DATABASE](DATABASE.md#data-protection) owns the behavior.
   - Frozen `sh_g_8_*` artifacts must not move.
   - Keep `F:\NamiSyncExecutorBenchSource`, `H:\test_dir`, `dist/v0.1.0/` and
     `build/inventory-cold/`.
+
+## Third M2-A4 review — five additional open findings at `77746a5e`
+
+1. **High — A first-use sync can resume into a restored ledger.** A plan made
+   before either database existed carried no ledger instance. Execution wrote
+   its run to the newly created ledger. With degraded History, the run paused
+   during verification and `restore ledger` put back a pre-execution backup.
+   The run row was absent after restore. Resume recreated it and reported both
+   phases completed with degraded recording. Keep the first-start allowance and
+   bind the continuation to the ledger instance opened by its first recorder.
+2. **Medium — `check` can advise deletion when the pair decision calls for a
+   path correction.** With an empty ledger file and a real ledger at the History
+   path, `inventory` reported `history-wrong-role` and directed the user to check
+   the paths. `check` first printed the unsupported ledger's instruction to
+   archive or delete it. Report both role observations and let the pair decision
+   supply the recovery action.
+3. **Medium — `check` can create a file at the selected History main path.**
+   With both mains absent, `--database collision.db --history-database
+   collision.db.claim` created a zero-byte History main when taking the ledger
+   claim, then reported History unavailable. Check for overlap between either
+   main and the other database's claim path before opening either claim.
+4. **Low — First-use maintenance contention loses its retry guidance.** With
+   both mains absent and both exclusive claims held, a child `inventory` exited
+   `4` with “coordinated database initialization failed.” Cleanup retracted the
+   reservations. Preserve the typed claim refusal after successful cleanup so
+   this case gets the same exit `3` and retry guidance as a ready pair.
+5. **Low — A successful History restore can say “Nothing was changed.”** With
+   the ledger option pointing to another History database, `restore history`
+   restored the requested History and published its pre-restore backup. The
+   subsequent `ledger-wrong-role` message ended with “Nothing was changed.”
+   Keep the peer diagnosis and let the restore result describe what changed.
