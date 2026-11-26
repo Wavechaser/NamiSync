@@ -7210,6 +7210,7 @@ def test_inventory_ordinary_native_selection_results_refresh_and_close(tmp_path,
         ordinary = window["integrity"]
         assert ordinary["session_id"] == second.session_id and ordinary["request_id"] == second.request_id
         assert ordinary["complete"] and not ordinary["gap"] and len(ordinary["items"]) == 2
+        assert ordinary["outcome"] == "completed"
         assert {item["result"] for item in ordinary["items"]} == {"baselined"}
         assert registry.start_inventory_integrity(first.task_id, first.request_id, expected_revision=2,
             mode=mode, accept_current_evidence=True, command_id="3" * 32, wire_intent=(mode,)) == second
@@ -7804,6 +7805,7 @@ def test_copied_dispatcher_partial_pause_and_terminal_reconciliation(tmp_path, m
             overlay = window["integrity"]
             assert overlay["session_id"] == manual.session_id
             assert overlay["gap"] and not overlay["complete"] and overlay["items"] == []
+            assert overlay["outcome"] is None
             node_id = next(row["node_id"] for row in window["rows"] if row["row_id"] is not None)
             detail = registry.get_inventory_detail(planned.task_id,
                 expected_revision=view["view_revision"], node_id=node_id)
@@ -7838,6 +7840,7 @@ def test_copied_dispatcher_partial_pause_and_terminal_reconciliation(tmp_path, m
                 expected_revision=view["view_revision"], offset=0, limit=256)["integrity"]
             assert overlay["complete"] and not overlay["gap"]
             assert len(overlay["items"]) == (2 if action == "resume" else completed_before_pause)
+            assert overlay["outcome"] == ("completed" if action == "resume" else "canceled")
             assert all(item["result"] == "verified" for item in overlay["items"])
             assert owner.copied_scope is subject_index
             assert len(calls) == (2 if action == "resume" else 1)
@@ -7901,6 +7904,7 @@ def test_inventory_ordinary_live_control_terminal_repair_and_zero_replacement(tm
             assert started.wait(5)
             before = registry.get_inventory_window(first.task_id, expected_revision=summary["view_revision"], offset=0, limit=256)["integrity"]
             assert before["session_id"] == current.session_id and before["items"] == [] and not before["complete"]
+            assert before["outcome"] is None
             with pytest.raises(TaskUnavailableError):
                 registry.control_integrity(first.task_id, baseline.session_id, "cancel")
             assert registry.control_integrity(first.task_id, current.session_id, "pause").accepted
@@ -7911,6 +7915,7 @@ def test_inventory_ordinary_live_control_terminal_repair_and_zero_replacement(tm
             result = registry.get_inventory_window(first.task_id, expected_revision=summary["view_revision"], offset=0, limit=256)["integrity"]
             assert result["complete"] and not result["gap"]
             assert [item["result"] for item in result["items"]] == (["verified"] if action == "resume" else [])
+            assert result["outcome"] == ("completed" if action == "resume" else "canceled")
             assert len(calls) == (2 if action == "resume" else 1)
             # An admitted baseline with no eligible unbaselined members replaces all previous outcomes.
             empty = registry.start_inventory_integrity(first.task_id, current.request_id,

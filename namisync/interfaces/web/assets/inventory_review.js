@@ -305,6 +305,7 @@ export function createInventoryReviewPanel(callbacks, detailsState = { expanded:
   let rowOrdinaryItems = new Map();
   let rowOrdinaryMode = null;
   let rowOrdinarySessionId = null;
+  let rowOrdinaryOutcome = null;
   let renderedProgress = null;
   const renderedPresence = new WeakMap();
   const selectionControls = new Map();
@@ -455,9 +456,13 @@ export function createInventoryReviewPanel(callbacks, detailsState = { expanded:
 
   function renderPresence(state, row, ordinary = {
     item: row.is_container ? null : rowOrdinaryItems.get(row.row_id) ?? null,
-    mode: rowOrdinaryMode, sessionId: rowOrdinarySessionId,
+    mode: rowOrdinaryMode, sessionId: rowOrdinarySessionId, outcome: rowOrdinaryOutcome,
   }, reuse = false) {
-    const ordinaryItem = ordinary.item;
+    // A run that did not complete (for example a resume refused because the
+    // ledger was replaced) reports what it did, not what the ledger now attests:
+    // only its error/canceled items stay on the row; Details keep the rest.
+    const ordinaryItem = ordinary.item !== null && runEnded(ordinary.sessionId, ordinary.outcome)
+      && !["error", "canceled"].includes(ordinary.item.result) ? null : ordinary.item;
     const presentation = task?.progressPresentation;
     const active = presentation?.activeItem;
     const live = !row.is_container && row.warning === null && row.row_id !== null
@@ -690,9 +695,11 @@ export function createInventoryReviewPanel(callbacks, detailsState = { expanded:
     const previousItems = rowOrdinaryItems;
     const previousMode = rowOrdinaryMode;
     const previousSessionId = rowOrdinarySessionId;
+    const previousOutcome = rowOrdinaryOutcome;
     rowOrdinaryItems = new Map((ordinary?.items ?? []).map((item) => [item.row_id, item]));
     rowOrdinaryMode = ordinary?.mode ?? null;
     rowOrdinarySessionId = ordinary?.session_id ?? null;
+    rowOrdinaryOutcome = ordinary?.outcome ?? null;
     const accepted = passive ? controller.commitPassiveWindow(generation, window)
       : controller.commitWindow(generation, window, preferredNodeId, reveal);
     if (accepted) {
@@ -716,8 +723,20 @@ export function createInventoryReviewPanel(callbacks, detailsState = { expanded:
       rowOrdinaryItems = previousItems;
       rowOrdinaryMode = previousMode;
       rowOrdinarySessionId = previousSessionId;
+      rowOrdinaryOutcome = previousOutcome;
     }
     return accepted;
+  }
+
+  // The released payload's outcome is authoritative. Before release (outcome
+  // null) only the run's own terminal session state is known; both come from
+  // the same terminal record, so the fallback cannot contradict the payload.
+  function runOutcome(sessionId, outcome) {
+    return outcome ?? (sessionId != null && sessionId === task?.sessionId
+      && task.sessionState !== "active" ? task.sessionState : null);
+  }
+  function runEnded(sessionId, outcome) {
+    return ["failed", "canceled", "refused"].includes(runOutcome(sessionId, outcome));
   }
 
   function isCurrentIntegrity(value) {
@@ -809,7 +828,7 @@ export function createInventoryReviewPanel(callbacks, detailsState = { expanded:
     renderPresence(detailStatus, { ...row, presence: value.row.presence,
       verification_state: value.row.verification_state, reappeared: value.row.reappeared_at !== null },
     !row.is_container && isCurrentIntegrity(ordinary)
-      ? {item:ordinaryItem, mode:ordinary.mode, sessionId:ordinary.session_id} : undefined);
+      ? {item:ordinaryItem, mode:ordinary.mode, sessionId:ordinary.session_id, outcome:ordinary.outcome ?? null} : undefined);
     const stateLabel = detailStatus.querySelector(".nami-file-state-label");
     if (!row.is_container && value.row.presence === "present" && stateLabel !== null) {
       renderText(stateLabel, `Present · ${stateLabel.textContent}`);
@@ -820,7 +839,8 @@ export function createInventoryReviewPanel(callbacks, detailsState = { expanded:
       appendDetail("Checksum", value.attestation?.content.digest ?? "No baseline evidence", { fullWidth: true, block: true });
       if (value.attestation !== null) appendDetail("Observation time", formatLocalDateTime(value.attestation.content.observed_at));
       if (ordinaryItem !== null) {
-        appendDetail(`${isCurrentIntegrity(ordinary) ? "" : "Previous "}${({baseline: "Baseline", verify: "Verification", rebaseline: "Rebaseline"})[ordinary.mode]} result`, integrityLabel(ordinaryItem.result));
+        const outcome = runOutcome(ordinary.session_id, ordinary.outcome ?? null);
+        appendDetail(`${isCurrentIntegrity(ordinary) ? "" : "Previous "}${({baseline: "Baseline", verify: "Verification", rebaseline: "Rebaseline"})[ordinary.mode]} result${runEnded(ordinary.session_id, outcome) ? ` (run ${outcome})` : ""}`, integrityLabel(ordinaryItem.result));
         if (ordinaryItem.reason !== null) appendDetail("Result reason", ordinaryItem.reason);
         appendDetail("Recording", `${ordinaryItem.recording === "ok" ? "OK" : ordinaryItem.recording}${ordinaryItem.record_disposition === null ? "" : ` · ${ordinaryItem.record_disposition}`}`);
         if (ordinaryItem.detail_omitted_count > 0) appendDetail("Omitted result details", String(ordinaryItem.detail_omitted_count));
@@ -865,6 +885,7 @@ export function createInventoryReviewPanel(callbacks, detailsState = { expanded:
     rowOrdinaryItems.clear();
     rowOrdinaryMode = null;
     rowOrdinarySessionId = null;
+    rowOrdinaryOutcome = null;
     renderedProgress = null;
     selectionControls.clear();
     current = null;
@@ -886,6 +907,7 @@ export function createInventoryReviewPanel(callbacks, detailsState = { expanded:
       rowOrdinaryItems.clear();
       rowOrdinaryMode = null;
       rowOrdinarySessionId = null;
+      rowOrdinaryOutcome = null;
       renderedProgress = null;
       searchDraft = false;
     }
@@ -1111,15 +1133,17 @@ export function createInventoryReviewPanel(callbacks, detailsState = { expanded:
     const progressKey = JSON.stringify([value.sessionId, value.sessionKind, value.sessionState,
       value.snapshot?.session_id, value.snapshot?.session_state, active?.item_type,
       active?.item_id, value.progressPresentation?.itemPercent]);
+    const ended = runEnded(rowOrdinarySessionId, rowOrdinaryOutcome);
     if (!replacingRows && renderedProgress?.key !== progressKey) {
       for (const row of review.window.rows) {
         const itemId = `${review.summary.location_id}:${row.row_id}`;
-        if (itemId !== active?.item_id && itemId !== renderedProgress?.itemId) continue;
+        if (renderedProgress?.ended === ended && itemId !== active?.item_id
+            && itemId !== renderedProgress?.itemId) continue;
         const rowElement = selectionControls.get(row.node_id)?.parentElement?.parentElement;
         if (rowElement !== undefined && rowElement !== null) renderPresence(rowElement.children[2], row, undefined, true);
       }
     }
-    renderedProgress = {key:progressKey, itemId:active?.item_id};
+    renderedProgress = {key:progressKey, itemId:active?.item_id, ended};
     if (Number.isSafeInteger(follow?.scrollOffset)) {
       tree.setPassiveScrollOffset(follow.scrollOffset);
       follow.scrollOffset = null;

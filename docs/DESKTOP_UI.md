@@ -894,7 +894,12 @@ identities. No view/selection/Refresh silently hashes or creates baseline eviden
 
 Presence shows current integrity progress, then current-session/displayed-scan
 ordinary results, then ledger state; a newer successful scan adopts current ledger
-facts. Mismatch wins over Reappeared, then Verified/Modified/Unverified; Reappeared
+facts. A run that ended failed, canceled or refused keeps only error/canceled
+results in Presence, also while a later Refresh is pending or failed; its other
+results account for the run, not current attestation (the ledger may have been
+replaced), so rows show ledger state and Details mark the run outcome. The
+released context's outcome decides; before release, the run's own terminal state.
+Mismatch wins over Reappeared, then Verified/Modified/Unverified; Reappeared
 alone proves no verification. Missing/unsupported/error stay explicit, ordinary
 present folders green Present, rowless folders blank, scan notices neutral Notice.
 Known progress uses inline bar, unknown text; settle exact current result even if

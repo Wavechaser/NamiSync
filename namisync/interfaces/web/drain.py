@@ -257,6 +257,8 @@ class _InventoryIntegrityState:
     copied_scope: CopiedSubjectScope | None = None
     path_rows: dict[str, str] = field(default_factory=dict)
     row_paths: dict[str, str] = field(default_factory=dict)
+    # The released session's terminal state; None while the run is live.
+    outcome: str | None = None
 
     def offer(self, update: TaskDeliveryUpdate) -> None:
         if self.complete or type(update) is not SessionEventView:
@@ -294,6 +296,7 @@ class _InventoryIntegrityState:
         return {"request_id": self.request_id, "session_id": self.session_id,
                 "mode": self.mode, "location_id": str(self.location_id),
                 "revision": self.revision, "complete": self.complete, "gap": self.gap,
+                "outcome": self.outcome,
                 "items": [{"row_id": row_id, **self.items[row_id]}
                           for row_id in row_ids if row_id in self.items]}
 
@@ -3161,6 +3164,7 @@ class TaskRegistry:
                 for item in retained_ordinary.items:
                     replacement.add(asdict(item))
                 replacement.complete = True
+                replacement.outcome = delivery.record.state
                 task.ordinary_integrity = replacement
             task.session_released = True
             if task.task_kind == "sync-plan":

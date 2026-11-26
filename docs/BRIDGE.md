@@ -743,14 +743,18 @@ observing an original command never repeats its effect. Current controls use
 
 After an ordinary start, inventory windows and domain details additionally carry
 an `integrity` context: activity request/session/mode/location identity, result
-revision, complete and gap flags, and compact outcome items for only the returned
-row IDs. Items carry result/reason, recording/disposition and omitted-detail
-count. At most 256 facts cross a window and at most one crosses detail; full
-selected populations remain server-owned. Terminal reconciliation replaces the
-live subset and clears the gap flag, even with zero outcomes. These activity
-facts do not reinterpret the separate current ledger fields. Existing pure
-inventory responses omit this context. Standalone controls and both selected
-and copied-file Verify actions in sync tasks consume this one ordinary overlay.
+revision, complete and gap flags, the run `outcome`, and compact outcome items
+for only the returned row IDs. Items carry result/reason, recording/disposition
+and omitted-detail count. At most 256 facts cross a window and at most one
+crosses detail; full selected populations remain server-owned. Terminal
+reconciliation replaces the live subset, even with zero outcomes; it clears the
+gap flag and sets `outcome` to the released session's terminal state
+(`completed`, `failed`, `canceled` or `refused`), which is null exactly while
+the context is incomplete. These activity facts do not reinterpret the separate
+current ledger fields; items of a run that did not complete are its account,
+not current attestation. Existing pure inventory responses omit this context.
+Standalone controls and both selected and copied-file Verify actions in sync
+tasks consume this one ordinary overlay.
 Selected subjects use admitted row IDs;
 copied scope uses workflow-owned canonical path admission with the frozen
 location/mode and binds emitted rows

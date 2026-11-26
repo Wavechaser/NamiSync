@@ -2554,7 +2554,7 @@ window.addEventListener("unhandledrejection", (event) => {
         && liveTree.getAttribute("aria-activedescendant") === liveActiveDescendant,
       notes_clear:!liveRow.querySelector('.nami-file-row__notes').textContent};
     review.window = {...review.window, integrity:{location_id:review.summary.location_id,
-      session_id:liveTask.sessionId, mode:"verify", revision:1, complete:true, gap:false,
+      session_id:liveTask.sessionId, mode:"verify", revision:1, complete:true, gap:false, outcome:"completed",
       items:[{row_id:rows[0].row_id, result:"verified", reason:null, recording:"ok",
         record_disposition:null, detail_omitted_count:0}]}};
     panel.render(liveTask);

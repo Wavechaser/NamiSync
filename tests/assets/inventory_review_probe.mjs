@@ -1392,7 +1392,7 @@ for (const [phase, label] of [["baseline", "Baseline"], ["verify", "Verification
 const overlayItem = {row_id:real.row_id, result:"verified", reason:null, recording:"ok",
   record_disposition:null, detail_omitted_count:0};
 const overlay = {request_id:"c".repeat(32), session_id:"d".repeat(32), mode:"verify",
-  location_id:presentationReview.summary.location_id, revision:1, complete:false, gap:true,
+  location_id:presentationReview.summary.location_id, revision:1, complete:false, gap:true, outcome:null,
   items:[overlayItem]};
 presentationTask.requestId = overlay.request_id;
 presentationTask.sessionId = overlay.session_id;
@@ -1496,7 +1496,7 @@ assert.match(text(walk(presentationPane.element).find(value => value.ariaLabel =
 presentationReview.detail.response = {...presentationReview.detail.response, integrity:overlay};
 assert.doesNotMatch(ordinaryDetailText, /Record disposition/);
 presentationReview.window = {...presentationReview.window,
-  integrity:{...overlay, revision:2, complete:true, gap:false, items:[]}};
+  integrity:{...overlay, revision:2, complete:true, gap:false, outcome:"completed", items:[]}};
 presentationTask.sessionState = "completed";
 presentationTask.sessionReleased = true;
 presentationTask.snapshot = {session_id:overlay.session_id, session_state:"completed", phase:"verify",
@@ -1519,7 +1519,7 @@ assert.match(presentationPane.element.querySelector('.nami-plan-review__status')
   /new baselines, not verification/);
 presentationPane.render(presentationTask);
 presentationReview.window = {...presentationReview.window,
-  integrity:{...overlay, revision:3, complete:true, gap:false}};
+  integrity:{...overlay, revision:3, complete:true, gap:false, outcome:"completed"}};
 presentationReview.summary = {...presentationReview.summary, scan_request_id:overlay.request_id};
 presentationTask.requestId = "e".repeat(32);
 presentationTask.sessionId = "f".repeat(32);
@@ -1544,7 +1544,7 @@ const changedDetail = {...fixture.detail,
   detail:{...fixture.detail.detail, row:{...fixture.detail.detail.row, verification_state:"modified"}}};
 for (const [result, expected] of [["verified", "Verified"], ["baselined", "Baselined"],
   ["mismatched", "Mismatch"], ["error", "Error"]]) {
-  const retained = {...overlay, complete:true, gap:false,
+  const retained = {...overlay, complete:true, gap:false, outcome:"completed",
     items:[{...overlayItem, result, recording:result === "error" ? "degraded" : "ok",
       reason:result === "error" ? "read-error" : null}]};
   presentationReview.window = {...savedFreshnessWindow, rows:[changedRow], integrity:retained};
@@ -1622,6 +1622,101 @@ presentationTask.progressPresentation = null;
 presentationReview.summary = savedFreshnessSummary;
 presentationReview.window = savedFreshnessWindow;
 presentationReview.detail = savedFreshnessDetail;
+
+// A failed run (for example a resume refused because the ledger was replaced)
+// or a canceled run keeps its results as an account of that run; the row's
+// primary state comes from the ledger rows, which a reload reads from the
+// current ledger. Run-outcome results (error, canceled) attest nothing and stay.
+// The released payload carries the run's outcome, so a later Refresh (pending or
+// failed) that keeps the run's scan publication cannot restore the run's label.
+{
+  const ledgerRow = {...presentationRows[0], reappeared:false, verification_state:"unverified"};
+  const ledgerDetail = {...fixture.detail, detail:{...fixture.detail.detail, attestation:null,
+    row:{...fixture.detail.detail.row, verification_state:"unverified", reappeared_at:null}}};
+  const rowState = () => presentationPane.element.querySelector(".nami-integrity-row__presence");
+  const rowLabel = () => rowState().querySelector(".nami-file-state-label").textContent;
+  const detailHeader = () => presentationPane.element.querySelector(".nami-plan-review__detail-status");
+  const detailText = () => text(walk(presentationPane.element).find(value => value.ariaLabel === "Inventory item details"));
+  const runTask = (ran, sessionState) => Object.assign(presentationTask, {sessionId:ran.session_id,
+    requestId:ran.request_id, sessionKind:ran.mode, sessionState, sessionReleased:sessionState !== "active",
+    snapshot:null, progressPresentation:null});
+  const refreshTask = (sessionState) => Object.assign(presentationTask, {sessionId:"9".repeat(32),
+    requestId:"8".repeat(32), sessionKind:"inventory", sessionState, sessionReleased:sessionState !== "active",
+    snapshot:null, progressPresentation:null});
+  const show = (integrity, scanRequestId = savedFreshnessSummary.scan_request_id) => {
+    presentationReview.summary = {...savedFreshnessSummary, scan_request_id:scanRequestId};
+    presentationReview.window = {...savedFreshnessWindow, rows:[ledgerRow], integrity};
+    presentationReview.detail = {row:ledgerRow, state:"current", response:{...ledgerDetail, integrity}};
+  };
+  const assertLedgerState = (message, account) => {
+    assert.equal(rowLabel(), "Unverified", message);
+    assert.equal(rowState().dataset.integrity, "unverified");
+    assert.equal(Object.hasOwn(rowState().dataset, "integrityState"), false);
+    assert.equal(rowState().title, "Present · Unverified");
+    assert.equal(detailHeader().querySelector(".nami-file-state-label").textContent, "Present · Unverified");
+    assert.equal(Object.hasOwn(detailHeader().dataset, "integrityState"), false);
+    assert.ok(detailText().includes(account), "Details keep the run's result, labelled as that run's account");
+  };
+  for (const [mode, owner, result, expected] of [["baseline", "Baseline", "baselined", "Baselined"],
+    ["verify", "Verification", "verified", "Verified"], ["rebaseline", "Rebaseline", "baselined", "Baselined"],
+    ["verify", "Verification", "mismatched", "Mismatch"], ["verify", "Verification", "modified", "Modified"],
+    ["verify", "Verification", "missing", "Missing"], ["baseline", "Baseline", "unsupported", "Unsupported"]]) {
+    const ran = {...overlay, mode, revision:5, complete:false, gap:false, outcome:null, items:[{...overlayItem, result}]};
+    for (const sessionState of ["failed", "canceled", "refused"]) {
+      const account = `${owner} result (run ${sessionState}) ${expected}`;
+      show(ran);
+      runTask(ran, "active");
+      presentationPane.render(presentationTask);
+      assert.equal(rowLabel(), expected, "a running session's reported result is the row's live account");
+      // The terminal update arrives before release reloads the rows; until the
+      // released payload arrives, the run's own terminal state decides.
+      runTask(ran, sessionState);
+      presentationPane.render(presentationTask);
+      assertLedgerState(`a ${sessionState} ${mode} run's ${result} result is not the current ledger's attestation`, account);
+      // Release republishes the run's own scan with the outcome in the payload.
+      show({...ran, revision:6, complete:true, outcome:sessionState}, ran.request_id);
+      presentationPane.render(presentationTask);
+      assertLedgerState(`a released ${sessionState} run keeps the ledger state`, account);
+      for (const refresh of ["active", "failed"]) {
+        refreshTask(refresh);
+        presentationPane.render(presentationTask);
+        assertLedgerState(`a ${refresh === "active" ? "pending" : "failed"} Refresh after a ${sessionState} run keeps the ledger state`, account);
+        assert.doesNotMatch(detailText(), /Previous /, "the displayed scan's run is still current, not previous");
+      }
+    }
+    show({...ran, revision:6, complete:true, outcome:"completed"}, ran.request_id);
+    runTask(ran, "completed");
+    presentationPane.render(presentationTask);
+    for (const refresh of [null, "active", "failed"]) {
+      if (refresh !== null) {
+        refreshTask(refresh);
+        presentationPane.render(presentationTask);
+      }
+      assert.equal(rowLabel(), expected, "a completed run's result remains the row's state, also across a pending or failed Refresh");
+      assert.equal(rowState().dataset.integrityState, result);
+      assert.ok(rowState().title.startsWith(`${owner} · ${expected}`));
+      assert.ok(detailText().includes(`${owner} result ${expected}`));
+      assert.doesNotMatch(detailText(), /\(run /);
+    }
+  }
+  for (const [result, expected] of [["error", "Error"], ["canceled", "Canceled"]]) {
+    for (const sessionState of ["failed", "canceled"]) {
+      const ran = {...overlay, revision:7, complete:true, gap:false, outcome:sessionState,
+        items:[{...overlayItem, result, reason:result === "error" ? "read-error" : "canceled"}]};
+      show(ran, ran.request_id);
+      for (const owner of [() => runTask(ran, sessionState), () => refreshTask("failed")]) {
+        owner();
+        presentationPane.render(presentationTask);
+        assert.equal(rowLabel(), expected, `a ${sessionState} run keeps its per-item ${result} outcome on the row`);
+        assert.equal(rowState().dataset.integrityState, result);
+      }
+    }
+  }
+  runTask(overlay, "active");
+  presentationReview.summary = savedFreshnessSummary;
+  presentationReview.window = savedFreshnessWindow;
+  presentationReview.detail = savedFreshnessDetail;
+}
 
 Object.assign(presentationTask, {taskKind:"sync-plan", executionStarted:true, workPane:"verify",
   sessionKind:"inventory", sessionState:"completed", sessionReleased:true, snapshot:null,

@@ -1123,7 +1123,7 @@ assert.equal(d1Task.executionControlState, "paused",
 assert.equal(calls.filter(([name]) => name === "window").length, overlayReads + 1,
   "one live overlay read runs while a latest update queues");
 const liveOverlay = {request_id:d1Task.requestId, session_id:d1Task.sessionId, mode:"baseline",
-  location_id:d1Review.summary.location_id, revision:1, complete:false, gap:true, items:[]};
+  location_id:d1Review.summary.location_id, revision:1, complete:false, gap:true, outcome:null, items:[]};
 delayedWindow.resolve({...windowResponse(d1Review.summary.view_revision, d1Review.window.offset),
   integrity:liveOverlay});
 delayedWindow = null;
@@ -1463,7 +1463,7 @@ assert.equal(alignedReview.keyboardRevealWindow, null, "deferred live refresh ca
 let overlayFactRevision = 0;
 const overlayFacts = () => ({request_id:alignedTask.requestId, session_id:alignedTask.sessionId,
   mode:"verify", location_id:alignedReview.summary.location_id, revision:overlayFactRevision,
-  complete:true, gap:false, items:[]});
+  complete:true, gap:false, outcome:"completed", items:[]});
 const resultWindow = offset => ({...alignedWindow(offset), integrity:overlayFacts()});
 let rejectedWindow = null, rejectedDetail = null, failNextWindow = false;
 globalThis.inventoryHarness.getInventoryWindow = (taskId, revision, offset, limit) => {

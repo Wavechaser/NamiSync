@@ -3059,12 +3059,13 @@ function validateInventorySummary(value) {
 }
 
 function validateInventoryIntegrity(value, rowIds) {
-  return isExactObject(value, ["request_id", "session_id", "mode", "location_id", "revision", "complete", "gap", "items"])
+  return isExactObject(value, ["request_id", "session_id", "mode", "location_id", "revision", "complete", "gap", "outcome", "items"])
     && typeof value.request_id === "string" && ID_PATTERN.test(value.request_id)
     && typeof value.session_id === "string" && ID_PATTERN.test(value.session_id)
     && ["baseline", "verify", "rebaseline"].includes(value.mode)
     && isScalar64(value.location_id) && value.location_id !== "0" && isNonnegativeInteger(value.revision)
     && typeof value.complete === "boolean" && typeof value.gap === "boolean" && !(value.complete && value.gap)
+    && (value.complete ? ["completed", "failed", "canceled", "refused"].includes(value.outcome) : value.outcome === null)
     && Array.isArray(value.items) && value.items.length <= 256 && Array.isArray(rowIds)
     && new Set(value.items.map((item) => item?.row_id)).size === value.items.length
     && value.items.every((item) => {
