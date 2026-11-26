@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import sqlite3
 from dataclasses import replace
+from datetime import timedelta
 from threading import Event
 from time import monotonic, sleep
 from types import SimpleNamespace
@@ -32,6 +33,10 @@ from namisync.core.session import (
 from namisync.db.claims import DatabaseInUse, hold_maintenance_claims
 from namisync.dispatcher import Dispatcher, InProcessResourceLockProvider
 from namisync.interfaces.service import _workflow_registry
+from namisync.workflows.database_maintenance import (
+    backup_database_pair,
+    restore_database_from_backup,
+)
 from namisync.workflows.models import (
     ExecuteContinuation,
     ExecutionCheckpoint,
@@ -43,7 +48,14 @@ from namisync.workflows.selection import derive_execution_selection
 from namisync.workflows.runtime import EXECUTION_KIND, LocalWorkflowRuntime
 from namisync.workflows.sync import run_execution
 
-from _db_fixtures import NOW, file_stat, operation, plan, replace_ledger_instance
+from _db_fixtures import (
+    NOW,
+    FakeClock,
+    file_stat,
+    operation,
+    plan,
+    replace_ledger_instance,
+)
 
 
 class _Recording:
@@ -742,3 +754,166 @@ def test_ledger_writer_refuses_a_replacement_after_the_start_check(tmp_path) -> 
     assert _ledger_rows(ledger, "runs") == []
     with hold_maintenance_claims(ledger, history):
         pass
+
+
+def _pausing_once(original, entered: Event, checkpoint):
+    # Holds the first call at its checkpoint until the session pauses.
+    calls = 0
+
+    def pausing(*args):
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            entered.set()
+            while True:
+                checkpoint(args[1])
+                sleep(0.005)
+        return original(*args)
+
+    return pausing
+
+
+def _first_use_run_paused_in(tmp_path, phase: str):
+    """A plan made before either database existed, paused in ``phase`` after
+    its first recorder wrote the run. No History observer, as with degraded
+    audit, so the paused run holds no claim and a restore can land."""
+
+    source, target = tmp_path / "source", tmp_path / "target"
+    source.mkdir()
+    target.mkdir()
+    (source / "payload.bin").write_bytes(b"first use")
+    ledger, history = tmp_path / "ledger.db", tmp_path / "history.db"
+    runtime = LocalWorkflowRuntime(ledger, history)
+    entered = Event()
+    if phase == "execute":
+        runtime._deps = replace(runtime._deps, executor=_pausing_once(
+            runtime._deps.executor, entered, lambda context: context.checkpoint(),
+        ))
+    else:
+        runtime._deps = replace(runtime._deps, verifier=_pausing_once(
+            runtime._deps.verifier, entered, lambda context: context.run.checkpoint(),
+        ))
+    dispatcher = Dispatcher(
+        _workflow_registry(runtime),
+        lock_provider=InProcessResourceLockProvider(),
+        clock=runtime.clock,
+    )
+    execution = _plan_and_commit(
+        runtime, source, target, "a" * 32, "b" * 32, verify_after_execute=True,
+    )
+    assert execution.execution_set.commitment.ledger_instance_id is None
+    # The pair is created after planning, as admission does; this backup holds
+    # no run.
+    runtime.initialize_database_contracts()
+    backup = next(
+        item.path
+        for item in backup_database_pair(ledger, history, clock=FakeClock()).backups
+        if item.role == "ledger"
+    )
+    session_id = dispatcher.submit(EXECUTION_KIND, execution)
+    assert entered.wait(2)
+    assert dispatcher.pause(session_id).accepted
+    deadline = monotonic() + 3
+    while (
+        dispatcher.get(session_id).state is not SessionState.PAUSED
+        or session_id in dispatcher._current_workers
+    ):
+        assert monotonic() < deadline, "session did not pause"
+        sleep(0.01)
+    assert _ledger_rows(ledger, "runs", "run_token") == [("b" * 32,)]
+    return runtime, dispatcher, session_id, backup
+
+
+@pytest.mark.parametrize("phase", ("execute", "verify"))
+def test_resume_refuses_a_first_use_run_whose_ledger_was_restored(
+    tmp_path, phase: str,
+) -> None:
+    ledger, target = tmp_path / "ledger.db", tmp_path / "target"
+    runtime, dispatcher, session_id, backup = _first_use_run_paused_in(tmp_path, phase)
+    try:
+        bound = _stored_instance(ledger)
+        restored = restore_database_from_backup(
+            ledger, tmp_path / "history.db", "ledger", backup,
+            clock=FakeClock(NOW + timedelta(seconds=1)),
+        )
+        assert restored.restore is not None, restored.contract
+        assert _stored_instance(ledger) != bound
+        assert _ledger_rows(ledger, "runs") == []
+        assert dispatcher.resume(session_id).accepted
+        record = _settled(dispatcher, session_id)
+    finally:
+        dispatcher.shutdown()
+        runtime.close()
+
+    result = record.result
+    assert result.disposition is Disposition.RAN
+    assert result.recording is RecordingStatus.DEGRADED
+    assert "The ledger was replaced" in result.error.message
+    # Refused before any ledger write: the run is not recreated, nor finished.
+    assert _ledger_issue_reasons(result) == {TaskRecordingIssueReason.FINISH_FAILED}
+    assert _ledger_rows(ledger, "runs") == []
+    if phase == "execute":
+        assert result.status is SessionState.FAILED
+        assert result.error.type_name == "ExecutionResumeCommitmentInvalid"
+        assert list(target.iterdir()) == []
+    else:
+        assert result.status is SessionState.COMPLETED
+        assert result.phases[-1].status is PhaseStatus.INCOMPLETE
+        assert result.error.type_name == "VerificationContinuationInvalid"
+        assert (target / "payload.bin").read_bytes() == b"first use"
+
+
+@pytest.mark.parametrize("phase", ("execute", "verify"))
+def test_first_use_run_resumes_against_the_ledger_it_was_bound_to(
+    tmp_path, phase: str,
+) -> None:
+    ledger, target = tmp_path / "ledger.db", tmp_path / "target"
+    runtime, dispatcher, session_id, _backup = _first_use_run_paused_in(tmp_path, phase)
+    try:
+        bound = _stored_instance(ledger)
+        assert runtime._execution_ledger == {"b" * 32: bound}
+        assert dispatcher.resume(session_id).accepted
+        record = _settled(dispatcher, session_id)
+        assert runtime._execution_ledger == {}
+    finally:
+        dispatcher.shutdown()
+        runtime.close()
+
+    assert record.result.status is SessionState.COMPLETED
+    assert record.result.recording is RecordingStatus.OK
+    assert record.result.error is None
+    assert (target / "payload.bin").read_bytes() == b"first use"
+    assert _ledger_rows(ledger, "runs", "run_token, filesystem_status") == [
+        ("b" * 32, SessionState.COMPLETED.value)
+    ]
+
+
+def test_first_use_resume_recorder_refuses_a_replacement_after_the_resume_check(
+    tmp_path,
+) -> None:
+    ledger, target = tmp_path / "ledger.db", tmp_path / "target"
+    runtime, dispatcher, session_id, _backup = _first_use_run_paused_in(tmp_path, "verify")
+    original_observer = runtime._deps.observer
+
+    def replaced_during_preflight(*args, **kwargs):
+        # After the resume check, before the resumed recorder takes its claim.
+        replace_ledger_instance(ledger)
+        return original_observer(*args, **kwargs)
+
+    # Each resumed invocation reads the runtime's dependencies afresh.
+    runtime._deps = replace(runtime._deps, observer=replaced_during_preflight)
+    try:
+        runs_before = _ledger_rows(ledger, "runs")
+        assert dispatcher.resume(session_id).accepted
+        record = _settled(dispatcher, session_id)
+    finally:
+        dispatcher.shutdown()
+        runtime.close()
+
+    result = record.result
+    assert result.recording is RecordingStatus.DEGRADED
+    assert result.phases[-1].status is PhaseStatus.INCOMPLETE
+    assert TaskRecordingIssueReason.RECORDING_OPEN_FAILED in _ledger_issue_reasons(result)
+    # Neither the resumed recorder nor the finish wrote to the replaced ledger.
+    assert _ledger_rows(ledger, "runs") == runs_before
+    assert (target / "payload.bin").read_bytes() == b"first use"

@@ -2352,6 +2352,7 @@ def test_workflow_runtime_retains_a_store_whose_close_failed() -> None:
     runtime._retained_inventory_integrity = {}
     runtime._inventory_details = {"request": inventory_details}
     runtime._execution_started = {"run": NOW}
+    runtime._execution_ledger = {"run": "a" * 32}
     del plan, execution_details, inventory_details
 
     with pytest.raises(RuntimeError, match="writer close failed"):
@@ -2362,6 +2363,7 @@ def test_workflow_runtime_retains_a_store_whose_close_failed() -> None:
     assert tuple(runtime._execution_details) == ("run",)
     assert tuple(runtime._inventory_details) == ("request",)
     assert runtime._execution_started == {"run": NOW}
+    assert runtime._execution_ledger == {"run": "a" * 32}
     assert plan_ref() is not None
     assert execution_ref() is not None
     assert inventory_ref() is not None
@@ -2373,6 +2375,7 @@ def test_workflow_runtime_retains_a_store_whose_close_failed() -> None:
     assert runtime._execution_details == {}
     assert runtime._inventory_details == {}
     assert runtime._execution_started == {}
+    assert runtime._execution_ledger == {}
     assert plan_ref() is None
     assert execution_ref() is None
     assert inventory_ref() is None
@@ -2415,6 +2418,7 @@ def test_concurrent_workflow_runtime_close_waits_for_failed_attempt() -> None:
     runtime._retained_inventory_integrity = {}
     runtime._inventory_details = {}
     runtime._execution_started = {}
+    runtime._execution_ledger = {}
     first_errors: list[Exception] = []
 
     def first_close() -> None:

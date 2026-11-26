@@ -312,6 +312,8 @@ class SyncDependencies:
         [RecordingSpec, SessionState, RecordingStatus], None
     ]
     ledger_instance: Callable[[], str]
+    # The ledger instance a run token's first recorder opened, or None.
+    ledger_binding: Callable[[str], str | None]
     ignores: IgnoreSet = IgnoreSet()
 
 
@@ -320,15 +322,20 @@ class LedgerInstanceChanged(RuntimeError):
 
 
 def require_planned_ledger(
-    commitment: Commitment | None, current: Callable[[], str],
+    commitment: Commitment | None,
+    current: Callable[[], str],
+    bound: str | None = None,
 ) -> None:
     """Refuse a commitment whose plan was made against another ledger.
 
-    A plan made before any ledger existed read none, so it carries no id.
+    A plan made before any ledger existed read none, so it carries no id;
+    its run is held instead to ``bound``, the ledger its first recorder
+    opened, once there is one.
     """
 
     planned = None if commitment is None else commitment.ledger_instance_id
-    if planned is not None and current() != planned:
+    expected = bound if planned is None else planned
+    if expected is not None and current() != expected:
         raise LedgerInstanceChanged(
             "The ledger was replaced (restored or reset) after this plan was "
             "made, so it cannot run. Plan again to review it against the "
@@ -941,10 +948,14 @@ def _run_execution(
             )
             if commitment_error is None:
                 # The definitive refusal; each ledger writer repeats the check
-                # under its maintenance claim before its first write.
+                # under its maintenance claim before its first write. Only a
+                # resumed run can have a binding; the runtime always supplies
+                # the lookup, and test doubles that omit it have none.
+                binding = getattr(deps, "ledger_binding", None)
                 try:
                     require_planned_ledger(
                         xset.commitment, lambda: deps.ledger_instance(),
+                        None if binding is None else binding(str(xset.run_id)),
                     )
                 except LedgerInstanceChanged as error:
                     commitment_error = str(error)

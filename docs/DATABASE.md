@@ -920,6 +920,13 @@ own database, and the pair operation supplies anything that needs both.
     (degraded audit). It fails closed through the recording-open-failure path: no ledger
     write, no filesystem change, `FAILED` with recording degraded and the typed
     `LedgerInstanceChanged`, CLI exit 4.
+  - **First use.** A plan with no instance starts against whatever ledger
+    exists at execution. The run's first recorder reads the instance under
+    its claim, before its first write, and the runtime keeps it beside the
+    run's start time for as long as the run can resume. From then on it
+    stands in for the planned instance: each resume's start check and every
+    later ledger writer of that run compare against it, with the same
+    refusals and wording as above.
   - Inventory review's row-id actions (acknowledge, restore) are not plans and
     are not covered here.
   - The CLI case in `tests/test_cli.py` runs a real in-place restore while the
@@ -927,6 +934,8 @@ own database, and the pair operation supplies anything that needs both.
     restore by rewriting the id under the ledger's exclusive claim:
     `tests/test_bridge_resume.py` (start, paused execute and verify resumes of
     a run admitted without an observer, the under-claim check) and `tests/interfaces/web/test_drain.py`.
+    The first-use resume refusal in `tests/test_bridge_resume.py` restores a real pre-execution backup
+    while the run is paused.
 - A paused integrity session (baseline, verify, rebaseline) records the ledger
   instance its saved progress belongs to (user decision, 2026-11-26). Each
   stretch reads the instance right after its `LedgerRecorder` takes the

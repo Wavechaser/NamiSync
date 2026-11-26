@@ -345,6 +345,9 @@ class LocalWorkflowRuntime:
         self._retained_inventory_integrity: dict[str, RetainedInventoryIntegrity] = {}
         self._inventory_details: dict[str, InventoryDetails] = {}
         self._execution_started: dict[str, datetime] = {}
+        # The ledger instance a first-use run's first recorder opened, kept
+        # and dropped with its ``_execution_started`` entry.
+        self._execution_ledger: dict[str, str] = {}
         self._history_store: HistoryStore | None = None
         self._closing = False
         self._closed = False
@@ -370,6 +373,7 @@ class LocalWorkflowRuntime:
             save_execution_details=self._save_execution_details,
             finish_existing_recording=self._finish_existing_recording,
             ledger_instance=self._ledger_instance_id,
+            ledger_binding=self._execution_binding,
         )
         inventory_scan = inventory_scanner or self._scanner.scan
         self._inventory_deps = InventoryDependencies(
@@ -1597,6 +1601,7 @@ class LocalWorkflowRuntime:
                 self._retained_inventory_integrity.clear()
                 self._inventory_details.clear()
                 self._execution_started.clear()
+                self._execution_ledger.clear()
                 self._closed = True
 
     def _resolve_volume(self, path: str) -> VolumeId:
@@ -1764,7 +1769,40 @@ class LocalWorkflowRuntime:
         run_token = str(request.execution_set.run_id)
         with self._lock:
             if self._execution_started.get(run_token) == started_at:
-                self._execution_started.pop(run_token, None)
+                self._forget_execution(run_token)
+
+    def _forget_execution(self, run_token: str) -> None:
+        # Caller holds ``_lock``.
+        self._execution_started.pop(run_token, None)
+        self._execution_ledger.pop(run_token, None)
+
+    def _execution_binding(self, run_token: str) -> str | None:
+        with self._lock:
+            return self._execution_ledger.get(run_token)
+
+    def _require_run_ledger(self, spec: RecordingSpec, *, bind: bool) -> None:
+        """Refuse a ledger writer for a run whose ledger was replaced.
+
+        Called under the writer's shared claim, which a restore needs
+        exclusively, so the result holds until its last write. A plan made
+        before any ledger existed carries no instance; its run's first
+        recorder (``bind``) binds it to the instance read here, and every
+        later writer and resume of that run is held to it.
+        """
+
+        run_token = str(spec.run_id)
+        bound = self._execution_binding(run_token)
+        require_planned_ledger(spec.commitment, self._ledger_instance_id, bound)
+        if (
+            bind
+            and bound is None
+            and spec.commitment is not None
+            and spec.commitment.ledger_instance_id is None
+        ):
+            current = self._ledger_instance_id()
+            with self._lock:
+                if run_token in self._execution_started:
+                    self._execution_ledger.setdefault(run_token, current)
 
     def _finish_existing_recording(
         self,
@@ -1783,8 +1821,7 @@ class LocalWorkflowRuntime:
             clock=self.clock,
             database=self._database(),
         ) as recorder:
-            # Under the recorder's shared claim, which a restore needs exclusively.
-            require_planned_ledger(spec.commitment, self._ledger_instance_id)
+            self._require_run_ledger(spec, bind=False)
             recorder.finish_run(
                 FinishRunCommand(
                     run_token,
@@ -1794,7 +1831,7 @@ class LocalWorkflowRuntime:
                 )
             )
         with self._lock:
-            self._execution_started.pop(run_token, None)
+            self._forget_execution(run_token)
 
     def save_plan(self, artifact: PlanArtifact) -> None:
         with self._lock:
@@ -2081,9 +2118,8 @@ class _LedgerRunRecording:
             ),
         )
         try:
-            # The recorder now holds the ledger's shared claim, which a restore
-            # needs exclusively, so this check holds until its last write.
-            require_planned_ledger(spec.commitment, runtime._ledger_instance_id)
+            # The recorder now holds the ledger's shared claim.
+            runtime._require_run_ledger(spec, bind=True)
             self.recorder = self._begin(started_at)
         except BaseException:
             self._owner.close()
@@ -2166,10 +2202,7 @@ class _LedgerRunRecording:
             )
         )
         with self._runtime._lock:
-            self._runtime._execution_started.pop(
-                str(self._spec.run_id),
-                None,
-            )
+            self._runtime._forget_execution(str(self._spec.run_id))
 
     def __enter__(self) -> _LedgerRunRecording:
         return self
