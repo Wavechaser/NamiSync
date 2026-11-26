@@ -216,6 +216,8 @@ def _assert_backup_refusal(contract) -> None:
     assert "Put back the ledger it replaced" in contract.guidance
     for word in ("delete", "archive", "reset"):
         assert word not in contract.guidance.lower()
+    # Whether anything changed is the renderer's to say, from the result.
+    assert "changed" not in contract.guidance
 
 
 def test_backup_copied_into_place_is_refused_at_every_admission_without_change(

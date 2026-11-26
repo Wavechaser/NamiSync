@@ -1486,7 +1486,9 @@ the restored-at-the-prompt case in `tests/test_cli.py`.
   a failed `integrity_check`, or a `-journal` beside the main); `older`;
   `newer`; `wrong-role`; `unsupported` (reset required, such as an old-shape
   schema-5 ledger); `is-backup` (a backup copied into place); `unavailable`.
-  Violations found beside another state are listed under it.
+  Violations found beside another state are listed under it. An `unsupported`
+  role's problem says only what was found: which databases a reset discards is
+  the pair contract's decision, once the other role is classified.
 - **Backup** needs a ready pair and backs up the ledger, then History, at one
   cut time. A read-only connection copies the source with the SQLite backup
   API into an exclusively created temporary beside it, which is switched to

@@ -75,16 +75,136 @@ def _selected(ledger: Path, history: Path) -> str:
 def test_a_selected_path_is_shown_as_it_can_be_pasted() -> None:
     # Single quotes keep PowerShell from expanding $, and a bracket is not
     # doubled as it is in other output; every single quote PowerShell reads is
-    # doubled, and only control characters are escaped.
+    # doubled.
     assert cli_module._powershell_quoted(Path(r"C:\data [x] $HOME\it's.db")) == (
         r"'C:\data [x] $HOME\it''s.db'"
     )
     assert cli_module._powershell_quoted(Path("C:\\data\\O\u2019Brien.db")) == (
         "'C:\\data\\O\u2019\u2019Brien.db'"
     )
-    assert cli_module._powershell_quoted(Path("C:\\data\x1b$x\\ledger.db")) == (
-        "'C:\\data[U+001B]$x\\ledger.db'"
+
+
+@pytest.mark.parametrize("unshown", ["ledger", "history", "both"])
+def test_only_a_path_that_cannot_be_shown_as_it_is_is_described(unshown: str) -> None:
+    # Its [U+XXXX] rendering names other text, so pasted it would reach
+    # another path: that option is described and typed by the user; any other
+    # is still quoted for pasting.
+    plain, hidden = Path("C:/data [x]/plain.db"), Path("C:/data\x85$(Get-Date)/it's.db")
+    ledger = hidden if unshown in ("ledger", "both") else plain
+    history = hidden if unshown in ("history", "both") else plain.with_name("h.db")
+    stream = io.StringIO()
+
+    def option(name: str, path: Path) -> str:
+        if path == hidden:
+            return f"{name} (path shown here as {cli_module._safe(path)})"
+        return f"{name} {cli_module._powershell_quoted(path)}"
+
+    def retype(*names: str) -> str:
+        if len(names) > 1:
+            return (
+                f" Type the {' and '.join(names)} paths as you gave them, because they "
+                "hold characters that cannot be shown here."
+            )
+        return (
+            f" Type the {names[0]} path as you gave it, because it holds characters "
+            "that cannot be shown here."
+        )
+
+    ledger_retype = retype("--database") if ledger == hidden else ""
+    history_retype = retype("--history-database") if history == hidden else ""
+    both_retype = {
+        "ledger": ledger_retype, "history": history_retype,
+        "both": retype("--database", "--history-database"),
+    }[unshown]
+
+    selected = cli_module._selected_databases(
+        SimpleNamespace(database=str(ledger), history_database=str(history)), ledger, history,
+    )(stream)
+    given = cli_module._given_databases(
+        SimpleNamespace(database=str(ledger), history_database=None), ledger, history, stream,
     )
+    alone = cli_module._given_databases(
+        SimpleNamespace(database=None, history_database=str(history)), ledger, history, stream,
+    )
+
+    assert selected == (
+        f"These databases were selected with {option('--database', ledger)} "
+        f"{option('--history-database', history)}. Add the same options to any "
+        f"NamiSync command above.{both_retype}"
+    )
+    assert "[U+0085]$(Get-Date)" in selected
+    assert given == (
+        f"This command was run with {option('--database', ledger)}. Add the same "
+        f"options to any NamiSync command above.{ledger_retype}"
+    )
+    # Named alone, History must still be told to name its own ledger.
+    assert alone == (
+        f"This command was run with {option('--history-database', history)} and no "
+        "--database. Any NamiSync command above must also name this History's own "
+        "ledger with --database; otherwise it pairs this History with the default "
+        f"ledger.{history_retype}"
+    )
+    for line in (selected, given, alone):
+        assert "\x85" not in line
+        assert f"'{cli_module._safe(hidden)}" not in line, line
+
+
+def test_a_default_path_that_cannot_be_shown_is_not_one_to_type() -> None:
+    # The user gave only --history-database; the default ledger beside it
+    # cannot be shown, and was never typed, so it is named as the default.
+    history, ledger = Path("C:/data/history.db"), Path("C:/Users/A\u200bB/ledger.db")
+
+    selected = cli_module._selected_databases(
+        SimpleNamespace(database=None, history_database=str(history)), ledger, history,
+    )(io.StringIO())
+
+    assert selected == (
+        f"These databases were selected with --history-database '{history}' and the "
+        f"default ledger database (shown here as {cli_module._safe(ledger)}). Add the "
+        "same options to any NamiSync command above."
+    )
+
+
+def _encoded_stream(encoding: str) -> io.TextIOWrapper:
+    return io.TextIOWrapper(io.BytesIO(), encoding=encoding, newline="")
+
+
+def _written(stream: io.TextIOWrapper) -> str:
+    stream.flush()
+    return stream.buffer.getvalue().decode(stream.encoding)
+
+
+def test_a_path_the_output_encoding_cannot_write_is_described_there_and_quoted_elsewhere(
+    tmp_path: Path,
+) -> None:
+    # Reviewer: a cp1252 pipe writes 数据 as [U+6570][U+636E] markers, which
+    # quoted would name another path.
+    folder = tmp_path / "数据"
+    folder.mkdir()
+    ledger, history = folder / "ledger.db", tmp_path / "history.db"
+    ledger.touch()  # unsupported beside a missing History: check names the pair
+    lines = {}
+    for encoding in ("cp1252", "utf-8"):
+        stdout, stderr = _encoded_stream(encoding), _encoded_stream(encoding)
+        code = main(["check", *_flags(ledger, history)], stdout=stdout, stderr=stderr)
+        assert (code, _written(stderr)) == (EXIT_FAILED, "")
+        lines[encoding] = _written(stdout).splitlines()[-1]
+
+    marked = str(ledger).replace("数据", "[U+6570][U+636E]")
+    assert lines["cp1252"] == (
+        f"These databases were selected with --database (path shown here as {marked}) "
+        f"--history-database '{history}'. Add the same options to any NamiSync command "
+        "above. Type the --database path as you gave it, because it holds characters "
+        "that cannot be shown here."
+    )
+    assert lines["utf-8"] == _selected(ledger, history)
+    options = lines["utf-8"].removeprefix("These databases were selected with ").removesuffix(
+        ". Add the same options to any NamiSync command above."
+    )
+    [parsed] = _parsed_by_powershell(tmp_path, "pwsh", ["namisync check " + options])
+    assert parsed["errors"] == [] and [
+        element["value"] for element in parsed["elements"] if element["kind"] == "SingleQuoted"
+    ] == [str(ledger), str(history)]
 
 
 # Every character PowerShell reads as a single or double quote, the characters
@@ -147,12 +267,12 @@ def test_a_selected_path_parses_back_in_powershell_as_the_same_path(
 ) -> None:
     data = Path("C:/data")
     cases = []
-    for name in (*_AWKWARD_NAMES, "esc\x1bname", "esc\x1b$(Get-Date) ”quote"):
+    for name in _AWKWARD_NAMES:
         ledger, history = data / name / "ledger.db", data / f"{name}.db"
         line = cli_module._selected_databases(
             SimpleNamespace(database=str(ledger), history_database=str(history)),
             ledger, history,
-        )
+        )(io.StringIO())
         options = line.removeprefix("These databases were selected with ").removesuffix(
             ". Add the same options to any NamiSync command above."
         )
@@ -161,9 +281,6 @@ def test_a_selected_path_parses_back_in_powershell_as_the_same_path(
     parsed = _parsed_by_powershell(tmp_path, shell, [source for source, _, _ in cases])
 
     for (source, ledger, history), result in zip(cases, parsed, strict=True):
-        if "\x1b" in ledger:
-            # Not shown as it is: its markers, quoted alike, are never run.
-            ledger, history = cli_module._safe(ledger), cli_module._safe(history)
         assert (result["errors"], result["elements"]) == ([], [
             {"kind": "BareWord", "value": "namisync"},
             {"kind": "BareWord", "value": "check"},
@@ -773,6 +890,93 @@ def test_an_empty_history_beside_a_healthy_ledger_is_the_only_file_to_discard(
     assert f"archive or delete the history database file {history} and its" in restored.out
     assert keep in restored.out
     assert all(str(ledger) not in sentence for sentence in _discarding(restored.out))
+    # The pair's direction alone: History's own check only says what was found.
+    for output in (checked.out, refused.err, restored.out):
+        assert len(_discarding(output)) == 1, output
+
+
+def test_check_directs_a_reset_of_both_databases_once(tmp_path: Path) -> None:
+    ledger, history = tmp_path / "ledger.db", tmp_path / "history.db"
+    ledger.touch()
+    history.touch()
+
+    checked = _main(["check", *_flags(ledger, history)])
+
+    assert (checked.code, checked.err) == (EXIT_FAILED, "")
+    assert "ledger: unsupported\n" in checked.out and "history: unsupported\n" in checked.out
+    assert "Pair: ledger-contract.\n" in checked.out
+    assert _discarding(checked.out) == [
+        "Close every NamiSync process, then archive or delete both database main "
+        f"files, the ledger database {ledger.resolve()} and the history database "
+        f"{history.resolve()}, "
+        "and all of their -wal, -shm, and -journal sidecars together before "
+        "restarting NamiSync."
+    ]
+
+
+def test_check_of_an_unsupported_database_beside_a_damaged_one_says_what_to_do_first(
+    tmp_path: Path,
+) -> None:
+    # Reviewer: beside a damaged History the pair names no reset, and the
+    # damaged History's lines say nothing of the ledger.
+    ledger, history = _pair(tmp_path)
+    flags = _flags(ledger, history)
+    backup = _backup(ledger, history)["history"]
+    _unlink(ledger)
+    ledger.touch()
+    _damage(history)
+
+    checked = _main(["check", *flags])
+
+    assert (checked.code, checked.err) == (EXIT_FAILED, "")
+    assert "ledger: unsupported\n" in checked.out and "history: damaged\n" in checked.out
+    assert "Pair:" not in checked.out
+    assert (
+        "  This NamiSync cannot use or update this database; the lines above say what "
+        "was found. Deal with the other database first, as its lines say, then run "
+        "namisync check again: it then says whether a reset is needed and which "
+        "database it discards.\n"
+    ) in checked.out
+    assert _discarding(checked.out) == []
+
+    # Once History is repaired, check says which database the reset discards.
+    assert _main(["restore", "history", str(backup), *flags]).code == EXIT_SUCCESS
+    again = _main(["check", *flags])
+    assert "Pair: ledger-contract.\n" in again.out
+    assert "Deal with the other database first" not in again.out
+    [discard] = _discarding(again.out)
+    assert f"archive or delete the ledger database file {ledger.resolve()} and its" in discard
+
+
+def test_check_beside_a_peer_at_the_wrong_path_directs_the_path_correction_only(
+    tmp_path: Path,
+) -> None:
+    # External review: an empty ledger beside a ledger at the History path was
+    # told to archive or delete the empty one before the paths were corrected.
+    other_ledger = _pair(tmp_path / "other")[0]
+    ledger, history = tmp_path / "ledger.db", tmp_path / "history.db"
+    ledger.touch()
+    history.write_bytes(other_ledger.read_bytes())
+    flags = _flags(ledger, history)
+
+    checked = _main(["check", *flags])
+
+    assert (checked.code, checked.err) == (EXIT_FAILED, "")
+    assert checked.out.startswith(
+        "ledger: unsupported\n  - unsupported ledger schema version empty;"
+    )
+    assert "history: wrong-role\n" in checked.out
+    assert _discarding(checked.out) == []
+    *_, correction, selected = checked.out.splitlines()
+    assert "look swapped; check them." in correction
+    assert selected == _selected(ledger, history)
+
+    root = tmp_path / "root"
+    root.mkdir()
+    refused = _main(["inventory", str(root), *flags])
+    assert refused.code == EXIT_REFUSED
+    assert "Database pair refused: history-wrong-role." in refused.err
+    assert _discarding(refused.err) == []
 
 
 def test_foreign_key_violations_are_refused_by_backup_and_restored_aside(tmp_path: Path) -> None:
@@ -892,6 +1096,26 @@ def test_a_ledger_is_restored_beside_an_older_history_and_the_pair_still_needs_u
     assert "Note: the database pair is not ready yet (history-older)." in run.out
     assert "Start NamiSync, or run a sync or inventory command, once" in run.out
     assert _listing(history.parent) == history_before
+
+
+def test_a_history_restored_beside_a_history_at_the_ledger_path_does_not_say_nothing_changed(
+    tmp_path: Path,
+) -> None:
+    # External review: the peer's diagnosis ended "Nothing was changed." after
+    # this restore had replaced History and published its pre-restore backup.
+    ledger, history = _pair(tmp_path)
+    backup = _backup(ledger, history)["history"]
+    other_history = tmp_path / "other-history.db"
+    other_history.write_bytes(history.read_bytes())
+
+    run = _main(["restore", "history", str(backup), *_flags(other_history, history)])
+
+    assert (run.code, run.err) == (EXIT_SUCCESS, "")
+    assert f"Restored the history from {backup}." in run.out
+    assert "The replaced history was backed up to" in run.out
+    assert "Note: the database pair is not ready yet (ledger-wrong-role)." in run.out
+    assert "look swapped" in run.out
+    assert "changed" not in run.out
 
 
 # --- usage ---------------------------------------------------------------------------

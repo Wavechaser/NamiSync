@@ -59,7 +59,16 @@ class DatabaseAdmissionError(sqlite3.DatabaseError):
 
 
 class SchemaResetRequired(DatabaseAdmissionError):
-    """An unsupported schema can only be archived and recreated, never migrated."""
+    """An unsupported schema can only be archived and recreated, never migrated.
+
+    ``finding`` says only what was found. The message adds this database's own
+    reset direction for a reader of it alone; where both roles are classified,
+    the pair decides what is discarded.
+    """
+
+    def __init__(self, finding: str) -> None:
+        super().__init__(f"{finding} {_RESET_DIRECTION}")
+        self.finding = finding
 
 
 class DatabaseMigrationRequired(DatabaseAdmissionError):
@@ -1138,9 +1147,7 @@ def _topology_digest(topology: list[_SchemaObject]) -> str:
 
 
 def _refuse_topology(history: bool) -> None:
-    raise SchemaResetRequired(
-        f"unsupported {_role(history)} schema topology. {_RESET_DIRECTION}"
-    )
+    raise SchemaResetRequired(f"unsupported {_role(history)} schema topology.")
 
 
 def _validate_schema_topology(
@@ -1188,9 +1195,7 @@ def _raise_newer(history: bool, detail: str) -> None:
 
 
 def _refuse_metadata(history: bool, detail: str) -> None:
-    raise SchemaResetRequired(
-        f"unsupported {_role(history)} schema metadata ({detail}). {_RESET_DIRECTION}"
-    )
+    raise SchemaResetRequired(f"unsupported {_role(history)} schema metadata ({detail}).")
 
 
 def classify_database(connection: sqlite3.Connection, *, history: bool) -> int:
@@ -1216,7 +1221,7 @@ def classify_database(connection: sqlite3.Connection, *, history: bool) -> int:
             f"The {_role(history)} database path holds a {_role(not history)} "
             "database: the ledger and history database paths look swapped. Check "
             "the two database paths (for the command line, --database and "
-            "--history-database), then start again. Nothing was changed."
+            "--history-database), then start again."
         )
     if role is not None and role != _role(history):
         # Only a newer NamiSync could write a role this version does not know.
@@ -1224,8 +1229,7 @@ def classify_database(connection: sqlite3.Connection, *, history: bool) -> int:
             f"The file at the {_role(history)} database path is not a NamiSync "
             f"{_role(history)} database this version knows (its role is "
             f"{role!r}). Check the database path (for the command line, "
-            "--database and --history-database), then start again. Nothing was "
-            "changed."
+            "--database and --history-database), then start again."
         )
     current = HISTORY_SCHEMA_VERSION if history else LEDGER_SCHEMA_VERSION
     if version > current:
@@ -1353,7 +1357,7 @@ def _raise_reset_required(version: object, *, history: bool) -> None:
         f"unsupported {_role(history)} schema version {version}; this NamiSync "
         f"uses ledger v{LEDGER_SCHEMA_VERSION} and history v{HISTORY_SCHEMA_VERSION} "
         f"and updates the ledger v{RELEASED_LEDGER_SCHEMA_VERSION} and history "
-        f"v{RELEASED_HISTORY_SCHEMA_VERSION} of NamiSync 0.1.0. {_RESET_DIRECTION}"
+        f"v{RELEASED_HISTORY_SCHEMA_VERSION} of NamiSync 0.1.0."
     )
 
 
@@ -1398,7 +1402,7 @@ def _refuse_live_backup(connection: sqlite3.Connection) -> None:
             "recorded after the backup was made would count as its own. Put back "
             "the ledger it replaced, or restore the backup with the command "
             "namisync restore ledger <backup file>, which gives the restored "
-            "ledger a new instance. Nothing was changed."
+            "ledger a new instance."
         )
 
 

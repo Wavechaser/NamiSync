@@ -343,7 +343,8 @@ def check_database(path: str | Path, *, history: bool, claim: DatabaseClaim) -> 
     except DatabaseNewerVersion as error:
         return result(DatabaseCheckState.NEWER, str(error))
     except SchemaResetRequired as error:
-        return result(DatabaseCheckState.UNSUPPORTED, str(error))
+        # What was found only: the pair decides which databases a reset discards.
+        return result(DatabaseCheckState.UNSUPPORTED, error.finding)
     except (DatabaseAdmissionError, OSError, sqlite3.Error, ValueError) as error:
         if _damage(error):
             return result(DatabaseCheckState.DAMAGED, f"{type(error).__name__}: {error}")

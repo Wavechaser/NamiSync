@@ -6,6 +6,7 @@ import argparse
 import re
 import sys
 from collections import Counter
+from collections.abc import Callable
 from pathlib import Path
 from types import SimpleNamespace
 from typing import TextIO
@@ -59,23 +60,32 @@ class _OutputStream:
     def __init__(self, stream: TextIO) -> None:
         self._stream = stream
 
+    @property
+    def encoding(self) -> str | None:
+        return getattr(self._stream, "encoding", None)
+
     def write(self, text: str) -> None:
-        encoding = getattr(self._stream, "encoding", None)
-        if encoding:
-            try:
-                text.encode(encoding)
-            except UnicodeEncodeError:
-                replacements = {}
-                for character in set(text):
-                    try:
-                        character.encode(encoding)
-                    except UnicodeEncodeError:
-                        replacements[ord(character)] = f"[U+{ord(character):04X}]"
-                text = text.translate(replacements)
-        self._stream.write(text)
+        self._stream.write(_encodable(text, self.encoding))
 
     def flush(self) -> None:
         self._stream.flush()
+
+
+def _encodable(text: str, encoding: str | None) -> str:
+    """``text`` with each character ``encoding`` cannot write as a [U+XXXX] marker."""
+
+    if encoding:
+        try:
+            text.encode(encoding)
+        except UnicodeEncodeError:
+            replacements = {}
+            for character in set(text):
+                try:
+                    character.encode(encoding)
+                except UnicodeEncodeError:
+                    replacements[ord(character)] = f"[U+{ord(character):04X}]"
+            text = text.translate(replacements)
+    return text
 
 
 class _ArgumentParser(argparse.ArgumentParser):
@@ -670,7 +680,7 @@ def _run_history(
         print(f"History admission refused: {_safe(error)}", file=stderr)
         # Its direction (retry, start NamiSync, check, restore, archive) is
         # followed with the options given here, and only those.
-        given = _given_databases(namespace, ledger, history)
+        given = _given_databases(namespace, ledger, history, stderr)
         if given is not None:
             print(given, file=stderr)
         return EXIT_REFUSED
@@ -786,7 +796,7 @@ def _database_refusal(
     selected_mount: str | None = None,
     selected_paths: tuple[str, ...] = (),
     paired: bool = False,
-    selected: str | None = None,
+    selected: Callable[[TextIO], str] | None = None,
 ) -> int | None:
     """Admit the pair for mutating work, migrating or completing it first.
 
@@ -845,7 +855,7 @@ def _database_refusal(
     else:
         return None
     if selected is not None:
-        print(selected, file=stderr)
+        print(selected(stderr), file=stderr)
     return EXIT_REFUSED
 
 
@@ -955,7 +965,7 @@ def _run_maintenance(
                     file=stderr,
                 )
                 if selected is not None:
-                    print(selected, file=stderr)
+                    print(selected(stderr), file=stderr)
             return EXIT_FAILED
     finally:
         _close_service(service, stderr)
@@ -963,22 +973,33 @@ def _run_maintenance(
 
 def _selected_databases(
     namespace: argparse.Namespace, ledger: Path, history: Path,
-) -> str | None:
-    """Name the custom pair, so guidance followed literally reaches it, or None."""
+) -> Callable[[TextIO], str] | None:
+    """Name the custom pair, so guidance followed literally reaches it, or None.
+
+    The line is made for the stream it is printed to, which decides the
+    characters it can show.
+    """
 
     if not namespace.database and not namespace.history_database:
         return None
-    return (
-        f"These databases were selected with --database {_powershell_quoted(ledger)} "
-        f"--history-database {_powershell_quoted(history)}. Add the same options to any "
-        "NamiSync command above."
-    )
+
+    def line(stream: TextIO) -> str:
+        options, retype = _database_options((
+            ("--database", "ledger", ledger, bool(namespace.database)),
+            ("--history-database", "history", history, bool(namespace.history_database)),
+        ), stream)
+        return (
+            f"These databases were selected with {options}. Add the same options to "
+            f"any NamiSync command above.{retype}"
+        )
+
+    return line
 
 
 def _given_databases(
-    namespace: argparse.Namespace, ledger: Path, history: Path,
+    namespace: argparse.Namespace, ledger: Path, history: Path, stream: TextIO,
 ) -> str | None:
-    """Name exactly the database options given, or None.
+    """Name exactly the database options given, for ``stream``, or None.
 
     Unlike ``_selected_databases`` it adds none that was not given: a default
     ledger beside ``--history-database`` alone changes how History reads. A
@@ -987,25 +1008,67 @@ def _given_databases(
     """
 
     if namespace.history_database and not namespace.database:
+        options, retype = _database_options(
+            (("--history-database", "history", history, True),), stream,
+        )
         return (
-            f"This command was run with --history-database "
-            f"{_powershell_quoted(history)} and no --database. Any NamiSync "
+            f"This command was run with {options} and no --database. Any NamiSync "
             "command above must also name this History's own ledger with "
-            "--database; otherwise it pairs this History with the default ledger."
+            f"--database; otherwise it pairs this History with the default ledger.{retype}"
         )
-    options = " ".join(
-        f"{option} {_powershell_quoted(path)}"
-        for option, given, path in (
-            ("--database", namespace.database, ledger),
-            ("--history-database", namespace.history_database, history),
+    given = tuple(
+        (option, role, path, True)
+        for option, role, named, path in (
+            ("--database", "ledger", namespace.database, ledger),
+            ("--history-database", "history", namespace.history_database, history),
         )
-        if given
+        if named
     )
-    if not options:
+    if not given:
         return None
+    options, retype = _database_options(given, stream)
     return (
         f"This command was run with {options}. Add the same options to any "
-        "NamiSync command above."
+        f"NamiSync command above.{retype}"
+    )
+
+
+def _database_options(
+    options: tuple[tuple[str, str, Path, bool], ...], stream: TextIO,
+) -> tuple[str, str]:
+    """The options as PowerShell arguments, and any sentence the line must add.
+
+    Each entry is an option, its role, its path and whether the user gave it.
+    A path ``stream`` cannot show as it is (one with [U+XXXX] markers from
+    ``_safe`` or from the stream's encoding) names other text there, so it is
+    never offered as an argument: a given one is described and the user is
+    told to type it as given; a default one is described as the default.
+    """
+
+    encoding = getattr(stream, "encoding", None)
+    arguments: list[str] = []
+    defaults: list[str] = []
+    retype: list[str] = []
+    for option, role, path, given in options:
+        text = str(path)
+        if _safe(text).replace("[[", "[") == text and _encodable(text, encoding) == text:
+            arguments.append(f"{option} {_powershell_quoted(text)}")
+        elif given:
+            arguments.append(f"{option} (path shown here as {_safe(text)})")
+            retype.append(option)
+        else:
+            defaults.append(f"the default {role} database (shown here as {_safe(text)})")
+    named = " and ".join((" ".join(arguments), *defaults))
+    if not retype:
+        return named, ""
+    if len(retype) > 1:
+        return named, (
+            f" Type the {' and '.join(retype)} paths as you gave them, because they "
+            "hold characters that cannot be shown here."
+        )
+    return named, (
+        f" Type the {retype[0]} path as you gave it, because it holds characters "
+        "that cannot be shown here."
     )
 
 
@@ -1016,14 +1079,11 @@ def _powershell_quoted(value: object) -> str:
     Inside single quotes nothing else is special ($, backtick and every double
     quote stay literal), and a single quote followed by any other stands for
     that second one, so doubling each keeps it as it is (Windows PowerShell 5.1
-    and PowerShell 7 alike). Text holding control characters cannot be shown as
-    it is: its [U+XXXX] rendering is quoted instead, which names other text.
+    and PowerShell 7 alike). Callers quote only text that output can show as
+    it is (``_database_options``).
     """
 
-    text = str(value)
-    if _safe(text).replace("[[", "[") != text:
-        text = _safe(text)
-    return "'" + _POWERSHELL_SINGLE_QUOTE.sub(lambda quote: quote[0] * 2, text) + "'"
+    return "'" + _POWERSHELL_SINGLE_QUOTE.sub(lambda quote: quote[0] * 2, str(value)) + "'"
 
 
 def _is_file(value: str) -> bool:
@@ -1044,7 +1104,11 @@ def _maintenance_os_error(label: str, error: OSError, stderr: TextIO) -> int:
     return EXIT_FAILED
 
 
-def _check_meaning(role: str, state: str, has_problems: bool) -> str | None:
+def _check_meaning(
+    role: str, state: str, has_problems: bool, *, pair_decides: bool,
+) -> str | None:
+    """One role's meaning and next step; ``pair_decides`` when a Pair line follows."""
+
     if state == "foreign-key-violations":
         return (
             "SQLite's integrity check passed, but some rows refer to rows that "
@@ -1088,9 +1152,17 @@ def _check_meaning(role: str, state: str, has_problems: bool) -> str | None:
             "--database and --history-database look swapped; check them."
         )
     if state == "unsupported":
-        return (
+        found = (
             "This NamiSync cannot use or update this database; the lines above "
             "say what was found."
+        )
+        if pair_decides:
+            return found
+        # The pair names no reset beside a peer it could not classify as usable.
+        return (
+            f"{found} Deal with the other database first, as its lines say, then "
+            "run namisync check again: it then says whether a reset is needed and "
+            "which database it discards."
         )
     if state == "is-backup":
         return (
@@ -1122,7 +1194,7 @@ def _render_no_databases(ledger: Path, history: Path, stdout: TextIO) -> None:
 
 def _render_check(
     result, ledger: Path, history: Path, stdout: TextIO, stderr: TextIO,
-    *, selected: str | None = None,
+    *, selected: Callable[[TextIO], str] | None = None,
 ) -> int:
     contract = result.contract
     if not result.checks:
@@ -1132,35 +1204,34 @@ def _render_check(
     if str(contract.state) == "fresh":
         _render_no_databases(ledger, history, stdout)
         return EXIT_SUCCESS
-    usable = True
-    explained = False
-    for check in result.checks:
-        state = str(check.state)
+    states = [str(check.state) for check in result.checks]
+    explained = any(state not in ("ok", "foreign-key-violations") for state in states)
+    # Every role reads fine on its own, so nothing below explains the pair; or
+    # the pair decides which databases a reset discards.
+    pair_line = str(contract.state) != "ready" and (
+        not explained or contract.reset_direction is not None
+    )
+    usable = not pair_line and all(state == "ok" for state in states)
+    for check, state in zip(result.checks, states):
         print(f"{check.role}: {state}", file=stdout)
         for problem in check.problems:
             print(f"  - {_safe(problem)}", file=stdout)
-        if state != "ok":
-            usable = False
-        if state not in ("ok", "foreign-key-violations"):
-            explained = True
-        meaning = _check_meaning(check.role, state, bool(check.problems))
+        meaning = _check_meaning(
+            check.role, state, bool(check.problems), pair_decides=pair_line,
+        )
         if meaning is not None:
             print(f"  {meaning}", file=stdout)
-    if str(contract.state) != "ready" and (
-        not explained or contract.reset_direction is not None
-    ):
-        # Every role reads fine on its own, so nothing above explains the
-        # pair; or the pair decides which databases a reset discards.
-        usable = False
+    if pair_line:
         print(f"Pair: {_safe(contract.reason)}.", file=stdout)
         print(_safe(contract.guidance or contract.reset_direction), file=stdout)
     if not usable and selected is not None:
-        print(selected, file=stdout)
+        print(selected(stdout), file=stdout)
     return EXIT_SUCCESS if usable else EXIT_FAILED
 
 
 def _print_refusal(
-    contract, errors: TextIO, closing: str | None, selected: str | None = None,
+    contract, errors: TextIO, closing: str | None,
+    selected: Callable[[TextIO], str] | None = None,
 ) -> None:
     """Print a refused pair as the admission refusal does, then what happened.
 
@@ -1176,7 +1247,7 @@ def _print_refusal(
     if closing is not None:
         print(closing, file=errors)
     if selected is not None:
-        print(selected, file=errors)
+        print(selected(errors), file=errors)
 
 
 # Backup refusals the maintenance workflow itself produces; any other is the
@@ -1185,7 +1256,8 @@ _BACKUP_MAINTENANCE_REFUSALS = ("database-in-use", "backup-failed")
 
 
 def _render_backup(
-    result, stdout: TextIO, stderr: TextIO, *, selected: str | None = None,
+    result, stdout: TextIO, stderr: TextIO, *,
+    selected: Callable[[TextIO], str] | None = None,
 ) -> int:
     contract = result.contract
     for backup in result.backups:
@@ -1224,7 +1296,8 @@ def _render_backup(
 
 
 def _render_restore(
-    result, stdout: TextIO, stderr: TextIO, *, selected: str | None = None,
+    result, stdout: TextIO, stderr: TextIO, *,
+    selected: Callable[[TextIO], str] | None = None,
 ) -> int:
     contract = result.contract
     restore = result.restore
@@ -1251,7 +1324,7 @@ def _render_restore(
                 file=stderr,
             )
         if selected is not None:
-            print(selected, file=stderr)
+            print(selected(stderr), file=stderr)
         return EXIT_FAILED if reason in ("restore-failed", "restore-unconfirmed") else EXIT_REFUSED
     role = restore.role
     print(f"Restored the {role} from {_safe(restore.source)}.", file=stdout)
@@ -1276,7 +1349,7 @@ def _render_restore(
         print(f"Note: the database pair is not ready yet ({_safe(contract.reason)}).", file=stdout)
         print(_safe(contract.guidance or contract.reset_direction), file=stdout)
         if selected is not None:
-            print(selected, file=stdout)
+            print(selected(stdout), file=stdout)
     return EXIT_SUCCESS
 
 

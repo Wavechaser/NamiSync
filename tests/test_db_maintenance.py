@@ -433,6 +433,9 @@ def test_check_reports_each_ledger_state_and_writes_nothing(
         state not in (DatabaseCheckState.OK, DatabaseCheckState.MISSING)
     )
     assert len(result.problems) <= 20
+    if state is DatabaseCheckState.UNSUPPORTED:
+        # What was found only: which databases a reset discards is the pair's call.
+        assert result.problems == ("unsupported ledger schema topology.",)
     assert _files(tmp_path) == before
 
 

@@ -190,7 +190,9 @@ it is `This command was run with <options>. Add the same options to any
 NamiSync command above.` With `--history-database` alone it names that option,
 says no `--database` was given, and says any command above must also name this
 History's own ledger with `--database`, since otherwise it pairs the History
-with the default ledger; it suggests no ledger path.
+with the default ledger; it suggests no ledger path. A path the line would
+show with `[U+XXXX]` markers is described, not quoted, as for the [maintenance
+commands](#maintenance-commands).
 
 `history` reads the ledger only to mark which runs belong to it, by the read
 rule in [DATABASE](DATABASE.md#ledger-instance-and-ids), and never refuses or
@@ -303,24 +305,32 @@ of the commands that change files) ends with
 paths in effect, because a command in the guidance run without them would
 reach the default pair. The paths are single-quoted for pasting into
 PowerShell, with every quote PowerShell reads as a single quote (`'` and
-U+2018-U+201B) doubled. A path holding characters NamiSync shows as `[U+XXXX]`
-markers (controls, soft hyphen, zero-width, bidi and similar) is shown with
-those markers, which never run but do not name that path.
+U+2018-U+201B) doubled. A path the line would show with `[U+XXXX]` markers
+(controls, soft hyphen, zero-width, bidi and similar, or characters the output
+stream's encoding cannot write) names another path, so it is never quoted: a
+given option is shown as `--database (path shown here as <rendering>)` and the
+line ends by saying to type that path as you gave it, while a default path is
+named as `the default ledger database (shown here as <rendering>)`. Every other
+path is still quoted.
 
 - `check` reports each role on its own line, `ledger: ok`, then every problem
   as `  - <text>` (at most 20 in all, as the workflow returns them) and, for a
   state that is not `ok`, one sentence of what it means and the next step. States:
   `ok`, `foreign-key-violations`, `missing`, `damaged`, `older`, `newer`,
   `wrong-role`, `unsupported`, `is-backup`, `unavailable`
-  ([DATABASE](DATABASE.md#data-protection)). When every role reads fine alone
-  but the pair is not ready, or the pair needs a reset (`unsupported`), a
-  `Pair: <reason>.` line with the workflow's guidance follows; for a reset it
-  says what to archive or delete: both databases, each by path, when both are
-  unsupported; otherwise only the unsupported one, by path, with direction to keep the
-  other present one or, if the other is missing, where it was looked for. A pair
-  with no databases at all prints `No NamiSync
-  databases were found at <ledger> and <history>.` and a note on how they are
-  created. Exit `0` for `ok` and `ok`, and for a pair with no databases; exit
+  ([DATABASE](DATABASE.md#data-protection)). An `unsupported` role's problems
+  say only what was found, never to archive or delete it. When every role
+  reads fine alone but the pair is not ready, or the pair needs a reset
+  (`unsupported`), a `Pair: <reason>.` line with the workflow's guidance
+  follows; for a reset it says what to archive or delete: both databases, each
+  by path, when both are unsupported; otherwise only the unsupported one, by
+  path, with direction to keep the other present one or, if the other is
+  missing, where it was looked for. When no `Pair:` line follows, as beside a
+  `newer`, `wrong-role` or `is-backup` peer or a `damaged` one whose schema
+  cannot be read, the `unsupported` role's line says to deal with the other database first, as its lines say,
+  then run `namisync check` again, which then says which database a reset
+  discards. A pair with no databases at all prints `No NamiSync databases were
+  found at <ledger> and <history>.` and a note on how they are created. Exit `0` for `ok` and `ok`, and for a pair with no databases; exit
   `4` when any role is anything else, `older`, `missing` and
   `foreign-key-violations` included. `4` means check found something that
   needs attention, or could not finish; a state NamiSync still opens

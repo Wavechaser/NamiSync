@@ -353,6 +353,8 @@ def test_wrong_role_contract_marker_refuses_read_only(
     assert ("look swapped" in result.guidance) is (marker == "other-role")
     assert ("is not a NamiSync" in result.guidance) is (marker == "unknown")
     assert not re.search(r"newer|delete|archive|reset", result.guidance, re.IGNORECASE)
+    # Whether anything changed is the renderer's to say, from the result.
+    assert "changed" not in result.guidance
     assert _snapshot(ledger, history) == before
     service.close()
 
