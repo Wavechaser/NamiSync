@@ -228,7 +228,9 @@ def test_prepare_plan_refuses_database_pair_before_resource_admission(
 
         assert raised.value.contract.state is database_pair.DatabasePairState.REFUSED
         assert raised.value.contract.reason == "ledger-contract"
-        assert raised.value.contract.reset_direction == database_pair.DATABASE_RESET_DIRECTION
+        assert raised.value.contract.reset_direction == database_pair._reset_both_direction(
+            ledger.resolve(), history.resolve(),
+        )
         assert admitted == []
         assert {path: path.read_bytes() for path in artifacts if path.exists()} == before
         assert list(source.iterdir()) == list(target.iterdir()) == []

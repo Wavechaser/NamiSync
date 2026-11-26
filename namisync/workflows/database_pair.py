@@ -9,7 +9,8 @@ from pathlib import Path
 import sqlite3
 import stat
 
-from namisync.db.claims import DatabaseClaimRefused, hold_maintenance_claims
+from namisync.core.session import SessionAdmissionRefused
+from namisync.db.claims import CLAIM_SUFFIX, DatabaseClaimRefused, hold_maintenance_claims
 from namisync.db.contracts import (
     DATABASE_UNAVAILABLE_DIRECTION,
     DatabaseArtifactsChanged,
@@ -45,11 +46,6 @@ from namisync.workflows._database_pair_native import (
 )
 
 
-DATABASE_RESET_DIRECTION = (
-    "Close every NamiSync process, then archive or delete both database main "
-    "files and all of their -wal, -shm, and -journal sidecars together before "
-    "restarting NamiSync."
-)
 DATABASE_MIGRATION_DIRECTION = (
     "At least one database of this pair was written by NamiSync 0.1.0, so the "
     "pair must be updated before use. Start NamiSync, or run a sync or inventory "
@@ -150,6 +146,30 @@ class DatabasePairRefusedError(RuntimeError):
         self.contract = contract
 
 
+def require_distinct_database_paths(ledger: Path, history: Path) -> None:
+    """Refuse, with ``ValueError``, a database path that is the other's or one of its files.
+
+    Taking a claim creates ``<main>.claim``, and SQLite creates the sidecars,
+    so a main at one of those paths would be created or overwritten by the
+    other database. Takes resolved paths and opens nothing; Windows paths
+    compare ignoring case, as Windows does.
+    """
+
+    if ledger == history:
+        raise ValueError("ledger and history databases must use distinct paths")
+    for role, main, other_role, other in (
+        ("history", history, "ledger", ledger), ("ledger", ledger, "history", history),
+    ):
+        for suffix in (CLAIM_SUFFIX, *_SQLITE_SIDECAR_SUFFIXES):
+            if main == Path(f"{other}{suffix}"):
+                raise ValueError(
+                    f"the {role} database path {main} is the {other_role} database's "
+                    f"{suffix} file; the ledger and history databases must use distinct "
+                    "paths, neither one the other's path with .claim, -wal, -shm or "
+                    "-journal added"
+                )
+
+
 def validate_database_pair(
     ledger_path: str | Path,
     history_path: str | Path,
@@ -161,8 +181,7 @@ def validate_database_pair(
 
     ledger = Path(ledger_path).resolve()
     history = Path(history_path).resolve()
-    if ledger == history:
-        raise ValueError("ledger and history databases must use distinct paths")
+    require_distinct_database_paths(ledger, history)
 
     try:
         return retry_database_validation(lambda: _validate_database_pair_once(
@@ -252,7 +271,10 @@ def _validate_database_pair_once(
             pass
         raise DatabaseArtifactsChanged(f"{role} database changed during validation")
     if len(reset) == 2:
-        return _refused("ledger-contract", reset=True)
+        direction = _reset_both_direction(ledger, history)
+        return DatabasePairContract(
+            DatabasePairState.REFUSED, "ledger-contract", direction, direction,
+        )
     if reset:
         # The other database was validated as current or supported older.
         role = reset[0][0]
@@ -315,6 +337,17 @@ def _validate_lone_role(
     )
 
 
+def _reset_both_direction(ledger: Path, history: Path) -> str:
+    """Discard both databases, each named by its path."""
+
+    return (
+        "Close every NamiSync process, then archive or delete both database main "
+        f"files, the ledger database {ledger} and the history database {history}, "
+        "and all of their -wal, -shm, and -journal sidecars together before "
+        "restarting NamiSync."
+    )
+
+
 def _reset_one_direction(
     role: str, ledger: Path, history: Path, *, peer_older: bool,
 ) -> str:
@@ -355,7 +388,11 @@ def initialize_database_pair(
     ledger_database: DatabaseConnectionOwner | None = None,
     history_database: DatabaseConnectionOwner | None = None,
 ) -> DatabasePairContract:
-    """Publish a fresh ledger then history, retracting only owned files on error."""
+    """Publish a fresh ledger then history, retracting only owned files on error.
+
+    A claim refusal is raised as itself once cleanup is complete; any other
+    failure, or an incomplete cleanup, is a ``DatabasePairInitializationError``.
+    """
 
     ledger = Path(ledger_path).resolve()
     history = Path(history_path).resolve()
@@ -395,18 +432,20 @@ def initialize_database_pair(
             ),
             None,
         )
+        incomplete = (
+            "NamiSync database initialization cleanup was incomplete. "
+            f"{_reset_both_direction(ledger, history)}"
+        )
         if cleanup_interrupt is not None and isinstance(error, Exception):
-            cleanup_interrupt.add_note(
-                "NamiSync database initialization cleanup was incomplete. "
-                f"{DATABASE_RESET_DIRECTION}"
-            )
+            cleanup_interrupt.add_note(incomplete)
             raise cleanup_interrupt
         if not isinstance(error, Exception):
             if cleanup_errors:
-                error.add_note(
-                    "NamiSync database initialization cleanup was incomplete. "
-                    f"{DATABASE_RESET_DIRECTION}"
-                )
+                error.add_note(incomplete)
+            raise
+        if isinstance(error, DatabaseClaimRefused) and not cleanup_errors:
+            # Another process holds a claim, and nothing this call reserved
+            # is left: contention to retry, reported as it is for a ready pair.
             raise
         suffix = "" if not cleanup_errors else "; cleanup was incomplete"
         raise DatabasePairInitializationError(
@@ -444,7 +483,9 @@ def ensure_database_pair(
 ) -> DatabasePairContract:
     """Require a ready pair before admitting work that can mutate both stores.
 
-    A fresh pair is created. An older one is refused with the migration
+    A fresh pair is created; a claim another process holds on either path
+    refuses admission with ``SessionAdmissionRefused`` once nothing created
+    is left. An older one is refused with the migration
     direction, and an incomplete one with the direction to create its missing
     database: only ``upgrade_database_pair`` migrates or completes, so each
     reaches a caller that reports it.
@@ -455,7 +496,16 @@ def ensure_database_pair(
         ledger_database=ledger_database, history_database=history_database,
     )
     if contract.state is DatabasePairState.FRESH:
-        contract = initialize_database_pair(ledger_path, history_path)
+        try:
+            contract = initialize_database_pair(ledger_path, history_path)
+        except DatabaseClaimRefused as error:
+            # As the runtime refuses a ready pair's writer under maintenance.
+            message = str(error)
+        else:
+            message = None
+        if message is not None:
+            # Raised outside the handler, so no refused-claim frames ride along.
+            raise SessionAdmissionRefused(message)
     if contract.state in (
         DatabasePairState.REFUSED, DatabasePairState.MIGRATION_REQUIRED,
         DatabasePairState.INCOMPLETE,
@@ -709,11 +759,6 @@ def _entry_exists(path: Path) -> bool:
 
 
 def _refused(
-    reason: str, *, reset: bool = False, guidance: str = DATABASE_UNAVAILABLE_DIRECTION,
+    reason: str, *, guidance: str = DATABASE_UNAVAILABLE_DIRECTION,
 ) -> DatabasePairContract:
-    return DatabasePairContract(
-        DatabasePairState.REFUSED,
-        reason,
-        DATABASE_RESET_DIRECTION if reset else None,
-        DATABASE_RESET_DIRECTION if reset else guidance,
-    )
+    return DatabasePairContract(DatabasePairState.REFUSED, reason, None, guidance)

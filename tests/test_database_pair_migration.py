@@ -571,9 +571,8 @@ def test_both_reset_verdicts_are_rechecked_before_the_both_files_direction(
                     "SELECT key, value FROM schema_metadata WHERE key = 'format.numeric'"
                 ).fetchone()
                 connection.execute("DELETE FROM schema_metadata WHERE key = 'format.numeric'")
-    assert validate_database_pair(ledger, history).reset_direction == (
-        database_pair.DATABASE_RESET_DIRECTION
-    )
+    both = database_pair._reset_both_direction(ledger, history)
+    assert validate_database_pair(ledger, history).reset_direction == both
 
     probe = database_pair.probe_database_file_contract
     probed: list[bool] = []
@@ -594,7 +593,7 @@ def test_both_reset_verdicts_are_rechecked_before_the_both_files_direction(
     contract = validate_database_pair(ledger, history)
 
     assert (contract.state, contract.reason) == (DatabasePairState.REFUSED, "ledger-contract")
-    assert contract.reset_direction != database_pair.DATABASE_RESET_DIRECTION
+    assert contract.reset_direction != both
     # History's recheck saw the change and the classification repeated.
     assert probed[:4] == [False, True, False, True] and len(probed) > 4
     assert f"the ledger database file {ledger.resolve()} and its" in contract.reset_direction

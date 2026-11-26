@@ -32,6 +32,7 @@ from .database_pair import (
     DatabasePairContract,
     DatabasePairState,
     _refused,
+    require_distinct_database_paths,
     validate_database_pair,
 )
 
@@ -146,6 +147,7 @@ def check_database_pair(ledger_path: str | Path, history_path: str | Path) -> Da
 
     ledger = Path(ledger_path).resolve()
     history = Path(history_path).resolve()
+    require_distinct_database_paths(ledger, history)
     try:
         with hold_maintenance_claims(ledger, history) as claims:
             checks = (
@@ -170,6 +172,7 @@ def backup_database_pair(
 
     ledger = Path(ledger_path).resolve()
     history = Path(history_path).resolve()
+    require_distinct_database_paths(ledger, history)
     backups: list[DatabaseBackup] = []
     try:
         with hold_maintenance_claims(ledger, history) as claims:
@@ -227,6 +230,7 @@ def restore_database_from_backup(
         raise ValueError("restore replaces the ledger or History")
     ledger = Path(ledger_path).resolve()
     history = Path(history_path).resolve()
+    require_distinct_database_paths(ledger, history)
     try:
         with hold_maintenance_claims(ledger, history) as claims:
             now = clock.now()

@@ -52,7 +52,10 @@ change its filters, trash-on-update, preservation, or casing settings.
 `--verify-after-copy` keeps successfully published copy/update/move-update
 files under the same session and volume custody for immediate readback.
 `history` accepts `--limit N` for `1..256` summaries, `--database PATH` and
-`--history-database PATH`. For `sync`, both
+`--history-database PATH`. For every command, neither database path may be
+the other's, or the other's with `.claim`, `-wal`, `-shm` or `-journal` added
+(compared ignoring case): such a pair is a `Configuration error:` naming the
+overlap, exit `2`, before any file is opened. For `sync`, both
 database files must be distinct and outside the managed roots; defaults are
 the local
 `%LOCALAPPDATA%\NamiSync-Development\ledger.db` and
@@ -154,9 +157,11 @@ four location commands are refused at admission: they print
 `Execution refused:` (sync) or `<Command> refused:` with the maintenance
 message (new work is refused, not queued; wait, then start again), exit `3`
 and start no run. Planning and review still run, since they write neither
-database. A refusal at admission or because another NamiSync process, of
-any version, has either database open or holds its claim leaves every existing
-main and sidecar byte unchanged. A migration that fails after its backup was
+database. The same holds when neither database exists yet and the command
+would create them: it prints the claim's in-use message, which ends `then
+retry.`, exits `3` and leaves no database file. A refusal at admission or
+because another NamiSync process, of any version, has either database open or
+holds its claim leaves every existing main and sidecar byte unchanged. A migration that fails after its backup was
 published (`migration-failed`) normally leaves the old main file, the published
 backup, and a WAL grown by a discarded tail. When the failure was in the final
 commit itself, the update could not be confirmed and the database may already
@@ -310,8 +315,8 @@ those markers, which never run but do not name that path.
   ([DATABASE](DATABASE.md#data-protection)). When every role reads fine alone
   but the pair is not ready, or the pair needs a reset (`unsupported`), a
   `Pair: <reason>.` line with the workflow's guidance follows; for a reset it
-  says what to archive or delete: both databases when both are unsupported;
-  otherwise only the unsupported one, by path, with direction to keep the
+  says what to archive or delete: both databases, each by path, when both are
+  unsupported; otherwise only the unsupported one, by path, with direction to keep the
   other present one or, if the other is missing, where it was looked for. A pair
   with no databases at all prints `No NamiSync
   databases were found at <ledger> and <history>.` and a note on how they are

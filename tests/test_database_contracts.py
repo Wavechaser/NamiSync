@@ -18,6 +18,8 @@ import namisync.db.repositories as repositories_module
 import namisync.db.schema as schema_module
 import namisync.workflows.database_pair as database_pair
 import namisync.workflows._database_pair_native as database_pair_native
+from namisync.core.session import SessionAdmissionRefused
+from namisync.db.claims import DatabaseInUse, hold_maintenance_claims
 from namisync.db.connections import connect_history_writer, connect_ledger_writer
 from namisync.db.history import HistoryRepository
 from namisync.db.repositories import LedgerRepository
@@ -307,8 +309,15 @@ def test_ensure_database_pair_refuses_empty_mains_without_mutation(tmp_path: Pat
 
     assert raised.value.contract.state is database_pair.DatabasePairState.REFUSED
     assert raised.value.contract.reason == "ledger-contract"
-    assert raised.value.contract.reset_direction == database_pair.DATABASE_RESET_DIRECTION
-    assert database_pair.DATABASE_RESET_DIRECTION in str(raised.value)
+    # Both need the reset, and the direction names each main by its path.
+    direction = raised.value.contract.reset_direction
+    assert direction == raised.value.contract.guidance
+    assert (
+        "archive or delete both database main files, the ledger database "
+        f"{ledger.resolve()} and the history database {history.resolve()}, and all of "
+        "their -wal, -shm, and -journal sidecars together"
+    ) in direction
+    assert direction in str(raised.value)
     assert _snapshot(ledger, history) == before
 
 
@@ -539,7 +548,10 @@ def _assert_epoch_pair_refused_without_mutation(
     assert first.state == "refused"
     assert first.reason == expected_reason
     if len(refused_roles) == 2:
-        assert first.reset_direction == database_pair.DATABASE_RESET_DIRECTION
+        assert (
+            f"the ledger database {ledger.resolve()} and the history database "
+            f"{history.resolve()},"
+        ) in first.reset_direction
     else:
         # Beside a usable database only the refused one is to be discarded.
         (role,) = refused_roles
@@ -1678,6 +1690,48 @@ def test_caught_partial_database_initialization_removes_owned_artifacts(
     service.close()
 
 
+def test_first_use_under_held_claims_keeps_the_typed_refusal_after_cleanup(
+    tmp_path: Path,
+) -> None:
+    # External review (third A4): with both mains absent and both claims held,
+    # admission failed as "coordinated database initialization failed".
+    ledger, history = tmp_path / "ledger.db", tmp_path / "history.db"
+
+    with hold_maintenance_claims(ledger, history):
+        with pytest.raises(DatabaseInUse) as typed:
+            database_pair.initialize_database_pair(ledger, history)
+        with pytest.raises(SessionAdmissionRefused) as refused:
+            database_pair.ensure_database_pair(ledger, history)
+
+    assert str(refused.value) == str(typed.value)
+    assert str(refused.value).endswith("then retry.")
+    assert refused.value.__cause__ is None and refused.value.__context__ is None
+    assert _snapshot(ledger, history) == {}
+    assert database_pair.ensure_database_pair(ledger, history).state is (
+        database_pair.DatabasePairState.READY
+    )
+
+
+def test_first_use_claim_refusal_with_incomplete_cleanup_stays_a_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    ledger, history = tmp_path / "ledger.db", tmp_path / "history.db"
+    retract = database_pair._retract_owned
+
+    def incomplete(owned: dict[Path, OwnedArtifactLease]) -> tuple[BaseException, ...]:
+        assert retract(owned) == ()
+        return (OSError("injected cleanup report"),)
+
+    monkeypatch.setattr(database_pair, "_retract_owned", incomplete)
+    with hold_maintenance_claims(ledger, history):
+        with pytest.raises(
+            DatabasePairInitializationError, match="cleanup was incomplete",
+        ) as raised:
+            database_pair.ensure_database_pair(ledger, history)
+
+    assert isinstance(raised.value.__cause__, DatabaseInUse)
+
+
 def test_initialization_cleanup_preserves_unproven_raced_sidecar(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -1848,8 +1902,10 @@ def test_database_initialization_interrupt_reports_incomplete_cleanup_without_wr
     assert raised.value is interruption
     assert raised.value.__notes__ == [
         "NamiSync database initialization cleanup was incomplete. "
-        f"{database_pair.DATABASE_RESET_DIRECTION}"
+        f"{database_pair._reset_both_direction(ledger.resolve(), history.resolve())}"
     ]
+    assert str(ledger.resolve()) in raised.value.__notes__[0]
+    assert str(history.resolve()) in raised.value.__notes__[0]
     assert _snapshot(ledger, history) == {}
     service.close()
 
@@ -1878,7 +1934,7 @@ def test_cleanup_interrupt_is_not_wrapped_after_ordinary_publication_failure(
     assert raised.value is interruption
     assert raised.value.__notes__ == [
         "NamiSync database initialization cleanup was incomplete. "
-        f"{database_pair.DATABASE_RESET_DIRECTION}"
+        f"{database_pair._reset_both_direction(ledger.resolve(), history.resolve())}"
     ]
     service.close()
 

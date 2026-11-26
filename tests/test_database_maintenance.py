@@ -188,6 +188,39 @@ def test_maintenance_refuses_while_a_writer_holds_a_shared_claim(
 # --- check and backup ----------------------------------------------------------
 
 
+@pytest.mark.parametrize(("ledger_name", "history_name", "role", "suffix"), [
+    ("collision.db", "collision.db.claim", "history", ".claim"),
+    ("COLLISION.db.claim", "collision.DB", "ledger", ".claim"),
+    ("x.db", "x.db-wal", "history", "-wal"),
+    ("x.db-shm", "x.db", "ledger", "-shm"),
+    ("x.db", "x.db-journal", "history", "-journal"),
+])
+def test_a_database_at_the_other_ones_claim_or_sidecar_path_is_refused_before_any_file(
+    tmp_path: Path, ledger_name: str, history_name: str, role: str, suffix: str,
+) -> None:
+    # External review (third A4): check took the ledger's claim at the History
+    # path and so created a zero-byte History main. As a sidecar, the History
+    # file would be overwritten by the ledger's SQLite.
+    ledger, history = tmp_path / ledger_name, tmp_path / history_name
+    calls = (
+        lambda: check_database_pair(ledger, history),
+        lambda: backup_database_pair(ledger, history, clock=_Clock()),
+        lambda: restore_database_from_backup(
+            ledger, history, "history", tmp_path / "absent", clock=_Clock(),
+        ),
+        lambda: validate_database_pair(ledger, history),
+        lambda: upgrade_database_pair(ledger, history, create=True),
+        lambda: initialize_database_pair(ledger, history),
+        lambda: NamiSyncService(ledger, history),
+    )
+    for call in calls:
+        with pytest.raises(
+            ValueError, match=f"the {role} database path .* database's {suffix} file",
+        ):
+            call()
+    assert list(tmp_path.iterdir()) == []
+
+
 def test_check_reports_every_role_in_any_pair_state(tmp_path: Path) -> None:
     ledger, history = _pair(tmp_path)
     result = check_database_pair(ledger, history)

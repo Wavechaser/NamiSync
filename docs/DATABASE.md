@@ -389,7 +389,10 @@ removed through a check/use race. These leases require a stable file identity;
 an absent native identity is an `OSError` refusal, never a usable lease token.
 Rollback covers ordinary exceptions,
 `KeyboardInterrupt`, and `SystemExit`; handles release stepwise and an
-incomplete cleanup carries the coordinated reset direction. It never invokes
+incomplete cleanup carries the coordinated reset direction, naming both main
+paths. A claim refusal (another process holds a claim on either path) is
+raised as itself once cleanup completed, so admission reports it as below
+([Maintenance Claim](#maintenance-claim)). It never invokes
 the destructive development reset. A crash-shaped one-main pair is
 `incomplete`, and the next start creates the missing database. An orphan
 sidecar or a `-journal` is refused as `inconsistent-pair` with direction to
@@ -974,7 +977,8 @@ backup in place, damage, or a read failure) is reported in preference to the
 reset, because such a database cannot be judged usable. Each role that needed
 the reset is then read once more, and the reset is returned only if it still
 needs it; otherwise the whole classification repeats (bounded, ending in
-`database-busy`). Both needing it gets the direction to discard both. One
+`database-busy`). Both needing it gets reason `ledger-contract` and the
+direction to discard both, naming each main by its path. One
 needing it beside a peer validated as current or older gets reason
 `<role>-contract` with a direction (`reset_direction` and `guidance`) naming
 only that database's path and sidecars, to keep the peer's path as it is, and
@@ -1289,7 +1293,14 @@ records are still being written to either database, in any process.
   database artifact: fresh-pair detection, `database_artifacts_present` and pair
   reservations consider only the main file and its `-wal`, `-shm` and `-journal`
   sidecars, and the desktop path lease (`AppPathLease.bind_databases`) pins only
-  the two main files.
+  the two main files. Neither database path may be the other's, or the other's
+  with `.claim`, `-wal`, `-shm` or `-journal` added (compared ignoring case, as
+  Windows does): taking the claim would create the other's main, and SQLite
+  would overwrite it as a sidecar. `require_distinct_database_paths` refuses
+  such a pair with `ValueError` naming the overlap before any file is opened:
+  in the service constructor, which every adapter reaches first (the CLI's
+  `Configuration error`, exit `2`), in `validate_database_pair`, and before
+  check, backup and restore take their claims.
 - **Refusals.** `DatabaseClaimRefused` extends `DatabaseAdmissionError`, as
   `DatabaseBusyError` does, so a claim refusal is an admission refusal to
   existing handlers; each carries the main file's `path`.
@@ -1336,6 +1347,15 @@ records are still being written to either database, in any process.
   (planning) write neither database and are not refused. A session whose
   audit is degraded holds neither claim until its ledger recorder opens, and
   that recorder refuses it as below.
+
+  First use is refused the same way. When admission creates a fresh pair
+  (`ensure_database_pair`) and schema creation's exclusive claim is refused
+  (`DatabaseInUse`, for example while `check` holds the absent pair), cleanup
+  removes everything the attempt reserved and the refusal becomes
+  `SessionAdmissionRefused` with the claim's own retry message (CLI exit `3`).
+  Cleanup that did not complete stays a `DatabasePairInitializationError`.
+  Desktop startup creates a fresh pair itself and shows that message in its
+  startup error.
 - **Maintenance holds it exclusively** on both databases of the pair, ledger
   first, and refuses rather than waits while any claim is held:
   `hold_maintenance_claims(ledger, history)` releases the ledger claim when
@@ -1348,16 +1368,16 @@ records are still being written to either database, in any process.
   operations themselves require their database's held exclusive claim. Schema
   creation (`_create_schema`) takes its own database's claim exclusively before
   SQLite opens the file, so a refused creation leaves no database; inside pair
-  initialization the refusal is the cause of `DatabasePairInitializationError`
-  and the reservations are retracted.
+  initialization the reservations are retracted and the refusal is reported as
+  above for first use.
 - **Readers take no claim.** SQLite reads are consistent snapshots, and a stale
   view is only behind. Read-only classification (`validate_database_pair`,
   `probe_database_file_contract`, `DatabaseConnectionOwner`) never creates a
   claim file.
 - **Where a refusal surfaces.** At admission no run starts. The CLI prints
   `Execution refused:` for sync, or `Inventory refused:`, `Baseline refused:`,
-  `Verify refused:` or `Rebaseline refused:`, with the
-  `DatabaseMaintenanceActive` message, and exits 3. The desktop receives the
+  `Verify refused:` or `Rebaseline refused:`, with the claim's own message
+  (`DatabaseMaintenanceActive`, or `DatabaseInUse` on first use), and exits 3. The desktop receives the
   definitive fixed bridge error `database_maintenance`
   ([BRIDGE](BRIDGE.md#fixed-errors)), whose path-free message the page shows
   for Setup inventory, inventory refresh, integrity and execution: no attempt is

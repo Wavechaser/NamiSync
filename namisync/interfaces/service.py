@@ -68,6 +68,7 @@ from namisync.workflows.database_maintenance import (
     DatabasePairCheck,
     DatabasePairRestore,
 )
+from namisync.workflows.database_pair import require_distinct_database_paths
 from namisync.workflows.node_tree import (
     NodeTree,
     NodeTreeKind,
@@ -355,6 +356,10 @@ class NamiSyncService:
         *,
         settings_path: str | Path | None = None,
     ) -> None:
+        # Every adapter's configuration check, before any file is opened or made.
+        require_distinct_database_paths(
+            Path(ledger_path).resolve(), Path(history_path).resolve(),
+        )
         self._runtime = LocalWorkflowRuntime(
             ledger_path,
             history_path,

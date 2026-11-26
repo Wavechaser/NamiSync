@@ -398,9 +398,9 @@ def test_schema_creation_is_refused_under_any_claim_and_leaves_no_database(
 def test_pair_creation_under_a_claim_retracts_its_reservations(tmp_path: Path) -> None:
     ledger, history = tmp_path / "ledger.db", tmp_path / "history.db"
     with _holder(history, "shared"):
-        with pytest.raises(Exception) as refused:
+        # Raised as itself once cleanup completed, so admission can report it.
+        with pytest.raises(DatabaseInUse):
             initialize_database_pair(ledger, history)
-        assert isinstance(refused.value.__cause__, DatabaseInUse)
         assert _sqlite_artifacts(ledger) == _sqlite_artifacts(history) == []
     assert validate_database_pair(ledger, history).state is DatabasePairState.FRESH
 

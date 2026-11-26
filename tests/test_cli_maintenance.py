@@ -923,6 +923,26 @@ def test_one_path_for_both_databases_and_unknown_roles_are_usage_errors(
         assert "usage: namisync restore" in capsys.readouterr().err
 
 
+@pytest.mark.parametrize(("ledger_name", "history_name", "role"), [
+    ("collision.db", "collision.db.claim", "history"),
+    ("Collision.DB.Claim", "collision.db", "ledger"),
+])
+def test_a_database_at_the_other_ones_claim_path_is_a_configuration_error(
+    tmp_path: Path, ledger_name: str, history_name: str, role: str,
+) -> None:
+    # External review (third A4): with both mains absent, check created a
+    # zero-byte History main when it took the ledger's claim.
+    root = tmp_path / "root"
+    root.mkdir()
+    flags = _flags(tmp_path / ledger_name, tmp_path / history_name)
+    for arguments in (["check", *flags], ["backup", *flags], ["inventory", str(root), *flags]):
+        run = _main(arguments)
+        assert (run.code, run.out) == (EXIT_USAGE, ""), run
+        assert run.err.startswith(f"Configuration error: the {role} database path ")
+        assert "database's .claim file" in run.err
+    assert [path.name for path in tmp_path.iterdir()] == ["root"]
+
+
 def test_the_commands_share_the_cli_argument_bound(tmp_path: Path) -> None:
     run = _main(["restore", "ledger", "x" * 70_000])
     assert (run.code, run.out, run.err) == (EXIT_USAGE, "", "Invalid command request.\n")

@@ -1538,6 +1538,46 @@ def test_location_work_under_a_ledger_only_claim_is_refused_at_admission(
         pass
 
 
+def test_first_use_work_during_database_maintenance_is_refused_with_retry_guidance(
+    tmp_path: Path,
+) -> None:
+    # External review (third A4): with both mains absent and both claims held,
+    # inventory exited 4 with "coordinated database initialization failed".
+    root, source, target = tmp_path / "root", tmp_path / "source", tmp_path / "target"
+    for folder in (root, source, target):
+        folder.mkdir()
+    (source / "payload.bin").write_bytes(b"payload")
+    ledger, history = tmp_path / "ledger.db", tmp_path / "history.db"
+    in_use = (
+        f"Database {ledger.resolve()} is in use by NamiSync work in this or another "
+        "process. Wait for running tasks to finish, close other NamiSync windows and "
+        "commands, then retry.\n"
+    )
+    arguments = [
+        "inventory", str(root), "--database", str(ledger), "--history-database", str(history),
+    ]
+    stdout, stderr = io.StringIO(), io.StringIO()
+    with hold_maintenance_claims(ledger, history):
+        result = main(arguments, stdout=stdout, stderr=stderr)
+    assert (result, stdout.getvalue(), stderr.getvalue()) == (
+        EXIT_REFUSED, "", f"Inventory refused: {in_use}",
+    )
+
+    stderr = io.StringIO()
+    with hold_maintenance_claims(ledger, history):
+        result = main(
+            _arguments(source, target, ledger, history),
+            stdin=io.StringIO("execute\n"), stdout=io.StringIO(), stderr=stderr,
+        )
+    assert (result, stderr.getvalue()) == (EXIT_REFUSED, f"Execution refused: {in_use}")
+    assert not (target / "payload.bin").exists()
+    # Nothing but the claim files is left, and the retry the guidance names works.
+    assert sorted(path.name for path in tmp_path.iterdir()) == [
+        "history.db.claim", "ledger.db.claim", "root", "source", "target",
+    ]
+    assert main(arguments, stdout=io.StringIO(), stderr=io.StringIO()) == EXIT_SUCCESS
+
+
 def test_sync_execution_during_database_maintenance_is_refused_at_admission(
     tmp_path: Path,
 ) -> None:
