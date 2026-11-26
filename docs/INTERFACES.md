@@ -315,7 +315,7 @@ The current public service surface includes:
 NamiSyncService(ledger_path, history_path, *, settings_path=None)
 validate_database_contracts() -> DatabaseContractView
 initialize_database_contracts() -> DatabaseContractView
-upgrade_database_contracts()
+upgrade_database_contracts(*, create)
     -> tuple[DatabaseContractView, tuple[tuple[str, int, str], ...],
              tuple[tuple[str, str], ...]]
 validate_database_paths() -> None   # ValueError for an invalid path
@@ -452,9 +452,11 @@ classifies the ledger/history mains plus WAL/SHM/journal sidecars as fresh,
 ready, migration-required, incomplete (one database missing), or refused.
 Initialization is a separate call and
 never resets an existing file. Upgrade is another separate call, made before
-the process opens either database: it migrates an older pair, or creates the
-missing database of an incomplete pair after migrating the present one when
-NamiSync 0.1.0 wrote it, and returns any other pair unchanged. It returns the
+the process opens either database: it migrates an older pair, or, when the
+caller permits creation (`create`; desktop startup does, a CLI command only
+with roots), creates the missing database of an incomplete pair after
+migrating the present one when NamiSync 0.1.0 wrote it, and returns any other
+pair unchanged. It returns the
 resulting contract and, to in-process callers only, the role, source schema
 version and backup path of each database it migrated, and the role and path of each database it
 created (no bridge shape carries them;

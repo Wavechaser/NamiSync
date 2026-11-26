@@ -423,9 +423,13 @@ def ensure_database_pair(
 
 
 def upgrade_database_pair(
-    ledger_path: str | Path, history_path: str | Path,
+    ledger_path: str | Path, history_path: str | Path, *, create: bool,
 ) -> DatabasePairUpgrade:
     """Migrate an older pair, or create the missing database of an incomplete one.
+
+    ``create`` is the caller's permission to create a missing database.
+    Without it, an ``incomplete`` pair, whether seen cold or under the claims,
+    is returned as found: nothing is migrated, created or made for it.
 
     The cold classification decides whether there is anything to do; any
     state but ``migration-required`` or ``incomplete`` is returned unchanged
@@ -444,8 +448,9 @@ def upgrade_database_pair(
     ledger = Path(ledger_path).resolve()
     history = Path(history_path).resolve()
     contract = validate_database_pair(ledger, history)
-    if contract.state not in (
-        DatabasePairState.MIGRATION_REQUIRED, DatabasePairState.INCOMPLETE,
+    if not (
+        contract.state is DatabasePairState.MIGRATION_REQUIRED
+        or (contract.state is DatabasePairState.INCOMPLETE and create)
     ):
         return DatabasePairUpgrade(contract)
     unavailable = (
@@ -483,7 +488,7 @@ def upgrade_database_pair(
                 _record_migrated(migrated, "history", migrate_database(
                     history, history=True, claim=claims.history, ledger_instance_id=stamp,
                 ))
-            elif contract.state is DatabasePairState.INCOMPLETE:
+            elif contract.state is DatabasePairState.INCOMPLETE and create:
                 unavailable = "completion-unavailable"
                 create_history = contract.reason == "history-missing"
                 present, present_claim = (
@@ -512,6 +517,8 @@ def upgrade_database_pair(
                     ),
                 ))
             else:
+                # Including an incomplete pair without permission to create:
+                # the surviving database is left as found, not migrated.
                 return DatabasePairUpgrade(contract)
             contract = validate_database_pair(ledger, history)
     except DatabaseClaimRefused as error:

@@ -428,16 +428,17 @@ class LocalWorkflowRuntime:
                 history_database=self._history_database,
             )
 
-    def upgrade_database_contracts(self) -> DatabasePairUpgrade:
+    def upgrade_database_contracts(self, *, create: bool) -> DatabasePairUpgrade:
         """Migrate an older pair or complete an incomplete one; a no-op otherwise.
 
+        ``create`` is the caller's permission to create a missing database.
         Call it before this runtime opens either database: migration refuses
         while any connection, this process's included, has one open.
         """
 
         self._require_open()
         with self._database_pair_lock:
-            return upgrade_database_pair(self.ledger_path, self.history_path)
+            return upgrade_database_pair(self.ledger_path, self.history_path, create=create)
 
     def validate_database_paths(self) -> None:
         """Refuse a database path that cannot name a local file, with ``ValueError``.

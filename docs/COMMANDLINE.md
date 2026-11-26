@@ -126,7 +126,8 @@ after the present one is updated if NamiSync 0.1.0 wrote it
 ([DATABASE](DATABASE.md#one-database-missing)). A lone 0.1.0 history keeps its
 runs unstamped, so they belong to an earlier ledger. Unlike migration, a
 command given `--location-id` never completes the pair, because no root is
-given to check the new database's path against: it exits `3` with `Database
+given to check the new database's path against, even when a database goes
+missing while its update is starting: it exits `3` with `Database
 pair refused: <role>-missing.`, directs you to run the
 command with its ROOT, run a sync, or start NamiSync once, and changes
 nothing. One line on standard output per created database follows any

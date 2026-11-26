@@ -1973,7 +1973,7 @@ def test_crash_shaped_single_publication_is_incomplete_then_completes(
     assert (result.state, result.reason) == ("incomplete", "history-missing")
     assert _snapshot(ledger, history) == before
     assert not history.exists()
-    contract, migrated, created = service.upgrade_database_contracts()
+    contract, migrated, created = service.upgrade_database_contracts(create=True)
     assert (contract.state, created, migrated) == ("ready", (("history", str(history)),), ())
     assert _snapshot(ledger) == before
     service.close()

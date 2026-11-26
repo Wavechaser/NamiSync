@@ -111,7 +111,7 @@ def test_migrated_released_ledger_has_the_fresh_topology_and_no_lineage(
 ) -> None:
     ledger, history = copy_released_pair(tmp_path / "data")
 
-    assert upgrade_database_pair(ledger, history).contract.state is DatabasePairState.READY
+    assert upgrade_database_pair(ledger, history, create=True).contract.state is DatabasePairState.READY
 
     assert _topology(ledger) == _topology(initialize_ledger(tmp_path / "fresh.db"))
     assert _lineage_rows(ledger) == []
@@ -150,7 +150,7 @@ def test_a_ledger_with_the_withdrawn_marker_kind_is_refused_with_reset(
     contract = validate_database_pair(ledger, history)
     assert (contract.state, contract.reason) == (DatabasePairState.REFUSED, "ledger-contract")
     assert contract.reset_direction is not None
-    assert upgrade_database_pair(ledger, history).contract == contract
+    assert upgrade_database_pair(ledger, history, create=True).contract == contract
     assert _files(tmp_path) == before
 
 
@@ -251,7 +251,7 @@ def test_maintenance_classification_refuses_a_backup_and_migrates_nothing(
     ledger, history = backup_pair
     before = _files(tmp_path)
 
-    result = upgrade_database_pair(ledger, history)
+    result = upgrade_database_pair(ledger, history, create=True)
 
     _assert_backup_refusal(result.contract)
     assert result.migrated == ()

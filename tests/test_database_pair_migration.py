@@ -106,7 +106,7 @@ elif stage == "committed":
 elif stage == "between":
     stop(pair, "migrate_database", 2, after=False)
 print("ready", flush=True)
-result = pair.upgrade_database_pair(ledger, history)
+result = pair.upgrade_database_pair(ledger, history, create=True)
 print("finished " + result.contract.state, flush=True)
 """
 _HOLD = r"""
@@ -170,7 +170,7 @@ def _migrate_eventually(ledger: Path, history: Path):
     # A killed holder's locks and handles may outlive it briefly on Windows.
     deadline = monotonic() + WAIT_SECONDS
     while True:
-        result = upgrade_database_pair(ledger, history)
+        result = upgrade_database_pair(ledger, history, create=True)
         if result.contract.reason != "database-in-use" or monotonic() > deadline:
             return result
         sleep(0.05)
@@ -200,7 +200,7 @@ def test_released_pair_migrates_with_every_row_and_id_kept(tmp_path: Path) -> No
     ledger, history = copy_released_pair(tmp_path / "data")
     old = _rows(ledger, history, tmp_path / "old")
 
-    result = upgrade_database_pair(ledger, history)
+    result = upgrade_database_pair(ledger, history, create=True)
 
     assert result.contract.state is DatabasePairState.READY
     assert sorted(path.parent for path in result.backups) == [ledger.parent] * 2
@@ -231,7 +231,7 @@ def test_released_pair_migrates_with_every_row_and_id_kept(tmp_path: Path) -> No
             )
 
     before = _entries(ledger.parent)
-    again = upgrade_database_pair(ledger, history)
+    again = upgrade_database_pair(ledger, history, create=True)
     assert (again.contract.state, again.backups) == (DatabasePairState.READY, ())
     assert _entries(ledger.parent) == before
 
@@ -250,7 +250,7 @@ def test_released_pair_migrates_with_every_row_and_id_kept(tmp_path: Path) -> No
 
 def test_migrated_history_pages_and_every_stored_hash_still_verifies(tmp_path: Path) -> None:
     ledger, history = copy_released_pair(tmp_path / "data")
-    assert upgrade_database_pair(ledger, history).contract.state is DatabasePairState.READY
+    assert upgrade_database_pair(ledger, history, create=True).contract.state is DatabasePairState.READY
 
     with HistoryRepository(history) as repository:
         summaries = repository.list_summaries(50)
@@ -347,7 +347,7 @@ def test_recorder_replays_existing_run_and_operation_tokens_after_migration(
     with pytest.raises(DatabaseMigrationRequired):
         probe_database_file_contract(ledger, history=False)
 
-    assert upgrade_database_pair(ledger, history).contract.state is DatabasePairState.READY
+    assert upgrade_database_pair(ledger, history, create=True).contract.state is DatabasePairState.READY
     assert carried_rows(ledger, tmp_path / "migrated", history=False) == carried_rows(
         setup.recorder.path, tmp_path / "recorded-rows", history=False,
     )
@@ -425,7 +425,7 @@ def test_migration_refuses_while_another_process_holds_either_database(
     try:
         assert child.read() == "held"
         before = _bytes(ledger, history)
-        result = upgrade_database_pair(ledger, history)
+        result = upgrade_database_pair(ledger, history, create=True)
         assert result.contract.state is DatabasePairState.REFUSED
         assert result.contract.reason == "database-in-use"
         assert result.contract.reset_direction is None
@@ -464,7 +464,7 @@ def test_classifying_released_and_migrated_pairs_writes_nothing(tmp_path: Path) 
         assert _entries(ledger.parent) == before
     assert not list(ledger.parent.glob("*.claim"))
 
-    assert upgrade_database_pair(ledger, history).contract.state is DatabasePairState.READY
+    assert upgrade_database_pair(ledger, history, create=True).contract.state is DatabasePairState.READY
     migrated = _entries(ledger.parent)
     assert validate_database_pair(ledger, history).state is DatabasePairState.READY
     assert _entries(ledger.parent) == migrated
@@ -497,7 +497,7 @@ def test_newer_role_refuses_pair_admission_without_reset_or_change(
 
     with pytest.raises(DatabasePairRefusedError, match="newer NamiSync"):
         ensure_database_pair(ledger, history)
-    migration = upgrade_database_pair(ledger, history)
+    migration = upgrade_database_pair(ledger, history, create=True)
     assert (migration.contract, migration.backups) == (contract, ())
     assert _classify(ledger, history=False) == "older"
     assert {name: value for name, value in _entries(data).items() if not name.endswith(".claim")} == before
@@ -641,7 +641,7 @@ def test_ensure_never_migrates_and_the_explicit_call_does(tmp_path: Path) -> Non
     assert not list(data.glob("*.backup-*"))
 
     old = carried_rows(history, tmp_path / "old", history=True)
-    result = upgrade_database_pair(ledger, history)
+    result = upgrade_database_pair(ledger, history, create=True)
     assert result.contract.state is DatabasePairState.READY
     assert [database.role for database in result.migrated] == ["history"]
     assert ensure_database_pair(ledger, history).state is DatabasePairState.READY
@@ -688,7 +688,7 @@ def test_a_released_pair_stamps_its_history_with_the_ledger_migrated_beside_it(
 ) -> None:
     ledger, history = copy_released_pair(tmp_path / "data")
 
-    result = upgrade_database_pair(ledger, history)
+    result = upgrade_database_pair(ledger, history, create=True)
 
     assert result.contract.state is DatabasePairState.READY
     assert [database.role for database in result.migrated] == ["ledger", "history"]

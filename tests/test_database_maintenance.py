@@ -246,7 +246,7 @@ def test_backup_refuses_an_incomplete_pair_with_the_completion_direction(
 
 def test_backups_rotate_to_three_and_leave_migration_backups(tmp_path: Path) -> None:
     ledger, history = copy_released_pair(tmp_path / "data")
-    migrated = upgrade_database_pair(ledger, history).backups
+    migrated = upgrade_database_pair(ledger, history, create=True).backups
     assert len(migrated) == 2
     published = []
     for minute in range(5):
@@ -395,7 +395,7 @@ def test_a_history_with_a_dangling_reference_keeps_the_ledger_backup_and_rotates
 def _refusal_sources(tmp_path: Path, ledger: Path, history: Path) -> dict[str, tuple[str, Path]]:
     released = tmp_path / "released"
     old_ledger, old_history = copy_released_pair(released)
-    migrated = upgrade_database_pair(old_ledger, old_history).backups
+    migrated = upgrade_database_pair(old_ledger, old_history, create=True).backups
     v4 = next(path for path in migrated if path.name.startswith("ledger"))
     v8 = next(path for path in migrated if path.name.startswith("history"))
     backups = _backup(ledger, history)
@@ -820,7 +820,7 @@ def test_a_healthy_v0_1_0_pair_is_updated_before_its_ledger_is_restored(tmp_path
 
     # Updating the pair first stamps the 0.1.0 runs with the migrated ledger;
     # after the restore they belong to an earlier ledger.
-    assert upgrade_database_pair(ledger, history).contract.state is DatabasePairState.READY
+    assert upgrade_database_pair(ledger, history, create=True).contract.state is DatabasePairState.READY
     released = _released_runs(history)
     restored = restore_database_from_backup(
         ledger, history, "ledger", other_backup, clock=_Clock(),
@@ -931,7 +931,7 @@ def test_a_ledger_restore_is_refused_only_beside_a_newer_or_misplaced_history(
             assert (result.contract.state, result.contract.reason) == (
                 DatabasePairState.INCOMPLETE, "history-missing",
             )
-            completion = upgrade_database_pair(ledger, history)
+            completion = upgrade_database_pair(ledger, history, create=True)
             assert completion.contract.state is DatabasePairState.READY
             assert [database.role for database in completion.created] == ["history"]
         return
@@ -954,7 +954,7 @@ def test_history_is_restored_beside_a_v0_1_0_ledger_and_joins_nothing(tmp_path: 
     assert (result.contract.state, result.contract.reason) == (
         DatabasePairState.MIGRATION_REQUIRED, "ledger-older",
     )
-    assert upgrade_database_pair(ledger, history).contract.state is DatabasePairState.READY
+    assert upgrade_database_pair(ledger, history, create=True).contract.state is DatabasePairState.READY
     assert _membership(ledger, history) == {"seeded": "earlier"}
 
 
@@ -972,7 +972,7 @@ def test_history_restored_where_the_ledger_is_missing_gains_a_new_ledger(
     assert (result.contract.state, result.contract.reason) == (
         DatabasePairState.INCOMPLETE, "ledger-missing",
     )
-    completion = upgrade_database_pair(ledger, history)
+    completion = upgrade_database_pair(ledger, history, create=True)
     assert completion.contract.state is DatabasePairState.READY
     assert [database.role for database in completion.created] == ["ledger"]
     assert _query(ledger, "SELECT kind, instance_id FROM ledger_lineage") == [

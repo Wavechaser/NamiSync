@@ -411,7 +411,7 @@ class NamiSyncService:
         )
 
     def upgrade_database_contracts(
-        self,
+        self, *, create: bool,
     ) -> tuple[
         DatabaseContractView,
         tuple[tuple[str, int, str], ...],
@@ -423,11 +423,13 @@ class NamiSyncService:
         one ``(role, source schema version, backup path)`` per database this
         call migrated; and one ``(role, path)`` per database it created
         (in-process callers only; no bridge shape carries them). Any other
-        pair is returned unchanged.
+        pair is returned unchanged. Without ``create`` a missing database is
+        never created: an incomplete pair is returned as ``incomplete`` with
+        nothing changed.
         """
 
         self._require_open()
-        upgrade = self._runtime.upgrade_database_contracts()
+        upgrade = self._runtime.upgrade_database_contracts(create=create)
         return (
             _database_contract_view(upgrade.contract),
             tuple(

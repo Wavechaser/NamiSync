@@ -490,7 +490,7 @@ def test_a_v4_migration_backup_is_refused_as_a_restore_source(tmp_path: Path) ->
     ledger, history = _pair(tmp_path / "data")
     old_ledger, old_history = copy_released_pair(tmp_path / "released")
     v4 = next(
-        path for path in upgrade_database_pair(old_ledger, old_history).backups
+        path for path in upgrade_database_pair(old_ledger, old_history, create=True).backups
         if path.name.startswith("ledger")
     )
     before = _listing(ledger.parent)

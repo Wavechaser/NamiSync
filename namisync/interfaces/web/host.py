@@ -845,7 +845,7 @@ def run_desktop(
         if contract.state == "fresh":
             contract = service.initialize_database_contracts()
         elif contract.state in ("migration-required", "incomplete"):
-            contract, migrated, created = service.upgrade_database_contracts()
+            contract, migrated, created = service.upgrade_database_contracts(create=True)
             if migrated:
                 # Roles and source versions only: GUI logs record no paths.
                 logging.getLogger("namisync").info(

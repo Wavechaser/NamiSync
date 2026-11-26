@@ -1754,9 +1754,10 @@ class _RecordedService:
         self._order.append("validate_databases")
         return self._service.validate_database_contracts()
 
-    def upgrade_database_contracts(self):
+    def upgrade_database_contracts(self, *, create):
+        assert create  # Desktop startup may create a missing database.
         self._order.append("upgrade_databases")
-        return self._service.upgrade_database_contracts()
+        return self._service.upgrade_database_contracts(create=create)
 
     def close(self):
         self._order.append("service.close")

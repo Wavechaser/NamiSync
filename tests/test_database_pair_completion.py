@@ -7,7 +7,7 @@ from the parent once their own script reports the stage it stopped at.
 
 from __future__ import annotations
 
-from contextlib import closing
+from contextlib import closing, contextmanager
 import os
 from pathlib import Path
 import re
@@ -19,6 +19,7 @@ import pytest
 from namisync.core.planning import OperationKind
 from namisync.db.contracts import probe_database_file_contract
 from namisync.db.schema import DatabaseMigrationRequired, initialize_history, initialize_ledger
+import namisync.workflows.database_pair as database_pair
 from namisync.workflows.database_pair import (
     CreatedDatabase,
     DatabasePairRefusedError,
@@ -31,7 +32,7 @@ from namisync.workflows.runtime import LocalWorkflowRuntime
 
 from _child_process import WAIT_SECONDS, Child
 from _db_fixtures import NOW, file_stat, operation, plan, seed_history_run, setup_recorder
-from _released_fixture import carried_rows, copy_released_role
+from _released_fixture import carried_rows, copy_released_pair, copy_released_role
 
 
 pytestmark = pytest.mark.skipif(os.name != "nt", reason="Windows file sharing and claims")
@@ -74,7 +75,7 @@ elif stage == "image-written":
 elif stage == "published":
     stop(pair, "create_database", after=True)
 print("ready", flush=True)
-result = pair.upgrade_database_pair(ledger, history)
+result = pair.upgrade_database_pair(ledger, history, create=True)
 print("finished " + result.contract.state, flush=True)
 """
 _HOLD = r"""
@@ -153,7 +154,7 @@ def _complete_eventually(ledger: Path, history: Path):
     # A killed holder's locks and handles may outlive it briefly on Windows.
     deadline = monotonic() + WAIT_SECONDS
     while True:
-        result = upgrade_database_pair(ledger, history)
+        result = upgrade_database_pair(ledger, history, create=True)
         if result.contract.reason != "database-in-use" or monotonic() > deadline:
             return result
         sleep(0.05)
@@ -206,7 +207,7 @@ def test_orphan_sidecars_of_the_missing_role_stay_inconsistent(
 
     contract = validate_database_pair(ledger, history)
     assert (contract.state, contract.reason) == (DatabasePairState.REFUSED, "inconsistent-pair")
-    completion = upgrade_database_pair(ledger, history)
+    completion = upgrade_database_pair(ledger, history, create=True)
     assert (completion.contract, completion.created) == (contract, ())
     assert _files(tmp_path) == files
 
@@ -224,7 +225,7 @@ def test_a_lone_main_with_its_own_journal_stays_inconsistent(
 
     contract = validate_database_pair(ledger, history)
     assert (contract.state, contract.reason) == (DatabasePairState.REFUSED, "inconsistent-pair")
-    completion = upgrade_database_pair(ledger, history)
+    completion = upgrade_database_pair(ledger, history, create=True)
     assert (completion.contract, completion.created) == (contract, ())
     assert _files(tmp_path) == files
 
@@ -245,13 +246,13 @@ def test_a_lone_database_needing_a_reset_names_only_itself_and_where_the_other_w
     assert f"archive or delete the ledger database file {ledger} and its" in contract.guidance
     assert f"The history database is missing at {history}" in contract.guidance
     assert "both" not in contract.guidance
-    assert upgrade_database_pair(ledger, history).created == ()
+    assert upgrade_database_pair(ledger, history, create=True).created == ()
     assert _files(tmp_path) == files
 
 
 def test_upgrade_returns_a_fresh_or_ready_pair_unchanged_without_a_claim(tmp_path: Path) -> None:
     fresh_ledger, fresh_history = tmp_path / "fresh" / "ledger.db", tmp_path / "fresh" / "history.db"
-    result = upgrade_database_pair(fresh_ledger, fresh_history)
+    result = upgrade_database_pair(fresh_ledger, fresh_history, create=True)
     assert (result.contract.state, result.migrated, result.created) == (
         DatabasePairState.FRESH, (), (),
     )
@@ -260,7 +261,7 @@ def test_upgrade_returns_a_fresh_or_ready_pair_unchanged_without_a_claim(tmp_pat
     ledger = initialize_ledger(tmp_path / "ledger.db")
     history = initialize_history(tmp_path / "history.db")
     before = sorted(path.name for path in tmp_path.iterdir())
-    result = upgrade_database_pair(ledger, history)
+    result = upgrade_database_pair(ledger, history, create=True)
     assert (result.contract.state, result.migrated, result.created) == (
         DatabasePairState.READY, (), (),
     )
@@ -275,7 +276,7 @@ def test_lone_current_ledger_gains_a_history_and_is_left_as_it_was(tmp_path: Pat
     history = tmp_path / "history.db"
     before = _bytes(ledger)
 
-    result = upgrade_database_pair(ledger, history)
+    result = upgrade_database_pair(ledger, history, create=True)
 
     assert result.contract.state is DatabasePairState.READY
     assert (result.created, result.migrated) == ((CreatedDatabase("history", history),), ())
@@ -285,7 +286,7 @@ def test_lone_current_ledger_gains_a_history_and_is_left_as_it_was(tmp_path: Pat
     assert not any(Path(f"{history}{suffix}").exists() for suffix in ("-wal", "-journal"))
     assert _read(history, "SELECT count(*) FROM history_runs") == [(0,)]
     assert not list(tmp_path.glob("*.tmp"))
-    again = upgrade_database_pair(ledger, history)
+    again = upgrade_database_pair(ledger, history, create=True)
     assert (again.contract.state, again.created) == (DatabasePairState.READY, ())
 
 
@@ -297,7 +298,7 @@ def test_lone_released_ledger_migrates_and_gains_a_new_history(tmp_path: Path) -
     assert (contract.state, contract.reason) == (DatabasePairState.INCOMPLETE, "history-missing")
     assert "written by NamiSync 0.1.0 and is updated first" in contract.guidance
 
-    result = upgrade_database_pair(ledger, history)
+    result = upgrade_database_pair(ledger, history, create=True)
 
     assert result.contract.state is DatabasePairState.READY
     assert result.created == (CreatedDatabase("history", history),)
@@ -325,7 +326,7 @@ def test_lone_released_history_migrates_then_gains_a_new_ledger(tmp_path: Path) 
     assert "runs are shown as belonging to an earlier ledger" in contract.guidance
     assert "written by NamiSync 0.1.0 and is updated first" in contract.guidance
 
-    result = upgrade_database_pair(ledger, history)
+    result = upgrade_database_pair(ledger, history, create=True)
 
     assert result.contract.state is DatabasePairState.READY, result.contract
     assert result.created == (CreatedDatabase("ledger", ledger),)
@@ -347,13 +348,77 @@ def test_lone_current_history_gains_a_new_ledger_and_is_left_as_it_was(tmp_path:
     ledger = tmp_path / "ledger.db"
     before = _bytes(history)
 
-    result = upgrade_database_pair(ledger, history)
+    result = upgrade_database_pair(ledger, history, create=True)
 
     assert result.contract.state is DatabasePairState.READY
     assert (result.created, result.migrated) == ((CreatedDatabase("ledger", ledger),), ())
     assert _bytes(history) == before
     assert _assert_new_ledger(ledger) != "a" * 32
     assert _membership(ledger, history) == {"stamped": "earlier", "unstamped": "earlier"}
+
+
+# --- permission to create --------------------------------------------------------
+
+
+def test_without_permission_a_lone_database_is_returned_incomplete_and_nothing_is_made(
+    tmp_path: Path,
+) -> None:
+    ledger = copy_released_role(tmp_path / "data", history=False)
+    history = tmp_path / "new" / "deeper" / "history.db"
+    before = _files(tmp_path / "data")
+
+    result = upgrade_database_pair(ledger, history, create=False)
+
+    assert result.contract == validate_database_pair(ledger, history)
+    assert (result.contract.state, result.contract.reason) == (
+        DatabasePairState.INCOMPLETE, "history-missing",
+    )
+    assert (result.migrated, result.created) == ((), ())
+    # No claim, folder, backup or migration: the directory is as found.
+    assert not (tmp_path / "new").exists()
+    assert sorted(path.name for path in (tmp_path / "data").iterdir()) == sorted(before)
+    assert _files(tmp_path / "data") == before
+
+
+@pytest.mark.parametrize("create", (False, True))
+def test_a_database_that_vanishes_under_the_claims_is_created_only_with_permission(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, create: bool,
+) -> None:
+    # Cold, both databases are from 0.1.0; under the claims the History is gone.
+    data = tmp_path / "data"
+    ledger, history = copy_released_pair(data)
+    assert validate_database_pair(ledger, history).state is DatabasePairState.MIGRATION_REQUIRED
+    hold = database_pair.hold_maintenance_claims
+
+    @contextmanager
+    def history_vanishes(*arguments):
+        with hold(*arguments) as claims:
+            for suffix in ("", "-wal", "-shm"):
+                Path(f"{history}{suffix}").unlink()
+            yield claims
+
+    monkeypatch.setattr(database_pair, "hold_maintenance_claims", history_vanishes)
+    ledger_files = {name: data.joinpath(name).read_bytes() for name in (
+        "ledger.db", "ledger.db-wal", "ledger.db-shm",
+    )}
+
+    result = upgrade_database_pair(ledger, history, create=create)
+
+    if not create:
+        assert (result.contract.state, result.contract.reason) == (
+            DatabasePairState.INCOMPLETE, "history-missing",
+        )
+        assert (result.migrated, result.created) == ((), ())
+        # The ledger is not migrated: no backup, no new sidecar, every byte kept.
+        assert _files(data) == ledger_files
+        assert _classify(ledger, history=False) == "older"
+        return
+    assert result.contract.state is DatabasePairState.READY, result.contract
+    assert result.created == (CreatedDatabase("history", history),)
+    assert [(database.role, database.source_version) for database in result.migrated] == [
+        ("ledger", 4),
+    ]
+    assert _classify(ledger, history=False) == "current"
 
 
 # --- refusals ------------------------------------------------------------------
@@ -379,7 +444,7 @@ def test_completion_refuses_while_another_process_holds_the_pair(
         assert child.read() == "held"
         before = _bytes(present)
         files = sorted(path.name for path in data.iterdir() if not path.name.endswith(".claim"))
-        result = upgrade_database_pair(ledger, history)
+        result = upgrade_database_pair(ledger, history, create=True)
         assert (result.contract.state, result.contract.reason) == (
             DatabasePairState.REFUSED, "database-in-use",
         )
@@ -404,7 +469,7 @@ def test_a_refused_claim_leaves_no_new_folder_and_a_later_call_creates_it(
     child = Child(_HOLD, "shared-claim", str(ledger))
     try:
         assert child.read() == "held"
-        result = upgrade_database_pair(ledger, history)
+        result = upgrade_database_pair(ledger, history, create=True)
         assert (result.contract.reason, result.created) == ("database-in-use", ())
         assert not (tmp_path / "new").exists()
     finally:
@@ -421,7 +486,7 @@ def test_a_reader_beside_a_current_lone_ledger_does_not_stop_completion(tmp_path
     child = Child(_HOLD, "sqlite-reader", str(ledger))
     try:
         assert child.read() == "held"
-        result = upgrade_database_pair(ledger, history)
+        result = upgrade_database_pair(ledger, history, create=True)
     finally:
         child.kill()
     assert result.contract.state is DatabasePairState.READY
@@ -442,7 +507,7 @@ def test_a_file_that_takes_the_missing_name_is_never_replaced(
         history.write_bytes(b"appeared meanwhile")
 
     monkeypatch.setattr(maintenance, "_write_new_image", write_then_occupy)
-    result = upgrade_database_pair(ledger, history)
+    result = upgrade_database_pair(ledger, history, create=True)
 
     assert (result.contract.reason, result.created) == ("creation-failed", ())
     assert "none was created" in result.contract.guidance

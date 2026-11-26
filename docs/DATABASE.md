@@ -951,11 +951,13 @@ and the placement check follows.
 `upgrade_database_pair` is the one operation that migrates or completes a
 pair; the CLI and the desktop call it once (through the runtime's and the
 service's `upgrade_database_contracts`) and report what it returns: the final
-contract, the databases it migrated and those it created. It classifies the
-pair cold and returns any state other than `migration-required` or
-`incomplete` unchanged, with no claim taken. Otherwise it takes both
-exclusive claims and classifies again under them; an incomplete pair is
-completed as in [One database missing](#one-database-missing). For an older
+contract, the databases it migrated and those it created. Its caller states
+whether it may create a missing database (`create`). It classifies the pair
+cold and returns, unchanged and with no claim taken, any state other than
+`migration-required` or `incomplete`, and `incomplete` too without that
+permission. Otherwise it takes both exclusive claims and classifies again
+under them; an incomplete pair is completed as in
+[One database missing](#one-database-missing). For an older
 pair it runs the delete-access probe (step 1) on both main files before
 either migrates, so a process holding only History refuses the pair with both
 databases unchanged. Then `migrate_database` runs for the ledger, then for
@@ -1146,10 +1148,13 @@ cases in `tests/test_database_maintenance.py`.
   `inconsistent-pair`. Classification still writes nothing.
 - **Admission never completes.** `ensure_database_pair` and planning refuse
   `incomplete` with that guidance, as they refuse `migration-required`. Only
-  `upgrade_database_pair` creates the missing database, and its callers
-  report it. It holds both exclusive claims, ledger first, and classifies
-  again; under them an older pair is migrated as in [Migration](#migration)
-  and any state but those two is returned unchanged. The missing
+  `upgrade_database_pair` creates the missing database, and only when its
+  caller permits it; its callers report it. It holds both exclusive claims,
+  ledger first, and classifies again; under them an older pair is migrated as
+  in [Migration](#migration) and any state but those two is returned
+  unchanged. Without permission, `incomplete` is returned as found whether it
+  was seen cold or only under the claims: the present database is not
+  migrated and no folder or database is created. The missing
   database's folder is created before the claims, because its claim file
   lives there; when nothing is created, the folders the call made are removed
   again if still empty (one holding the claim file of a refused attempt
@@ -1193,7 +1198,9 @@ cases in `tests/test_database_maintenance.py`.
 - **Telling the user.** The CLI completes where it would migrate, after the
   same placement admission ([Migration](#migration)), except that a command
   given `--location-id` refuses instead (exit 3, nothing created), because no
-  root is given to check the new database's path against. It prints one line per
+  root is given to check the new database's path against. Such a command
+  never permits creation, so it refuses the same way when a database is found
+  missing only under the upgrade's claims. It prints one line per
   created database, after the migration line when the present one migrated
   ([COMMANDLINE](COMMANDLINE.md)). The desktop completes before binding and
   logs `startup.database_created role=<role> reason=missing` with no path,

@@ -718,7 +718,7 @@ def test_a_restore_image_that_fails_verification_restores_nothing(
 
 def test_a_migrated_pair_backs_up_and_restores(tmp_path: Path) -> None:
     ledger, history = copy_released_pair(tmp_path / "data")
-    assert upgrade_database_pair(ledger, history).contract.state is DatabasePairState.READY
+    assert upgrade_database_pair(ledger, history, create=True).contract.state is DatabasePairState.READY
     backup = _backup(ledger, history)
     result = _restore(ledger, history, backup)
     assert result.kept_as == "backup"

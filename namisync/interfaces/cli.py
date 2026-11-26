@@ -788,28 +788,16 @@ def _database_refusal(
     """
 
     contract = service.validate_database_contracts()
-    if contract.state == "incomplete" and not roots:
-        # --location-id names no root to check the new database's path
-        # against, so nothing is created here.
-        print(f"Database pair refused: {_safe(contract.reason)}.", file=stderr)
-        print(
-            f"The {'ledger' if contract.reason == 'ledger-missing' else 'history'} "
-            "database is missing. A --location-id command does "
-            "not create it, because no root is given to check its path against. "
-            "Run the command with its ROOT, run a sync, or start NamiSync once to "
-            "create it, then try again. Nothing was changed.",
-            file=stderr,
-        )
-        if selected is not None:
-            print(selected, file=stderr)
-        return EXIT_REFUSED
-    if contract.state in ("migration-required", "incomplete"):
+    migrated = ()
+    if contract.state == "migration-required" or (contract.state == "incomplete" and roots):
         if not service.database_placement_admitted(
             roots, selected_mount=selected_mount,
             selected_paths=selected_paths, paired=paired,
         ):
             return None
-        contract, migrated, created = service.upgrade_database_contracts()
+        # --location-id names no root to check a new database's path
+        # against, so it never permits creating one.
+        contract, migrated, created = service.upgrade_database_contracts(create=bool(roots))
         if migrated:
             roles = " and ".join(f"{role} (v{version})" for role, version, _ in migrated)
             plural = "s" if len(migrated) > 1 else ""
@@ -829,10 +817,23 @@ def _database_refusal(
                 "earlier ledger.",
                 file=stdout,
             )
-    if contract.state != "refused":
+    if contract.state == "incomplete" and not roots:
+        # Missing cold, or found missing under the upgrade's claims.
+        print(f"Database pair refused: {_safe(contract.reason)}.", file=stderr)
+        print(
+            f"The {'ledger' if contract.reason == 'ledger-missing' else 'history'} "
+            "database is missing. A --location-id command does "
+            "not create it, because no root is given to check its path against. "
+            "Run the command with its ROOT, run a sync, or start NamiSync once to "
+            "create it, then try again. "
+            + ("Nothing else was changed." if migrated else "Nothing was changed."),
+            file=stderr,
+        )
+    elif contract.state == "refused":
+        print(f"Database pair refused: {_safe(contract.reason)}.", file=stderr)
+        print(_safe(contract.guidance or contract.reset_direction), file=stderr)
+    else:
         return None
-    print(f"Database pair refused: {_safe(contract.reason)}.", file=stderr)
-    print(_safe(contract.guidance or contract.reset_direction), file=stderr)
     if selected is not None:
         print(selected, file=stderr)
     return EXIT_REFUSED

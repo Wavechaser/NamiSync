@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from contextlib import closing
+from contextlib import closing, contextmanager
 import io
 import os
 from pathlib import Path
@@ -14,9 +14,10 @@ import namisync.interfaces.cli as cli_module
 from namisync.db.claims import acquire_database_claim
 from namisync.db.schema import initialize_ledger
 from namisync.interfaces.cli import EXIT_FAILED, EXIT_REFUSED, EXIT_SUCCESS, main
+import namisync.workflows.database_pair as database_pair
 
 from _db_fixtures import NOW, seed_history_run
-from _released_fixture import copy_released_role
+from _released_fixture import copy_released_pair, copy_released_role
 
 
 pytestmark = pytest.mark.skipif(os.name != "nt", reason="Windows file sharing and claims")
@@ -183,6 +184,45 @@ def test_location_id_never_creates_the_missing_database(tmp_path: Path, present:
         f"'{history}'. Add the same options to any NamiSync command above.",
     ]
     assert (sorted(path.name for path in data.iterdir()), _files(data)) == before
+
+
+def test_location_id_refuses_a_database_that_vanishes_under_the_claims(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Cold, the 0.1.0 pair needs updating; under the claims the History is gone.
+    data = tmp_path / "data"
+    ledger, history = copy_released_pair(data)
+    hold = database_pair.hold_maintenance_claims
+
+    @contextmanager
+    def history_vanishes(*arguments):
+        with hold(*arguments) as claims:
+            for suffix in ("", "-wal", "-shm"):
+                Path(f"{history}{suffix}").unlink()
+            yield claims
+
+    monkeypatch.setattr(database_pair, "hold_maintenance_claims", history_vanishes)
+    ledger_bytes = ledger.read_bytes(), Path(f"{ledger}-wal").read_bytes()
+    stdout, stderr = io.StringIO(), io.StringIO()
+
+    result = main(
+        _arguments(["inventory", "--location-id", "1"], ledger, history),
+        stdout=stdout, stderr=stderr,
+    )
+
+    assert result == EXIT_REFUSED
+    assert stdout.getvalue() == ""
+    assert stderr.getvalue().splitlines()[:2] == [
+        "Database pair refused: history-missing.",
+        "The history database is missing. A --location-id command does "
+        "not create it, because no root is given to check its path against. Run "
+        "the command with its ROOT, run a sync, or start NamiSync once to create it, "
+        "then try again. Nothing was changed.",
+    ]
+    assert (ledger.read_bytes(), Path(f"{ledger}-wal").read_bytes()) == ledger_bytes
+    assert sorted(path.name for path in data.iterdir() if not path.name.endswith(".claim")) == [
+        "ledger.db", "ledger.db-shm", "ledger.db-wal",
+    ]
 
 
 def test_location_id_never_creates_a_database_inside_a_managed_root(tmp_path: Path) -> None:
