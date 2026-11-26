@@ -1991,6 +1991,7 @@ class _IntegrityInvocation:
         self._recording = request.recording
         self._recording_issues = request.recording_issues
         self._omitted_detail_count = request.omitted_detail_count
+        self._ledger_instance_id: str | None = None
 
     def run(self, context) -> object:
         return run_integrity(
@@ -1999,6 +2000,7 @@ class _IntegrityInvocation:
             self._deps,
             selection_sink=self._capture_selection,
             recording_sink=self._capture_recording,
+            ledger_instance_sink=self._capture_ledger_instance,
         )
 
     def snapshot(self) -> IntegrityWorkflowRequest:
@@ -2033,10 +2035,20 @@ class _IntegrityInvocation:
                 self._request.refresh_generation + 1,
                 "inventory refresh generation",
             ),
+            # A selection is saved only under the recorder claim whose ledger
+            # instance was captured first, in the same stretch.
+            ledger_instance_id=(
+                self._request.ledger_instance_id
+                if self._selection is None
+                else self._ledger_instance_id
+            ),
         )
 
     def _capture_selection(self, selection: IntegritySelection) -> None:
         self._selection = selection
+
+    def _capture_ledger_instance(self, instance_id: str) -> None:
+        self._ledger_instance_id = instance_id
 
     def _capture_recording(
         self,

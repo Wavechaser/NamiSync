@@ -657,11 +657,20 @@ class IntegrityWorkflowRequest:
     recording: RecordingStatus = RecordingStatus.OK
     recording_issues: tuple[TaskRecordingIssue, ...] = ()
     omitted_detail_count: int = 0
+    # The ledger instance read under the recorder claim that saved this
+    # progress; a request with no saved progress yet has none.
+    ledger_instance_id: str | None = None
 
     def __post_init__(self) -> None:
         _require_workflow_request(self.request_id, self.binding)
         if type(self.mode) is not IntegrityMode:
             raise TypeError("integrity mode has the wrong type")
+        if self.ledger_instance_id is not None and (
+            type(self.ledger_instance_id) is not str
+            or len(self.ledger_instance_id) != 32
+            or self.ledger_instance_id.strip("0123456789abcdef")
+        ):
+            raise ValueError("integrity ledger instance id is malformed")
         if type(self.selected_paths) is not tuple:
             raise TypeError("integrity selected_paths must be a tuple")
         if exceeds_population_wall(
@@ -851,7 +860,37 @@ def _exact_integrity_workflow_request(
         recording=value.recording,
         recording_issues=value.recording_issues,
         omitted_detail_count=value.omitted_detail_count,
+        ledger_instance_id=value.ledger_instance_id,
     )
+
+
+class IntegrityLedgerChanged(RuntimeError):
+    """The ledger was replaced while an integrity run was paused."""
+
+
+def _require_integrity_ledger(
+    saved: str | None, current: str, mode: IntegrityMode,
+) -> None:
+    """Refuse saved progress that belongs to another ledger instance.
+
+    A request that saved no progress names no instance and has nothing to
+    compare.
+    """
+
+    if saved is not None and current != saved:
+        raise IntegrityLedgerChanged(
+            f"The ledger was replaced (restored or reset) while this {mode.value} "
+            "run was paused, so it cannot resume: the results it reported before "
+            "the pause belong to the replaced ledger, not the current one. Start a "
+            f"new {mode.value} run against the current ledger."
+        )
+
+
+def _ledger_instance(deps: IntegrityDependencies) -> str:
+    with LedgerRepository(
+        deps.ledger_path, database=None if deps.database is None else deps.database(),
+    ) as repository:
+        return repository.ledger_instance_id()
 
 
 @dataclass(frozen=True, slots=True)
@@ -1619,6 +1658,7 @@ def run_integrity(
         ]
         | None
     ) = None,
+    ledger_instance_sink: Callable[[str], None] | None = None,
 ) -> OperationResult:
     request = _exact_integrity_workflow_request(request)
     try:
@@ -1673,7 +1713,10 @@ def run_integrity(
             deps,
             root,
             recorder_observation=recorder_observation,
-        ) as recorder:
+            request=request,
+        ) as (recorder, ledger_instance):
+            if ledger_instance_sink is not None:
+                ledger_instance_sink(ledger_instance)
             host_id, location_id, scan = _register_and_scan(
                 request.request_id,
                 scope_token,
@@ -2215,8 +2258,16 @@ def _integrity_recorder(
     root: str,
     *,
     recorder_observation: list[_ObservedTaskRecordingIssue | None],
-) -> Iterator[LedgerRecorder]:
-    """Close the ledger owner without replacing an in-flight primary signal."""
+    request: IntegrityWorkflowRequest,
+) -> Iterator[tuple[LedgerRecorder, str]]:
+    """Open the ledger owner for the ledger the request's progress belongs to.
+
+    The instance is read, and checked against the saved progress, while the
+    recorder holds the ledger's shared claim, which a restore needs
+    exclusively; it cannot change until the recorder closes. A mismatch is a
+    recording-open failure: nothing is scanned or written. Close the owner
+    without replacing an in-flight primary signal.
+    """
 
     try:
         recorder = LedgerRecorder(
@@ -2232,7 +2283,23 @@ def _integrity_recorder(
         )
         raise
     try:
-        yield recorder
+        ledger_instance = _ledger_instance(deps)
+        _require_integrity_ledger(
+            request.ledger_instance_id, ledger_instance, request.mode,
+        )
+    except BaseException as error:
+        if isinstance(error, Exception):
+            recorder_observation[0] = _task_recording_issue(
+                TaskRecordingIssueReason.RECORDING_OPEN_FAILED,
+                error,
+            )
+        try:
+            recorder.close()
+        except Exception as close_error:
+            retire_exception_graph(close_error)
+        raise
+    try:
+        yield recorder, ledger_instance
     except BaseException:
         try:
             recorder.close()

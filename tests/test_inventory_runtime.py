@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import os
 import sqlite3
-from contextlib import contextmanager
+from contextlib import closing, contextmanager
 from dataclasses import dataclass, replace
+from datetime import timedelta
 from pathlib import Path
 from threading import Event
 from time import monotonic, sleep
@@ -76,7 +77,11 @@ from namisync.workflows.inventory import (
     LocationCandidateState,
     VolumeResolutionState,
 )
-from namisync.workflows.database_maintenance import check_database_pair
+from namisync.workflows.database_maintenance import (
+    backup_database_pair,
+    check_database_pair,
+    restore_database_from_backup,
+)
 from namisync.workflows.models import PlanRequest
 from namisync.workflows.runtime import (
     BASELINE_KIND,
@@ -2255,4 +2260,363 @@ def test_queued_verify_reopens_and_refuses_new_clone_before_scan_or_hash(
     finally:
         release.set()
         assert dispatcher.shutdown().complete
+        runtime.close()
+
+
+_INTEGRITY_KINDS = {
+    IntegrityMode.BASELINE: BASELINE_KIND,
+    IntegrityMode.VERIFY: VERIFY_KIND,
+    IntegrityMode.REBASELINE: REBASELINE_KIND,
+}
+_RECORDED_DIGEST = b"\x02" * 16
+
+
+def _ledger_dump(ledger: Path) -> list[str]:
+    with closing(sqlite3.connect(ledger)) as connection:
+        return list(connection.iterdump())
+
+
+def _ledger_digest(ledger: Path, path: str) -> bytes | None:
+    with closing(sqlite3.connect(ledger)) as connection:
+        (digest,) = connection.execute(
+            "SELECT content_digest FROM inventory WHERE rel_path = ?", (path,),
+        ).fetchone()
+    return None if digest is None else bytes(digest)
+
+
+def _recording_then_pausing_runner(
+    mode: IntegrityMode, started: Event, release: Event,
+    calls: list[str], recorded: list[str],
+):
+    # Records and reports one item through the run's own recorder, then waits
+    # at a checkpoint for the pause; a second stretch must never reach it.
+    def runner(selection, context, recorder):
+        calls.append(mode.value)
+        if len(calls) > 1:
+            return _settle_all(selection, context, mode)
+        item = selection.pending[0]
+        stat = item.expected_stat
+        assert stat is not None
+        attestation = Attestation(
+            ContentEvidence(
+                "xxh3_128", _RECORDED_DIGEST, stat.size,
+                Provenance.READBACK_ATTESTED, NOW,
+            ),
+            stat,
+        )
+        assert recorder.record_integrity(
+            IntegrityRecordCommand(
+                mode, item.item_id, item.row_id, item.location_id,
+                item.rel_path_key, item.scope_token, item.expected_state,
+                stat, item.baseline, attestation,
+                mode is IntegrityMode.VERIFY, False, item.invalidation,
+            )
+        ) is RecordDisposition.APPLIED
+        recorded.append(item.display_path)
+        selection.note_bytes_processed(stat.size)
+        context.run.emit(
+            IntegrityOutcome(
+                item_id=item.item_id,
+                row_id=item.row_id,
+                location_id=item.location_id,
+                path=item.display_path,
+                phase=mode.value,
+                result=(
+                    IntegrityResult.VERIFIED
+                    if mode is IntegrityMode.VERIFY and item.baseline is not None
+                    else IntegrityResult.BASELINED
+                ),
+            )
+        )
+        selection.mark_completed(item.item_id, stat.size)
+        started.set()
+        assert release.wait(2)
+        context.run.checkpoint()
+        raise AssertionError("pause checkpoint must stop the runner")
+
+    return runner
+
+
+def _integrity_request(mode: IntegrityMode, request_id: str, location_id: int) -> IntegrityRequest:
+    return IntegrityRequest(
+        request_id, mode, location_id=location_id,
+        selected_paths=("a.txt", "b.txt") if mode is IntegrityMode.REBASELINE else (),
+        accept_current_evidence=mode is IntegrityMode.REBASELINE,
+    )
+
+
+def _ledger_backup(runtime: LocalWorkflowRuntime) -> Path:
+    result = backup_database_pair(runtime.ledger_path, runtime.history_path, clock=FakeClock())
+    return next(backup.path for backup in result.backups if backup.role == "ledger")
+
+
+def _restore_ledger(runtime: LocalWorkflowRuntime, backup: Path, *, retry: bool = False):
+    deadline = monotonic() + 5.0
+    while True:
+        restored = restore_database_from_backup(
+            runtime.ledger_path, runtime.history_path, "ledger", backup,
+            clock=FakeClock(NOW + timedelta(seconds=1)),
+        )
+        if restored.restore is not None or not retry:
+            assert restored.restore is not None, restored.contract
+            return restored.restore
+        # A refused restore changes nothing; the closing observer still holds claims.
+        assert restored.contract.reason == "database-in-use", restored.contract
+        assert monotonic() < deadline, "the closed observer kept its claims"
+        sleep(0.01)
+
+
+def _assert_refused_resume(
+    record, mode: IntegrityMode, *, ledger: Path, dump_before: list[str],
+    scans_before: int, scanner: _Scanner, calls: list[str],
+) -> None:
+    result = record.result
+    assert result is not None
+    assert result.status is SessionState.FAILED
+    assert result.disposition is Disposition.RAN
+    assert result.error is not None
+    assert result.error.type_name == "IntegrityLedgerChanged", result.error
+    assert result.error.message == (
+        f"The ledger was replaced (restored or reset) while this {mode.value} "
+        "run was paused, so it cannot resume: the results it reported before "
+        "the pause belong to the replaced ledger, not the current one. Start a "
+        f"new {mode.value} run against the current ledger."
+    )
+    # Refused under the recorder's claim, through its open-failure path.
+    assert result.recording is RecordingStatus.DEGRADED
+    assert [
+        (issue.reason, (issue.detail or "").split(":")[0])
+        for issue in result.recording_issues
+    ] == [(TaskRecordingIssueReason.RECORDING_OPEN_FAILED, "IntegrityLedgerChanged")]
+    view = operation_result_view(result)
+    assert (view.filesystem, view.recording) == ("failed", "degraded")
+    assert view.error is not None and view.error.startswith("IntegrityLedgerChanged: ")
+    # Before any scan, ledger write or reuse of the saved progress.
+    assert calls == [mode.value]
+    assert len(scanner.calls) == scans_before
+    assert _ledger_dump(ledger) == dump_before
+
+
+@pytest.mark.parametrize(
+    "mode, backup_at",
+    [
+        (IntegrityMode.BASELINE, "before-run"),
+        (IntegrityMode.VERIFY, "before-run"),
+        (IntegrityMode.REBASELINE, "before-run"),
+        # A backup taken moments earlier, at the pause, restores the same
+        # content under a new instance: still refused.
+        (IntegrityMode.BASELINE, "at-pause"),
+    ],
+)
+def test_resume_refuses_integrity_progress_after_the_ledger_is_restored(
+    tmp_path: Path, mode: IntegrityMode, backup_at: str,
+) -> None:
+    started, release = Event(), Event()
+    calls: list[str] = []
+    recorded: list[str] = []
+    runtime, location_id, scanner = _mixed_integrity_runtime(
+        tmp_path,
+        {mode: _recording_then_pausing_runner(mode, started, release, calls, recorded)},
+    )
+    ledger = runtime.ledger_path
+    # Without a History observer, as with audit degraded at admission, the
+    # paused session holds no claim, so a restore can land.
+    dispatcher = Dispatcher(
+        _workflow_registry(runtime),
+        lock_provider=InProcessResourceLockProvider(),
+        clock=FakeClock(),
+    )
+    try:
+        if backup_at == "before-run":
+            backup = _ledger_backup(runtime)
+        session_id = dispatcher.submit(
+            _INTEGRITY_KINDS[mode], _integrity_request(mode, f"restored-{mode.value}", location_id),
+        )
+        assert started.wait(2)
+        assert dispatcher.pause(session_id).accepted
+        release.set()
+        paused = _wait_for(dispatcher, session_id, SessionState.PAUSED)
+        paused_instance = getattr(paused.checkpoint, "ledger_instance_id", None)
+        instance_before = stored_ledger_instance(ledger)
+        assert _ledger_digest(ledger, recorded[0]) == _RECORDED_DIGEST
+        if backup_at == "at-pause":
+            backup = _ledger_backup(runtime)
+
+        restore = _restore_ledger(runtime, backup)
+        assert restore.instance_id != instance_before
+        if backup_at == "before-run":
+            # The attestation the paused stretch recorded is not in the restored ledger.
+            assert _ledger_digest(ledger, recorded[0]) != _RECORDED_DIGEST
+        dump_before, scans_before = _ledger_dump(ledger), len(scanner.calls)
+        assert dispatcher.resume(session_id).accepted
+        record = _wait_for(dispatcher, session_id, SessionState.FAILED)
+
+        _assert_refused_resume(
+            record, mode, ledger=ledger, dump_before=dump_before,
+            scans_before=scans_before, scanner=scanner, calls=calls,
+        )
+        # Captured under the paused stretch's recorder claim.
+        assert paused_instance == instance_before
+        # Terminal: no checkpoint remains to resume into success.
+        assert record.checkpoint is None
+        assert not dispatcher.resume(session_id).accepted
+    finally:
+        release.set()
+        assert dispatcher.shutdown().complete
+        runtime.close()
+
+
+class _FailingAfterOutcomeObserver:
+    # Delegates to the runtime's observer until an integrity outcome arrives.
+    def __init__(self, observer) -> None:
+        self._observer = observer
+
+    def on_event(self, envelope):
+        if isinstance(envelope.body, IntegrityOutcome):
+            raise OSError("history write failed")
+        return self._observer.on_event(envelope)
+
+    def flush(self) -> None:
+        self._observer.flush()
+
+    def finalize(self, result):
+        return self._observer.finalize(result)
+
+    def close(self) -> None:
+        self._observer.close()
+
+
+def test_resume_refuses_integrity_progress_after_audit_failed_and_the_ledger_was_restored(
+    tmp_path: Path,
+) -> None:
+    mode = IntegrityMode.BASELINE
+    started, release = Event(), Event()
+    calls: list[str] = []
+    recorded: list[str] = []
+    runtime, location_id, scanner = _mixed_integrity_runtime(
+        tmp_path,
+        {mode: _recording_then_pausing_runner(mode, started, release, calls, recorded)},
+    )
+    ledger = runtime.ledger_path
+    backup = _ledger_backup(runtime)
+
+    def failing_observer(record):
+        observer = runtime.audit_observer(record)
+        return None if observer is None else _FailingAfterOutcomeObserver(observer)
+
+    dispatcher = Dispatcher(
+        _workflow_registry(runtime),
+        lock_provider=InProcessResourceLockProvider(),
+        clock=FakeClock(),
+        audit_observer_factory=failing_observer,
+    )
+    try:
+        session_id = dispatcher.submit(
+            _INTEGRITY_KINDS[mode], _integrity_request(mode, "audit-failed", location_id),
+        )
+        assert started.wait(2)
+        assert dispatcher.pause(session_id).accepted
+        release.set()
+        _wait_for(dispatcher, session_id, SessionState.PAUSED)
+        # The audit pump closed the failed observer, releasing both claims,
+        # while the session lives on paused.
+        _restore_ledger(runtime, backup, retry=True)
+        dump_before, scans_before = _ledger_dump(ledger), len(scanner.calls)
+        assert dispatcher.resume(session_id).accepted
+        record = _wait_for(dispatcher, session_id, SessionState.FAILED)
+
+        _assert_refused_resume(
+            record, mode, ledger=ledger, dump_before=dump_before,
+            scans_before=scans_before, scanner=scanner, calls=calls,
+        )
+        assert record.result.audit is RecordingStatus.DEGRADED
+    finally:
+        release.set()
+        assert dispatcher.shutdown().complete
+        runtime.close()
+
+
+def test_integrity_ledger_check_precedes_the_scan_and_saved_progress(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    runtime, location_id, scanner = _mixed_integrity_runtime(tmp_path, {})
+    reached: list[str] = []
+    monkeypatch.setattr(
+        inventory_workflow, "_register_and_scan",
+        lambda *args, **kwargs: reached.append("scan"),
+    )
+    monkeypatch.setattr(
+        inventory_workflow, "_integrity_rows",
+        lambda *args, **kwargs: reached.append("saved progress"),
+    )
+    try:
+        rows = runtime.list_inventory(location_id)
+        prepared = runtime.prepare_verify(
+            IntegrityRequest("placement-binding", IntegrityMode.VERIFY, location_id=location_id)
+        )
+        saved = tuple(f"{row.location_id}:{row.row_id}" for row in rows)
+        request = IntegrityWorkflowRequest(
+            request_id="placement",
+            binding=prepared.checkpoint.binding,
+            mode=IntegrityMode.VERIFY,
+            selection_item_ids=saved,
+            completed_bytes=((saved[0], 7),),
+            processed_bytes=7,
+            bytes_total_high_water=14,
+            refresh_generation=1,
+            ledger_instance_id="0" * 32,
+        )
+        dump_before, scans_before = _ledger_dump(runtime.ledger_path), len(scanner.calls)
+        session = runtime.open_verify(request)
+
+        result = session.run(RunContext(lambda _event: None, lambda: None))
+
+        assert reached == []
+        assert len(scanner.calls) == scans_before
+        assert _ledger_dump(runtime.ledger_path) == dump_before
+        assert result.status is SessionState.FAILED
+        assert result.error is not None
+        assert result.error.type_name == "IntegrityLedgerChanged"
+        assert result.items == ()
+    finally:
+        runtime.close()
+
+
+def test_integrity_ledger_instance_is_read_under_the_recorder_claim(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def pause_after_selection(selection, context, recorder):
+        del selection, context, recorder
+        raise PauseRequested("capture continuation")
+
+    runtime, location_id, _scanner = _mixed_integrity_runtime(
+        tmp_path, {IntegrityMode.VERIFY: pause_after_selection},
+    )
+    read = inventory_workflow._ledger_instance
+    attempts: list[str] = []
+
+    def replace_then_read(deps) -> str:
+        # A restore landing at the read must already be refused.
+        try:
+            replace_ledger_instance(runtime.ledger_path)
+            attempts.append("replaced")
+        except DatabaseInUse:
+            attempts.append("refused")
+        return read(deps)
+
+    monkeypatch.setattr(inventory_workflow, "_ledger_instance", replace_then_read)
+    try:
+        prepared = runtime.prepare_verify(
+            IntegrityRequest("under-claim", IntegrityMode.VERIFY, location_id=location_id)
+        )
+        assert prepared.checkpoint.ledger_instance_id is None
+        session = runtime.open_verify(prepared.checkpoint)
+        with pytest.raises(PauseRequested, match="capture continuation"):
+            session.run(RunContext(lambda _event: None, lambda: None))
+
+        assert attempts == ["refused"]
+        assert session.snapshot().ledger_instance_id == stored_ledger_instance(
+            runtime.ledger_path
+        )
+    finally:
         runtime.close()

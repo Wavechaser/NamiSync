@@ -927,6 +927,26 @@ own database, and the pair operation supplies anything that needs both.
     restore by rewriting the id under the ledger's exclusive claim:
     `tests/test_bridge_resume.py` (start, paused execute and verify resumes of
     a run admitted without an observer, the under-claim check) and `tests/interfaces/web/test_drain.py`.
+- A paused integrity session (baseline, verify, rebaseline) records the ledger
+  instance its saved progress belongs to (user decision, 2026-11-26). Each
+  stretch reads the instance right after its `LedgerRecorder` takes the
+  ledger's shared claim, and the continuation keeps it beside the saved
+  selection and completed items; a run with no saved progress yet keeps none
+  and compares nothing. On resume a different instance is refused
+  at that same point, before the inventory scan, any ledger write or reuse of
+  the saved progress, through the recording-open-failure path: `FAILED+RAN`,
+  recording degraded, typed `IntegrityLedgerChanged` (“The ledger was replaced
+  (restored or reset) while this baseline run was paused, so it cannot resume:
+  the results it reported before the pause belong to the replaced ledger, not
+  the current one. Start a new baseline run against the current ledger.”).
+  Restore always issues a new instance, so a restore from a backup taken
+  moments earlier is refused too. The workflow holds no claim across the
+  pause, so restore stays available unless a healthy History observer holds
+  its claims. Items reported before the pause stay in the
+  session's terminal record (the dispatcher accumulates them across stretches),
+  under the failed status and this message. Inventory does not pause. Tests:
+  the restored-ledger, audit-failed, placement and under-claim cases in
+  `tests/test_inventory_runtime.py`, with a real in-place restore.
 
 ### Migration
 
@@ -1369,13 +1389,11 @@ records are still being written to either database, in any process.
   admitted with degraded audit, and a session whose audit degraded after
   admission (the audit pump then closes its observer, releasing both claims,
   while the session lives on) hold neither claim, also while paused. For
-  them only sync commitments check the ledger instance at start and resume
-  ([above](#ledger-instance-and-ids)). Integrity continuations (baseline,
-  verify, rebaseline; inventory does not pause) do not: a paused integrity
-  session holding no claim that straddles a restore reports its carried items
-  as done against the replacement ledger. That is an open known limit.
-  Refusing maintenance by naming such waiting work arrives with the Data page
-  (M2-B3).
+  them sync commitments check the ledger instance at start and resume, and
+  integrity continuations on resume ([above](#ledger-instance-and-ids)), so
+  work that straddles a restore is refused rather than resumed against the
+  replacement ledger. Refusing maintenance by naming such waiting work arrives
+  with the Data page (M2-B3).
 
 ## Data Protection
 

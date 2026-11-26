@@ -727,7 +727,10 @@ handoff so it never shows stale/empty or falsely complete state during work.
 Baseline, verify, and rebaseline register pause support. Their continuation
 retains the exact admitted candidate ids plus completed ids/bytes; resume
 freshly inventories and guards those remaining rows without adding a newly
-appeared row. Inventory and plan register pause unsupported and remain
+appeared row. It also retains the ledger instance read under the recorder
+claim that saved them; resume compares it right after opening its recorder,
+before the scan, so progress from a replaced ledger is refused
+([DATABASE](DATABASE.md#ledger-instance-and-ids)). Inventory and plan register pause unsupported and remain
 cooperatively cancelable. The production interface registry includes these
 workflow kinds. The CLI reaches standalone and reviewed-sync activities through
 the shared service; deferred Verify copied derives successful target paths
