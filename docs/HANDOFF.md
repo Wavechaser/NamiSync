@@ -1,12 +1,54 @@
-# Latest session — M2-A4 third review round, 2026-11-27
+# Latest session — M2-A4 closure review, 2026-11-27
 
-The five findings of the third M2-A4 review and the four items the second
-round left open are fixed. Work is on `milestone2`; nothing is pushed. M2-A1
-to M2-A4 are complete and M2-A5 is the next row, still proposed.
-[M2_PLAN](M2_PLAN.md)'s A4 row holds the decisions and what is open;
-[DATABASE](DATABASE.md#data-protection) owns the behavior.
+**A4 is blocked at `9bfc6792`.** The previous nine findings are fixed, but
+inventory can still be admitted during a History restore. M2-A5 is the next
+proposed row. [M2_PLAN](M2_PLAN.md) records the A4 closure criteria and
+[DATABASE](DATABASE.md#data-protection) owns the maintenance contract.
 
-## Changes
+## Closure blocker
+
+After inventory preparation and immediately before observer admission, pause a
+child-process `restore history` inside SQLite's copy transaction. Keep the
+restore paused until inventory returns. The result depends on the ledger used
+by the restore:
+
+| Restore paths | Observed inventory result |
+| --- | --- |
+| Same ledger and History | The dispatcher admitted the run. The ledger recorder then hit the claim. Inventory reported `disposition=ran`, degraded audit and exit `4`. |
+| Different ledger, same History | Inventory completed its refresh with `ledger=ok`, degraded audit and exit `7` while restore still held the claims. |
+
+`LocalWorkflowRuntime._open_audit_observer` opens the History store before
+`_stamped_observer` takes the shared claims. The cold History open during
+restore raises `DatabaseAdmissionError`, which the dispatcher handles as an
+ordinary audit failure. Take both shared claims, ledger first, before opening
+either database for the observer. Closure requires both cases above to exit
+`3` with the maintenance retry message before a session is admitted.
+
+## Two lower-priority findings
+
+- Three concurrent inventories on a healthy pair reproduced the exit `7`
+  seen in the previous round. Of 105 installed-CLI runs, 102 succeeded and
+  three reported degraded audit. In a separate traced run, the **ledger**
+  changed during cold validation of its instance ID. The CLI directed the
+  user to check the **History** path or access. Both databases checked healthy
+  after the 105 runs.
+- On first use, selecting `nested.db` as the ledger and
+  `nested.db/history.db` as History created a directory at the ledger main
+  path and left both claim files. Inventory then exited `4` with
+  `inconsistent-pair`. Reject a main used as the other main's parent during
+  path validation, before creating directories.
+
+## Closure review verification
+
+595 focused tests passed, including first-use sync resume after restore,
+migration, pair completion, restore interruption, lineage and Inventory
+frontend regressions. All 13 import contracts held. The installed CLI refused
+a claim-path overlap before file creation, retained three backups per role
+after four backups, restored each role and checked the resulting pair healthy.
+The full ordinary suite and headed desktop journey were not rerun in this
+review. Disposable review fixtures were removed.
+
+## Previous round's changes
 
 - `d07cb246`: the dispatcher closes the audit observer when the event hub
   refuses its configuration.
@@ -31,7 +73,7 @@ to M2-A4 are complete and M2-A5 is the next row, still proposed.
   and work started during a restore's copy, exit `3` with the claim's retry
   message.
 
-## Verification
+## Previous round's verification
 
 - Ordinary suite on `0ce55b6f`: 7392 passed, 4 skipped, 35 deselected, with
   the seven known interpreter-bound failures; `lint-imports` 13 kept.
@@ -82,7 +124,8 @@ to M2-A4 are complete and M2-A5 is the next row, still proposed.
   - The process that created the pair can itself be told to retry when a
     later one holds the claims for its own look.
   - Three `inventory` commands at once on an existing pair: 2 of 40 rounds
-    had one exit `7`, "History recording is degraded". Not investigated.
+    had one exit `7`, "History recording is degraded". The closure review
+    above reproduced this and traced one occurrence.
 - An ordinary failed or canceled integrity run now also shows ledger states
   on its rows, with the run's result in Details; this is wider than the
   replaced-ledger case and is intended.
