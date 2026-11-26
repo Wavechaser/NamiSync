@@ -530,33 +530,69 @@ This table applies §2.5 to existing guard families. It sets target posture;
 
 #### 2.5.4 Migrating a released database
 
-v0.1.0 was not designed to be migrated. Its migration must work and stay
-simple: strong against data loss, accidents and NamiSync's own faults, with no
-defense or provision built for an unlikely v0.1.0-only state that M2 may tear
-down. A finding about migrating a v0.1.0 database is decided by the first
-question below that it answers yes (user decision, 2026-11-25):
+Migration is built for the databases NamiSync will release from M2 on. The
+migration of a v0.1.0 database is a one-time import that runs on the same
+engine (user decisions, 2026-11-25 and 2026-11-26). The two have different
+postures.
 
-1. **Can it lose, corrupt or misattribute data with no backup to recover
-   from, or advise the user to destroy data that is fine?** Fix it. These are
-   the engine's contracts.
-2. **Is it reachable by running v0.1.0 or M2 normally plus one plausible
-   accident**, such as power loss, a full disk, a killed process, a second
-   instance or a transient I/O error? Fix it and keep it under test.
-3. **Is the cause in shared code that later migrations also run through?** Fix
-   it in proportion, even when a v0.1.0 case found it.
-4. **Otherwise**, when it needs someone to move or edit files by hand and the
-   worst outcome is a migrated database with its backup beside it, or a wrong
-   message that destroys nothing: leave it. It is a
-   `disclosed-capability-limit` with no defense, no v0.1.0-only provision and
-   no further test.
+**Migrating an M2 or later database** is held to the hard-wall standard. Every
+future step meets these requirements, and a finding against one is fixed, not
+triaged. [DATABASE](DATABASE.md#schema-evolution) owns the mechanisms.
 
-[DATABASE](DATABASE.md#migration-limits) lists the limits left under question
-4; that list is their disposition. Work deferred to a later checkpoint is not
-such a limit and stays with [M2_PLAN](M2_PLAN.md).
+- The source describes itself: its role, schema version and format versions,
+  and, for the pair, the ledger's instance id with the stamp on each History
+  run. A step never infers what a database is or which ledger its runs belong
+  to.
+- A step reads and writes only its own database. Anything that needs both
+  databases belongs to the pair operation.
+- A verified backup is published first. Each database migrates in one
+  transaction, under both exclusive maintenance claims, and a process killed
+  at any point leaves the old or the new database.
+- A newer database is refused. A released database is never reset.
+- Every released version has a saved fixture and a registered step.
 
-Once M2 databases describe themselves, supported inputs are an operational
-rule, and the engine is source-independent with thin steps, robustness belongs
-in the format rather than in the migrator.
+**Importing a v0.1.0 database** is best effort on those rails. v0.1.0 was not
+designed to be migrated and was used by few people on limited data.
+
+- The supported input is the pair as v0.1.0 left it, in place, migrated by one
+  operation. Only that path has tests beyond the engine's own.
+- The import keeps what the engine gives every migration: no loss without a
+  backup, no half-migrated database, no migration under a writer, and no
+  advice to destroy data that is fine.
+- Where v0.1.0 did not record a fact a decision needs, the import takes the
+  conservative reading and says so. It builds no evidence to decide better.
+  A v0.1.0 History's runs are stamped with a ledger only when the same
+  operation migrated that ledger; in every other case they stay unstamped and
+  show as belonging to an earlier ledger.
+- An accident during the import, such as power loss, a full disk or a killed
+  process, must leave the data safe and the pair usable. Losing a v0.1.0-only
+  convenience, such as old runs joining the ledger, is an accepted limit.
+
+**Footprint.** Knowledge of v0.1.0 lives in three places: the registered steps
+from its two schema versions, the classifier that recognizes its released
+topology, and its fixture. No row, column, constraint value, lineage kind,
+public type or admission branch that exists only for v0.1.0 outlives those
+steps. A fact the pair operation needs across the two databases is passed in
+memory. An exception needs a user decision recorded here. Ending support for
+v0.1.0 is then the removal of those three things; whether to keep it is
+decided at the first schema change after M2.
+
+A finding about importing a v0.1.0 database is decided by the first question
+below that it answers yes:
+
+1. **Can it lose or corrupt data with no backup to recover from, or advise the
+   user to destroy data that is fine?** Fix it.
+2. **Is the cause in shared code that later migrations also run through?** Fix
+   it at the standard for M2 and later databases, even when a v0.1.0 case
+   found it.
+3. **Would the fix leave anything behind that the footprint rule excludes?**
+   Take the conservative reading instead of the fix.
+4. **Otherwise** leave it. It is a `disclosed-capability-limit` with no
+   defense, no v0.1.0-only provision and no further test.
+
+[DATABASE](DATABASE.md#migration-limits) lists the limits left under questions
+3 and 4; that list is their disposition. Work deferred to a later checkpoint
+is not such a limit and stays with [M2_PLAN](M2_PLAN.md).
 
 ### 2.6 Reopen triggers
 
