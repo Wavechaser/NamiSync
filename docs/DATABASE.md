@@ -43,7 +43,11 @@ Only a stable confirmed unsupported
 database — a pre-release version or contract id, missing or
 mismatched metadata, an incomplete or poisoned topology, an empty or
 markerless SQLite file — directs the user to close NamiSync and
-archive or delete both database mains and all sidecars together. Startup never
+archive or delete that database main and its sidecars. Both databases are
+named only when both are unsupported; beside a current or supported older
+peer, the direction names only the unsupported database and its path, says to
+keep the peer, and says that the next start creates a new one
+([Migration](#migration)). Startup never
 repairs or deletes artifacts. A standalone read-only history command may open
 one current history database without creating or requiring its ledger peer; it
 still validates role, version, formats and complete topology through the shared
@@ -388,9 +392,11 @@ Rollback covers ordinary exceptions,
 incomplete cleanup carries the coordinated reset direction. It never invokes
 the destructive development reset. A crash-shaped one-main pair is
 `incomplete`, and the next start creates the missing database. An orphan
-sidecar, an empty/unversioned
-file, or a role/version-marker mismatch is refused with the coordinated
-manual-reset direction and no mutation.
+sidecar or a `-journal` is refused as `inconsistent-pair` with direction to
+preserve the files for inspection, and a database of another role as
+`<role>-wrong-role`; neither gets reset advice. Only an empty or unversioned
+file, or unsupported metadata, topology or version, is refused with the
+manual-reset direction ([Migration](#migration)). None of these mutates.
 
 `repositories.py` returns immutable inventory, run, and `MappingSnapshot`
 values. Canonical path, file-identity, and canonical positive-decimal row-ID
@@ -932,11 +938,19 @@ reads, such as standalone `history`, refuses an older database with direction
 to start NamiSync once.
 
 When one role needs a reset, pair classification still classifies the other
-before it answers. A newer database or a wrong role there is reported in
-preference to the reset, because the reset direction tells the user to discard
-both databases. The role that needed the reset is then read once more, and the
-reset is returned only if it still needs it; otherwise the whole
-classification repeats (bounded, ending in `database-busy`).
+before it answers. A newer database or a wrong role there (or a ledger
+backup in place, damage, or a read failure) is reported in preference to the
+reset, because such a database cannot be judged usable. Each role that needed
+the reset is then read once more, and the reset is returned only if it still
+needs it; otherwise the whole classification repeats (bounded, ending in
+`database-busy`). Both needing it gets the direction to discard both. One
+needing it beside a peer validated as current or older gets reason
+`<role>-contract` with a direction (`reset_direction` and `guidance`) naming
+only that database's path and sidecars, to keep the peer's path as it is, and
+what follows: the pair is then [incomplete](#one-database-missing), so the
+next start or sync or inventory command creates a new one (a new ledger
+leaves the History's runs belonging to an earlier ledger; an older peer is
+updated first), or `namisync restore <role> <backup file>` replaces it.
 
 The CLI migrates only after the command's own roots and `--path` values are
 admitted with every database outside the roots (`database_placement_admitted`, which opens no

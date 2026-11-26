@@ -47,10 +47,10 @@ _INSTANCE_ID = re.compile("[0-9a-f]{32}")
 MAX_HISTORY_PHASE_NAME_BYTES = 1_024
 MAX_HISTORY_ERROR_TYPE_BYTES = 1_024
 MAX_HISTORY_ERROR_MESSAGE_BYTES = 1_024
+# One database's own refusal: whether its peer goes too is the pair's decision.
 _RESET_DIRECTION = (
-    "Close every NamiSync process, then archive or delete both database "
-    "main files and all of their -wal, -shm, and -journal sidecars "
-    "together before restarting."
+    "Close every NamiSync process, then archive or delete this database main "
+    "file and all of its -wal, -shm, and -journal sidecars before restarting."
 )
 
 

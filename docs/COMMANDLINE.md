@@ -76,8 +76,12 @@ The current databases are ledger v5 and history v9 ([DATABASE](DATABASE.md#persi
 Opening any ledger v1-v3 database, any history v1-v7 database, a v4/v8 file
 with a pre-release contract id, or a current-version file with missing or
 mismatched metadata fails before schema mutation with an instruction to close
-NamiSync and manually archive or delete **both** local database mains and all
-SQLite sidecars, then rerun the command. A database written by a newer
+NamiSync and manually archive or delete that database main and its SQLite
+sidecars, then rerun the command. Beside a database that validates as current
+or 0.1.0, the instruction names only the unusable file's path, says to keep the other
+database's path as it is, and that the next sync or inventory command creates
+a new one, or `namisync restore <role> <backup file>` replaces it; only when
+both are unusable does it name **both** mains. A database written by a newer
 NamiSync is refused with direction to use that version, never with that
 instruction. A ledger given as `--history-database` or a history given as
 `--database` is refused with `<role>-wrong-role` and direction to check the two
@@ -296,8 +300,12 @@ PowerShell and shown unescaped unless they hold control characters.
   `ok`, `foreign-key-violations`, `missing`, `damaged`, `older`, `newer`,
   `wrong-role`, `unsupported`, `is-backup`, `unavailable`
   ([DATABASE](DATABASE.md#data-protection)). When every role reads fine alone
-  but the pair is not ready, a `Pair: <reason>.` line with the workflow's
-  guidance follows. A pair with no databases at all prints `No NamiSync
+  but the pair is not ready, or the pair needs a reset (`unsupported`), a
+  `Pair: <reason>.` line with the workflow's guidance follows; for a reset it
+  says what to archive or delete: both databases when both are unsupported;
+  otherwise only the unsupported one, by path, with direction to keep the
+  other present one or, if the other is missing, where it was looked for. A pair
+  with no databases at all prints `No NamiSync
   databases were found at <ledger> and <history>.` and a note on how they are
   created. Exit `0` for `ok` and `ok`, and for a pair with no databases; exit
   `4` when any role is anything else, `older`, `missing` and

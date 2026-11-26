@@ -507,8 +507,9 @@ def test_newer_role_refuses_pair_admission_without_reset_or_change(
 def test_reset_required_ledger_never_brings_reset_advice_to_a_newer_or_misplaced_history(
     tmp_path: Path, other: str,
 ) -> None:
-    # The reset direction says to discard both databases, so a ledger that
-    # needs it must not hide what the history beside it is.
+    # A ledger that needs a reset must not hide what the history beside it is:
+    # a newer or misplaced one is not usable, so the reset direction cannot
+    # keep it.
     data = tmp_path / "data"
     ledger = initialize_ledger(data / "ledger.db")
     history = (
@@ -544,12 +545,60 @@ def test_reset_required_ledger_never_brings_reset_advice_to_a_newer_or_misplaced
         name: value for name, value in _entries(data).items() if not name.endswith(".claim")
     } == before
 
-    # With an ordinary history beside it, the same ledger still gets its reset.
+    # With an ordinary history beside it, the same ledger still gets its reset,
+    # which keeps that history.
     history.unlink()
     initialize_history(history)
     contract = validate_database_pair(ledger, history)
     assert (contract.state, contract.reason) == (DatabasePairState.REFUSED, "ledger-contract")
-    assert contract.reset_direction is not None
+    assert f"the ledger database file {ledger.resolve()} and its" in contract.reset_direction
+    assert f"Keep the history database {history.resolve()} as it is" in contract.reset_direction
+
+
+def test_both_reset_verdicts_are_rechecked_before_the_both_files_direction(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Both need a reset when first read; History's marker is restored before
+    # the final recheck, so the direction to discard both must not be given.
+    data = tmp_path / "data"
+    ledger = initialize_ledger(data / "ledger.db")
+    history = initialize_history(data / "history.db")
+    markers = {}
+    for main in (ledger, history):
+        with closing(sqlite3.connect(main)) as connection:
+            with connection:
+                markers[main] = connection.execute(
+                    "SELECT key, value FROM schema_metadata WHERE key = 'format.numeric'"
+                ).fetchone()
+                connection.execute("DELETE FROM schema_metadata WHERE key = 'format.numeric'")
+    assert validate_database_pair(ledger, history).reset_direction == (
+        database_pair.DATABASE_RESET_DIRECTION
+    )
+
+    probe = database_pair.probe_database_file_contract
+    probed: list[bool] = []
+    history_path = history
+
+    def restoring_probe(path: Path, *, history: bool):
+        # The ledger's recheck, after both first reads: History is fixed now.
+        if not history and probed == [False, True]:
+            with closing(sqlite3.connect(history_path)) as connection:
+                with connection:
+                    connection.execute(
+                        "INSERT INTO schema_metadata VALUES (?, ?)", markers[history_path],
+                    )
+        probed.append(history)
+        return probe(path, history=history)
+
+    monkeypatch.setattr(database_pair, "probe_database_file_contract", restoring_probe)
+    contract = validate_database_pair(ledger, history)
+
+    assert (contract.state, contract.reason) == (DatabasePairState.REFUSED, "ledger-contract")
+    assert contract.reset_direction != database_pair.DATABASE_RESET_DIRECTION
+    # History's recheck saw the change and the classification repeated.
+    assert probed[:4] == [False, True, False, True] and len(probed) > 4
+    assert f"the ledger database file {ledger.resolve()} and its" in contract.reset_direction
+    assert f"Keep the history database {history.resolve()} as it is." in contract.reset_direction
 
 
 def test_reset_verdict_that_no_longer_holds_is_not_returned(

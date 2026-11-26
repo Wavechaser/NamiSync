@@ -1037,8 +1037,8 @@ def _check_meaning(role: str, state: str, has_problems: bool) -> str | None:
         )
     if state == "unsupported":
         return (
-            "This NamiSync cannot use this database; the lines above say what "
-            "was found. Keep its files."
+            "This NamiSync cannot use or update this database; the lines above "
+            "say what was found."
         )
     if state == "is-backup":
         return (
@@ -1094,8 +1094,11 @@ def _render_check(
         meaning = _check_meaning(check.role, state, bool(check.problems))
         if meaning is not None:
             print(f"  {meaning}", file=stdout)
-    if str(contract.state) != "ready" and not explained:
-        # Every role reads fine on its own, so nothing above explains the pair.
+    if str(contract.state) != "ready" and (
+        not explained or contract.reset_direction is not None
+    ):
+        # Every role reads fine on its own, so nothing above explains the
+        # pair; or the pair decides which databases a reset discards.
         usable = False
         print(f"Pair: {_safe(contract.reason)}.", file=stdout)
         print(_safe(contract.guidance or contract.reset_direction), file=stdout)

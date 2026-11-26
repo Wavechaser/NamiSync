@@ -527,7 +527,7 @@ def _assert_epoch_pair_refused_without_mutation(
         ):
             with pytest.raises(
                 SchemaResetRequired,
-                match="ledger v5 and history v9.*archive or delete both database main files",
+                match="ledger v5 and history v9.*archive or delete this database main file",
             ) as raised:
                 consumer(selected)
             assert "Close every NamiSync process" in str(raised.value)
@@ -538,7 +538,17 @@ def _assert_epoch_pair_refused_without_mutation(
     first = database_pair.validate_database_pair(ledger, history)
     assert first.state == "refused"
     assert first.reason == expected_reason
-    assert first.reset_direction == database_pair.DATABASE_RESET_DIRECTION
+    if len(refused_roles) == 2:
+        assert first.reset_direction == database_pair.DATABASE_RESET_DIRECTION
+    else:
+        # Beside a usable database only the refused one is to be discarded.
+        (role,) = refused_roles
+        refused = (ledger if role == "ledger" else history).resolve()
+        assert (
+            f"archive or delete the {role} database file {refused} and its"
+            in first.reset_direction
+        )
+        assert "both" not in first.reset_direction
     assert _snapshot(ledger, history) == before
     assert database_pair.validate_database_pair(ledger, history) == first
     assert _snapshot(ledger, history) == before
@@ -677,14 +687,15 @@ def test_current_markers_do_not_admit_or_repair_invalid_topology(
     repository = LedgerRepository if role == "ledger" else HistoryRepository
     initialize = initialize_ledger if role == "ledger" else initialize_history
 
-    with pytest.raises(SchemaResetRequired, match="archive or delete both database main files"):
+    with pytest.raises(SchemaResetRequired, match="archive or delete this database main file"):
         file_contracts.probe_database_file_contract(selected, history=role == "history")
     assert _snapshot(ledger, history) == before
     result = database_pair.validate_database_pair(ledger, history)
     assert result.state == "refused"
     assert result.reason == f"{role}-contract"
+    assert f"the {role} database file {selected.resolve()} and its" in result.guidance
     for consumer in (repository, initialize):
-        with pytest.raises(SchemaResetRequired, match="archive or delete both database main files"):
+        with pytest.raises(SchemaResetRequired, match="archive or delete this database main file"):
             consumer(selected)
         assert _snapshot(ledger, history) == before
 

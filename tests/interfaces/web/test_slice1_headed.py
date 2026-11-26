@@ -421,13 +421,15 @@ with sqlite3.connect(root / "history.db") as connection:
         )
         assert "database pair refused (history-contract)" in message
         guidance = message.casefold()
+        # Only History is unusable, so only History is to be discarded.
         for fragment in (
             "close every namisync process",
-            "archive or delete both database main files",
-            "sidecars together",
-            "restart",
+            "archive or delete the history database file",
+            "keep the ledger database",
+            "start namisync",
         ):
             assert fragment in guidance
+        assert "both" not in guidance
         assert all(suffix in message for suffix in ("-wal", "-shm", "-journal"))
         dismiss_ok_dialog(dialog)
         completed = wait_for_process(process, deadline=deadline)

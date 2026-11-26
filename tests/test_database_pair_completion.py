@@ -250,6 +250,86 @@ def test_a_lone_database_needing_a_reset_names_only_itself_and_where_the_other_w
     assert _files(tmp_path) == files
 
 
+def _discarding(guidance: str) -> list[str]:
+    """The sentences of a direction that tell the user to discard something."""
+
+    return [sentence for sentence in guidance.split(". ") if re.search("archive|delete", sentence)]
+
+
+@pytest.mark.parametrize("peer", ("current", "released"))
+@pytest.mark.parametrize("role", ("ledger", "history"))
+def test_a_reset_beside_a_usable_database_names_only_itself_and_keeps_the_other(
+    tmp_path: Path, role: str, peer: str,
+) -> None:
+    # A zero-byte main beside a healthy database (user report, 2026-11-26):
+    # following the direction must never discard the healthy one.
+    other = "history" if role == "ledger" else "ledger"
+    if peer == "current":
+        kept = (initialize_history if other == "history" else initialize_ledger)(
+            tmp_path / f"{other}.db"
+        ).resolve()
+    else:
+        kept = copy_released_role(tmp_path, history=other == "history").resolve()
+    unusable = (tmp_path / f"{role}.db").resolve()
+    unusable.touch()
+    ledger, history = (unusable, kept) if role == "ledger" else (kept, unusable)
+    files = _files(tmp_path)
+
+    contract = validate_database_pair(ledger, history)
+
+    assert (contract.state, contract.reason) == (DatabasePairState.REFUSED, f"{role}-contract")
+    guidance = contract.guidance
+    assert guidance == contract.reset_direction
+    discarding = _discarding(guidance)
+    assert len(discarding) == 1
+    assert f"the {role} database file {unusable} and its" in discarding[0]
+    assert str(kept) not in discarding[0] and "both" not in guidance
+    assert f"Keep the {other} database {kept} as it is." in guidance
+    # Only its contract was read, not its integrity: no claim about its health.
+    assert not re.search(r"\b(usable|healthy)\b", guidance)
+    assert f"once to create a new {role}" in guidance
+    assert ("earlier ledger" in guidance) is (role == "ledger")
+    assert ("written by NamiSync 0.1.0" in guidance) is (peer == "released")
+    assert f"namisync restore {role} <backup file>" in guidance
+    with pytest.raises(DatabasePairRefusedError) as raised:
+        ensure_database_pair(ledger, history)
+    assert guidance in str(raised.value)
+    assert _files(tmp_path) == files
+
+    # Following it: the unusable file archived, the next start creates a new one
+    # beside the kept database.
+    unusable.rename(tmp_path / "archived.db")
+    assert validate_database_pair(ledger, history).reason == f"{role}-missing"
+    upgraded = upgrade_database_pair(ledger, history, create=True)
+    assert upgraded.created == (CreatedDatabase(role, unusable),)
+    assert upgraded.contract.state is DatabasePairState.READY
+    if peer == "current":
+        assert kept.read_bytes() == files[kept.name]
+
+
+@pytest.mark.parametrize("peer", ("damaged", "is-backup"))
+def test_a_reset_beside_an_unusable_ledger_reports_the_ledger_and_discards_nothing(
+    tmp_path: Path, peer: str,
+) -> None:
+    from _db_fixtures import add_ledger_lineage, stored_ledger_instance
+
+    ledger = initialize_ledger(tmp_path / "ledger.db")
+    if peer == "damaged":
+        data = bytearray(ledger.read_bytes())
+        data[100:612] = b"\xa5" * 512
+        ledger.write_bytes(bytes(data))
+    else:
+        add_ledger_lineage(ledger, "backup-cut", stored_ledger_instance(ledger), NOW)
+    history = tmp_path / "history.db"
+    history.touch()
+
+    contract = validate_database_pair(ledger, history)
+
+    assert contract.reason == ("database-damaged" if peer == "damaged" else "ledger-is-backup")
+    assert contract.reset_direction is None
+    assert _discarding(contract.guidance) == []
+
+
 def test_upgrade_returns_a_fresh_or_ready_pair_unchanged_without_a_claim(tmp_path: Path) -> None:
     fresh_ledger, fresh_history = tmp_path / "fresh" / "ledger.db", tmp_path / "fresh" / "history.db"
     result = upgrade_database_pair(fresh_ledger, fresh_history, create=True)

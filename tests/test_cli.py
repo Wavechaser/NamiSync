@@ -1460,8 +1460,13 @@ def test_mutating_cli_refuses_mismatched_database_pair_read_only(
     assert result == EXIT_REFUSED
     assert (ledger.read_bytes(), history.read_bytes()) == before
     assert "Database pair refused: history-contract" in stderr.getvalue()
-    assert "archive or delete both database main files" in stderr.getvalue()
-    assert "-wal, -shm, and -journal sidecars together" in stderr.getvalue()
+    # Only History is unusable: the healthy ledger is kept.
+    assert (
+        f"archive or delete the history database file {history.resolve()} and its "
+        "-wal, -shm, and -journal sidecars"
+    ) in stderr.getvalue()
+    assert f"Keep the ledger database {ledger.resolve()} as it is" in stderr.getvalue()
+    assert "both" not in stderr.getvalue()
 
 
 def test_location_work_during_database_maintenance_reports_the_typed_refusal(

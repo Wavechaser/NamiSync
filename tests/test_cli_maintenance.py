@@ -582,6 +582,50 @@ def test_a_damaged_role_is_named_by_check_and_restore_sets_it_aside(
     assert _main(["check", *flags]).out == "ledger: ok\nhistory: ok\n"
 
 
+def _discarding(text: str) -> list[str]:
+    """The sentences of the output that tell the user to discard something."""
+
+    return [
+        sentence for line in text.splitlines() for sentence in line.split(". ")
+        if re.search("archive|delete", sentence)
+    ]
+
+
+def test_an_empty_history_beside_a_healthy_ledger_is_the_only_file_to_discard(
+    tmp_path: Path,
+) -> None:
+    # User report (2026-11-26): every command told the user to delete both.
+    ledger, history = _pair(tmp_path)
+    flags = _flags(ledger, history)
+    backup = _backup(ledger, history)["ledger"]
+    _unlink(history)
+    history.touch()
+    ledger, history = ledger.resolve(), history.resolve()
+    keep = f"Keep the ledger database {ledger} as it is"
+
+    checked = _main(["check", *flags])
+    assert (checked.code, checked.err) == (EXIT_FAILED, "")
+    assert "ledger: ok\nhistory: unsupported\n" in checked.out
+    assert "Pair: history-contract.\n" in checked.out and keep in checked.out
+    assert f"archive or delete the history database file {history} and its" in checked.out
+    assert "Keep its files" not in checked.out
+    assert all(str(ledger) not in sentence for sentence in _discarding(checked.out))
+
+    root = tmp_path / "root"
+    root.mkdir()
+    refused = _main(["inventory", str(root), *flags])
+    assert refused.code == EXIT_REFUSED
+    assert "Database pair refused: history-contract." in refused.err and keep in refused.err
+    assert all(str(ledger) not in sentence for sentence in _discarding(refused.err))
+
+    restored = _main(["restore", "ledger", str(backup), *flags])
+    assert (restored.code, restored.err) == (EXIT_SUCCESS, "")
+    assert "Note: the database pair is not ready yet (history-contract)." in restored.out
+    assert f"archive or delete the history database file {history} and its" in restored.out
+    assert keep in restored.out
+    assert all(str(ledger) not in sentence for sentence in _discarding(restored.out))
+
+
 def test_foreign_key_violations_are_refused_by_backup_and_restored_aside(tmp_path: Path) -> None:
     ledger, history = _pair(tmp_path)
     flags = _flags(ledger, history)

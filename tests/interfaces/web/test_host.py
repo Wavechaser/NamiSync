@@ -1937,6 +1937,45 @@ def test_startup_refuses_a_ledger_backup_copied_into_place_before_binding(
     } == before
 
 
+def test_startup_directs_discarding_only_an_empty_history_beside_a_healthy_ledger(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from namisync.db.schema import initialize_ledger
+
+    paths, order, _webview, _document, reports = _patch_primary(monkeypatch, tmp_path)
+    initialize_ledger(paths.ledger)
+    paths.history.touch()
+    monkeypatch.setattr(
+        host, "_create_service",
+        lambda actual: order.append("create_service") or _RecordedService(actual, order),
+    )
+    before = {
+        path.name: path.read_bytes() for path in paths.root.iterdir()
+        if path.is_file() and path.name.startswith(("ledger.db", "history.db"))
+        and not path.name.endswith(".claim")
+    }
+
+    result = run_desktop(paths, _identity(), startup_error=reports.append)
+
+    assert result == 1
+    labels = [entry[0] if isinstance(entry, tuple) else entry for entry in order]
+    assert "path_lease.bind_databases" not in labels
+    assert len(reports) == 1
+    assert "NamiSync database pair refused (history-contract)" in reports[0]
+    ledger, history = paths.ledger.resolve(), paths.history.resolve()
+    assert f"archive or delete the history database file {history} and its" in reports[0]
+    assert f"Keep the ledger database {ledger} as it is" in reports[0]
+    assert all(
+        str(ledger) not in sentence for sentence in reports[0].split(". ")
+        if "archive" in sentence or "delete" in sentence
+    )
+    assert {
+        path.name: path.read_bytes() for path in paths.root.iterdir()
+        if path.is_file() and path.name.startswith(("ledger.db", "history.db"))
+        and not path.name.endswith(".claim")
+    } == before
+
+
 def test_startup_finalizer_quiesces_registry_before_service_close() -> None:
     order: list[str] = []
     dispatcher = SimpleNamespace(

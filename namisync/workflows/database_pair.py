@@ -56,17 +56,28 @@ DATABASE_MIGRATION_DIRECTION = (
     "command, once to update it; a backup of each database it updates is kept "
     "beside that database."
 )
+# What the user is told about the other database once a missing one is created.
+_KEPT_BESIDE_NEW = {
+    "ledger": (
+        "the existing History is kept, and its runs are shown as belonging to an "
+        "earlier ledger."
+    ),
+    "history": "the existing ledger is kept.",
+}
 _DATABASE_MISSING_DIRECTION = {
     "ledger": (
         "The ledger database is missing. Start NamiSync, or run a sync or "
-        "inventory command, once to create a new one; the existing History is "
-        "kept, and its runs are shown as belonging to an earlier ledger."
+        f"inventory command, once to create a new one; {_KEPT_BESIDE_NEW['ledger']}"
     ),
     "history": (
         "The History database is missing. Start NamiSync, or run a sync or "
-        "inventory command, once to create a new one; the existing ledger is kept."
+        f"inventory command, once to create a new one; {_KEPT_BESIDE_NEW['history']}"
     ),
 }
+_OLDER_KEPT = (
+    " The existing {} was written by NamiSync 0.1.0 and is updated first; a "
+    "backup of it is kept beside it."
+)
 _SQLITE_SIDECAR_SUFFIXES = ("-wal", "-shm", "-journal")
 _ARTIFACT_NATIVE: ArtifactNative = WindowsArtifactNative()
 
@@ -201,7 +212,7 @@ def _validate_database_pair_once(
 
     evidence: list[DatabaseFileEvidence] = []
     older: list[str] = []
-    reset: tuple[str, Path, bool, DatabaseConnectionOwner | None] | None = None
+    reset: list[tuple[str, Path, bool, DatabaseConnectionOwner | None]] = []
     for role, path, is_history, database in (
         ("ledger", ledger, False, ledger_database),
         ("history", history, True, history_database),
@@ -209,9 +220,10 @@ def _validate_database_pair_once(
         try:
             role_evidence = _validate_role(path, history=is_history, database=database)
         except SchemaResetRequired:
-            # The reset direction covers both databases, so the other role is
-            # classified first: a newer or misplaced one must not be discarded.
-            reset = reset or (role, path, is_history, database)
+            # The other role is classified first: a newer or misplaced one is
+            # reported instead, and one that validates decides that only this
+            # database is discarded.
+            reset.append((role, path, is_history, database))
             continue
         except DatabaseNewerVersion as error:
             return _refused(f"{role}-newer", guidance=str(error))
@@ -226,20 +238,30 @@ def _validate_database_pair_once(
             evidence.append(role_evidence)
     for role_evidence in evidence:
         role_evidence.require_unchanged()
-    if reset is not None:
-        # The verdict was reached before the other role was read, and it
-        # advises discarding both, so it must still hold now.
-        role, path, is_history, database = reset
+    for role, path, is_history, database in reset:
+        # A verdict reached before the other role was read advises discarding
+        # this database, so it must still hold now.
         try:
             _validate_role(path, history=is_history, database=database)
         except SchemaResetRequired:
-            return _refused(f"{role}-contract", reset=True)
+            continue
         except (
             DatabaseMigrationRequired, DatabaseNewerVersion, DatabaseRoleMismatch,
             LedgerIsBackup,
         ):
             pass
         raise DatabaseArtifactsChanged(f"{role} database changed during validation")
+    if len(reset) == 2:
+        return _refused("ledger-contract", reset=True)
+    if reset:
+        # The other database was validated as current or supported older.
+        role = reset[0][0]
+        direction = _reset_one_direction(
+            role, ledger, history, peer_older=bool(older),
+        )
+        return DatabasePairContract(
+            DatabasePairState.REFUSED, f"{role}-contract", direction, direction,
+        )
     if older:
         return DatabasePairContract(
             DatabasePairState.MIGRATION_REQUIRED,
@@ -287,12 +309,32 @@ def _validate_lone_role(
         raise DatabaseArtifactsChanged(f"{other} database appeared during validation")
     guidance = _DATABASE_MISSING_DIRECTION[other]
     if older:
-        guidance += (
-            f" The existing {'History' if history else 'ledger'} was written by "
-            "NamiSync 0.1.0 and is updated first; a backup of it is kept beside it."
-        )
+        guidance += _OLDER_KEPT.format("History" if history else "ledger")
     return DatabasePairContract(
         DatabasePairState.INCOMPLETE, f"{other}-missing", None, guidance,
+    )
+
+
+def _reset_one_direction(
+    role: str, ledger: Path, history: Path, *, peer_older: bool,
+) -> str:
+    """Discard only ``role``'s database; the other was validated and is kept."""
+
+    path, other, other_path = (
+        (history, "ledger", ledger) if role == "history" else (ledger, "history", history)
+    )
+    direction = (
+        f"Close every NamiSync process, then archive or delete the {role} database "
+        f"file {path} and its -wal, -shm, and -journal sidecars. Keep the {other} "
+        f"database {other_path} as it is. Then start NamiSync, or run "
+        f"a sync or inventory command, once to create a new {role}; "
+        f"{_KEPT_BESIDE_NEW[role]}"
+    )
+    if peer_older:
+        direction += _OLDER_KEPT.format("History" if other == "history" else "ledger")
+    return direction + (
+        f" With a backup made by namisync backup, namisync restore {role} <backup "
+        f"file> replaces the {role} instead and keeps the unusable files beside it."
     )
 
 

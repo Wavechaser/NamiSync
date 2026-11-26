@@ -379,7 +379,7 @@ def test_superseded_history_versions_are_refused_without_mutation(
 
     with pytest.raises(
         SchemaResetRequired,
-        match="history v9.*archive or delete both database main files",
+        match="history v9.*archive or delete this database main file",
     ):
         initialize_history(path)
 
@@ -604,7 +604,7 @@ def test_transitional_current_version_without_contract_is_refused_read_only(
 
     with pytest.raises(
         SchemaResetRequired,
-        match="archive or delete both database main files",
+        match="archive or delete this database main file",
     ):
         initializer(path)
 
@@ -1050,7 +1050,7 @@ def test_read_repositories_refuse_incompatible_contracts_without_mutation(
     before = _sqlite_artifact_snapshot(path)
 
     with pytest.raises(
-        SchemaResetRequired, match="archive or delete both database main files"
+        SchemaResetRequired, match="archive or delete this database main file"
     ):
         repository_type(path)
 
