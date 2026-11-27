@@ -189,13 +189,63 @@ Checkpoints:
     - At the first post-M2 schema step, the stamp condition ("the ledger
       migrated in this call") must be narrowed to the 0.1.0 step.
   - **Deferred:** five items to M2-B3 and one to M2-B2, recorded in those rows.
-- **M2-A5 Session progress and hold reason** (proposed). Sessions carry progress
-  and hold reason, and the server derives every capability from them. Includes
-  the `PENDING`-to-held edge. Consumer: Pause all and Resume all, pulled forward
-  from Task rail batch actions so the contract ships with a real user. Holds act
-  on today's in-process queue; nothing is persisted, and queue ownership is
-  B2's. Closes on: transition tests (a held session never starts), Pause all
-  atomic against the scheduler, and Resume all's admission order.
+- **M2-A5 Session progress and hold reason** (accepted 2026-11-27). Sessions
+  carry progress and the server derives can pause, can resume and can stop
+  from it. Includes the `PENDING`-to-held edge. Consumer: Pause all and Resume
+  all, pulled forward from Task rail batch actions so the contract ships with
+  a real user. Holds act on today's in-process queue; nothing is persisted,
+  and queue ownership is B2's.
+  - **User decisions (2026-11-27).**
+    - A held session is `PAUSED` with no start time, reached by one new edge,
+      `PENDING` to `PAUSED`, which only Pause all uses. No `HELD` state: a new
+      `SessionState` member is an event and database format change. History
+      shows a held session as paused and never started.
+    - Progress has two values, none and a saved continuation, derived from
+      the start time; unknown waits for its producer (B5, C2). Hold reason
+      gets no type until B5 adds its second value, the predecessor; until
+      then held by the user is exactly `PAUSED`, and resume releases it
+      through one predicate B5 narrows. Safe to close waits for its
+      consumers (B5, B6).
+    - Pause all is a point-in-time operation, not a mode: sessions admitted
+      after it run normally and stay ahead on Resume all.
+    - The desktop consumer is one bounded bridge command, Pause all and
+      Resume all buttons in the rail header with a count notice, pages that
+      read the server's capabilities, and held tasks labelled not started.
+      The rail menu, Stop all, batch Close and the filter stay in B6.
+    - A resume refused at preflight keeps ending `FAILED+RAN`, also under
+      Resume all; returning the run to paused is desirable, not required,
+      and is deferred ([Unowned](#unowned)).
+  - **Outcomes, one reviewed commit each, in order:** the core edge and
+    progress; the dispatcher's rule that a withdrawn pending worker retires
+    without running, and `pause_all`; `resume_all`; the server side (service,
+    task port, drain, command and task snapshot v4 with the page's
+    validator); the rail buttons and page labels; the row's closing
+    documents.
+  - **Preserved:** no event or database format change
+    (`tests/core/test_format_vectors.py` untouched); the control matrix is
+    unchanged, and pausing one pending session stays illegal; resume never
+    preempts; custody is released only by the generation that took it; the
+    dispatcher stays domain-blind; 13 import contracts.
+  - **Gate:** a queued session held behind a blocker never runs and is never
+    opened; a session held while waiting for its lease, or after `open`
+    before `RUNNING`, retires without running and frees the resource; Pause
+    all is atomic (when A's pausing event arrives, B queued on A's resource
+    is already held, and B does not start when A releases it); a resumed run
+    waiting in pending returns to paused with its continuation and later
+    resumes as ran; Resume all's order (S4, admitted during the hold, then
+    S1 to S3); cancel from held ends `CANCELED+UNRUN`; the result counts; the
+    interface capabilities agree with the control matrix for every state;
+    the ordinary suite and `lint-imports`; one headed rail journey.
+    Dispatcher tests wait on events, not deadlines.
+  - **Non-goals:** a `HELD` state, a hold-reason type, the predecessor wait,
+    unknown progress, safe to close, holding one session, Stop all, batch
+    Close, the rail menu and filter, persistence, queue ownership, refused
+    resume, and CLI pause or resume.
+  - **Assumptions for review:** no consumer misreads a never-started
+    `PAUSED` session as having a continuation; holding every publication
+    lock at once cannot deadlock or stall behind a slow audit emit; every
+    registered kind's `open` can be repeated after a discarded invocation;
+    every desktop session belongs to a rail task.
 - **M2-A6 Shared review surface** (proposed). Plan and Inventory render through
   one review component on the windowed table substrate, settling the switcher
   label drift. Includes the parity test against documented allowed differences,
@@ -204,11 +254,47 @@ Checkpoints:
 - **M2-A7 One table component** (proposed). Recent pairs and the batch table move
   onto the same component, so one table family remains. Depends on A6. Closes on:
   no native-table family left, with row-action behavior tested once in the component.
-- **M2-A8 Physical-disk scheduling** (proposed). Sessions on one spinning disk run
-  one at a time. Includes the per-start key callback, the unreadable-key
-  fallback and the seek-penalty read; drive-type notices and estimates ride
-  along. Depends on A2's volume query spike. Closes on: two partitions of the HDD
-  fixture serialize, SSD concurrency is unchanged, and unreadable keys fall back.
+- **M2-A8 Physical-disk scheduling** (accepted 2026-11-27; after A5, since both
+  change the scheduler). Sessions on one spinning disk run one at a time in
+  the process. Includes the per-start key reader, the unreadable-key fallback
+  and the seek-penalty read; drive-type notices and estimates ride along.
+  Depends on A2's volume query spike.
+  - **User decisions (2026-11-27).** Disk keys serialize sessions within one
+    process only: a desktop session and a CLI run on two partitions of one
+    disk still overlap, and volume custody stays the only cross-process
+    lock. The quiet advisory for an unreadable key moves to the drive-type
+    notices ride-along, which needs the same notice surface. The fixture is
+    disk 0, a SATA HDD carrying `J:` and a 4 GB `M:` made for this row.
+  - **Design.** A registration may supply a reader returning opaque
+    scheduling keys, kept apart from custody resources and never stored.
+    The scheduler calls it outside its lock at each start attempt and
+    launches only on a reading from the current pass; keys join the waiting
+    sets, so per-resource order holds. A reader that fails or answers badly
+    means no keys, never a refusal. The native reads (volume extents, bus
+    type, seek penalty) live in core; a disk counts as spinning unless it is
+    a non-USB disk that reports no seek penalty.
+  - **Outcomes, one reviewed commit each, in order:** core disk topology;
+    the dispatcher contract and scheduler (inert until a reader is
+    supplied); workflow and service wiring with the reference-machine test;
+    the evidence record.
+  - **Gate:** unit tests with injected readers (equal keys serialize in
+    admission order, disjoint keys overlap, a later session on another
+    partition cannot overtake, resume reads again, failure falls back, keys
+    are released on pause, cancel and failure, keys never reach records or
+    events, a hold during a blocked read launches nothing); on the
+    reference machine through real reads, `J:` and `M:` never run together
+    while two NVMe roots do, and an injected unreadable read falls back; one
+    real inventory pair on `J:\NamiSyncSpike\stop-latency` and a seeded
+    folder of at most 64 MB on `M:`, kept as evidence; the ordinary suite
+    and `lint-imports`.
+  - **Non-goals:** cross-process disk serialization, the advisory, notices,
+    estimates and parallel listing, filling `incurs_seek_penalty`, D-segment
+    registrations, nested virtual disks and Storage Spaces, network roots,
+    a reader deadline, and any speed claim.
+  - **Assumptions for review:** the opens and queries never block for long
+    (if one is shown, each read gets a daemon thread and a short deadline);
+    partitions of one disk report one disk number; a volume GUID captured at
+    admission stays valid across letter changes; stale keys cost only speed.
 - **M2-A9 Capacity decision** (proposed; rides along except where durable work
   forces it). Profile large tasks, then choose the task and start-response
   bounds (at most 256) and add the README and in-app notices. The profile
@@ -378,6 +464,19 @@ Checkpoints:
   live databases, never on the live files, plus release evidence under
   [TOOLS](TOOLS.md). Depends on every accepted row that does not ride along.
   Closes on: the release gates and the migration rehearsal.
+
+### Unowned
+
+Deferred work that fits no row yet, under
+[SCOPE](procedures/SCOPE.md#deferred-work):
+
+- **Refused resume returning to paused** (user decision, 2026-11-27, at
+  M2-A5's design). A resume refused at preflight, for a missing drive or a
+  replaced ledger, ends the run `FAILED+RAN` with its partial counters and
+  loses the continuation; under Resume all that can end every paused run on
+  one unplugged drive. Accepted as an outcome. Returning a run refused for
+  a transient cause to paused with its reason is desirable, not required;
+  it changes workflow settlement and FEATURES' Resume Outcomes.
 
 ### Ride-Alongs And Later
 
