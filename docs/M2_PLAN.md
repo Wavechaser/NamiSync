@@ -217,7 +217,9 @@ Checkpoints:
       and is deferred ([Unowned](#unowned)).
   - **Outcomes, one reviewed commit each, in order:** the core edge and
     progress; the dispatcher's rule that a withdrawn pending worker retires
-    without running, and `pause_all`; `resume_all`; the server side (service,
+    without running, and `pause_all`; `resume_all` (these first three share
+    one commit, because the edge alone would let a pending session settle
+    `PAUSED`); the server side (service,
     task port, drain, command and task snapshot v4 with the page's
     validator); the rail buttons and page labels; the row's closing
     documents.
@@ -243,9 +245,16 @@ Checkpoints:
     resume, and CLI pause or resume.
   - **Assumptions for review:** no consumer misreads a never-started
     `PAUSED` session as having a continuation; holding every publication
-    lock at once cannot deadlock or stall behind a slow audit emit; every
+    lock at once cannot deadlock; every
     registered kind's `open` can be repeated after a discarded invocation;
     every desktop session belongs to a rail task.
+  - **Accepted bound** (orchestrator decision, 2026-11-27): review found that
+    a wedged audit writer can stall a bulk call, and concurrent calls on its
+    sessions, for about N × (audit offer + flush timeout) for N changed
+    sessions. It is accepted rather than restructured, because no plausible
+    trigger has been shown ([DEFENSE §2.5](DEFENSE.md#25-proportional-defense)).
+    The bridge command runs bulk control off responsive threads, and
+    [DISPATCHER](DISPATCHER.md) states the bound.
 - **M2-A6 Shared review surface** (proposed). Plan and Inventory render through
   one review component on the windowed table substrate, settling the switcher
   label drift. Includes the parity test against documented allowed differences,
