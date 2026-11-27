@@ -29,6 +29,8 @@ submit(kind, request, *, attach=None) -> SessionId
 pause(session_id) -> ControlResult
 resume(session_id) -> ControlResult
 cancel(session_id) -> ControlResult
+pause_all() -> BulkControlResult
+resume_all() -> BulkControlResult
 subscribe(session_id, from_seq=None) -> EventStream
 get(session_id) -> SessionRecord
 list(query=None) -> Sequence[SessionRecord]
@@ -148,8 +150,10 @@ results and emit only nonterminal events through `RunContext`; dispatcher owns
 custody around the runner and releases it in every exit path.
 
 Failures raised before invocation entry by lock acquisition, continuation open,
-or retained-checkpoint cancellation settlement are projected to fixed terminal or
-control truth before the core runner is called. Dispatcher clears the caught
+or retained-checkpoint cancellation settlement are projected to fixed terminal
+truth before the core runner is called. No pause is accepted before `RUNNING`,
+so a `PauseRequested` raised there is an adapter failure that settles `FAILED`,
+never `PAUSED`. Dispatcher clears the caught
 exception's traceback, cause, and context after bounded diagnostic projection,
 so the runner closure and terminal store cannot retain collaborator frames or
 attached private graphs. A failing diagnostic renderer omits the detail rather
@@ -187,6 +191,53 @@ never preempts a running session, and starts with the workflow's fresh guard.
 worker finishes audit publication and retirement; the scheduler waits for the
 current-generation handoff instead of launching an overlapping successor.
 Cancel requests are cooperative but terminal cleanup/release is unconditional.
+
+Pause all and Resume all are point-in-time bulk controls, not a mode: sessions
+admitted afterwards run normally. Pause all requests a pause from each running
+session whose kind supports it, exactly as single pause does, and holds each
+pending session by moving it to `PAUSED`; single pause still refuses a pending
+session. A held session that never started (`SessionProgress.NONE`) resumes
+fresh, and cancel ends it `CANCELED+UNRUN` without retained-checkpoint
+settlement. A held resumed run keeps its continuation and still ends `RAN`.
+`BulkControlResult` counts running sessions asked to pause and held resumed runs
+as paused, never-started holds as held, and also counts already-pausing and
+still-running (cannot pause) sessions; canceling, paused and terminal sessions
+count nowhere. Resume all releases, in admission order, every session that a
+user resume may release, which today is every `PAUSED` session. Single resume
+shares that predicate and also accepts `INTERRUPTED`; Resume all leaves
+`INTERRUPTED` alone. Each released session joins the back of its resource queues,
+behind sessions admitted while it was paused, and never preempts.
+
+Both bulk controls snapshot the nonterminal sessions and take their publication
+locks in admission order. They change every affected session in one
+dispatcher-condition section, then publish each `StateChanged` and release that
+session's lock after its event. Record reads see the change whole: once
+`get()` or `list()` shows one session changed, they show every session the same
+call changed. Event streams are per session and receive those events one at a
+time, so one session's stream may show its pause before another's does. Bulk
+control is the only holder of more than one publication lock, and it takes them
+without holding the condition. Every other holder takes one lock and then waits
+only for the condition or a bounded hub operation, so there is no lock cycle
+with control, settlement, close or shutdown.
+
+Locks of unchanged sessions are released before publication. Publication is
+sequential while the locks of later changed sessions stay held, so a wedged
+audit writer bounds a bulk call by its changes rather than by one event. With N
+sessions changed, Pause all, and any concurrent `subscribe()` or control call on
+a session whose event is not yet published, can wait up to roughly
+N × (`audit_offer_timeout` + `audit_timeout`), the reliable offer plus the
+`PAUSED` flush. Resume all publishes no `PAUSED`, so its bound is roughly
+N × `audit_offer_timeout`. Callers run bulk control off threads that must stay
+responsive.
+
+A held session may already have a launched attempt waiting for its lease or
+inside `open`. Holding withdraws that exact generation. The withdrawal belongs to
+the attempt, not to session control, because resume resets control. The
+withdrawal ends the attempt's lease wait. From then on the attempt never changes
+its session's state, whether to `RUNNING` or to a pre-run failure or
+cancellation. It drops any opened invocation unrun, releases what it holds and
+retires. The current-generation handoff then lets a later attempt act for a
+session resumed or canceled meanwhile. `RUNNING` is entered only from `PENDING`.
 
 Execution may deliberately remain `PAUSING` while one durable retry operation
 settles from process-local staged state. That module-owned drain does not alter
@@ -248,6 +299,12 @@ still-live retiring worker as unfinished even when its terminal result is
 already visible. Core `BaseException` propagation is unchanged; an external
 exception hook that saves an exception after returning remains a separate
 caller-owned reference, not a dispatcher retirement guarantee.
+
+A held session leaves the pending queue at once, so any release appends it
+behind current entries even before the scheduler next runs. Its withdrawn
+attempt keeps its reservation and any lease until it retires, which is about one
+lease poll interval, or until `open` returns. Its resources can therefore stay
+reserved briefly after `PAUSED` is published.
 
 If `Thread.start()` raises before a session worker receives an OS thread
 identity, no workflow invocation exists. Dispatcher retires the raw start
@@ -575,8 +632,8 @@ until its owning worker acknowledges control and retires.
 - `core/session.py`: lifecycle table, checkpoint signals, generic result,
   session record/store protocol, and sole terminal-producing runner.
 - `core/events.py`: versioned M0 bodies/envelopes and explicit schema rejection.
-- `dispatcher/contracts.py`: opaque registration, audit, control, and shutdown
-  contracts.
+- `dispatcher/contracts.py`: opaque registration, audit, control, bulk-control,
+  and shutdown contracts.
 - `dispatcher/store.py`: honest process-local store.
 - `dispatcher/custody.py`: sorted Windows named-mutex custody and portable test
   fallback.

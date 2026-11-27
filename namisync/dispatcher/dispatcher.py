@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections import deque
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
 from threading import Condition, Event, Lock, Thread, current_thread
 from time import monotonic
@@ -26,6 +26,7 @@ from namisync.core.session import (
     ResultItem,
     SessionAdmissionRefused,
     SessionId,
+    SessionProgress,
     SessionRecord,
     SessionState,
     SessionStore,
@@ -35,10 +36,12 @@ from namisync.core.session import (
     require_transition,
     result_terminal_state,
     run_session,
+    session_progress,
 )
 from namisync.dispatcher.contracts import (
     AdmissionClosed,
     AuditObserverFactory,
+    BulkControlResult,
     ControlCode,
     ControlAction,
     ControlResult,
@@ -115,15 +118,17 @@ class AdmissionAttachment:
 def _project_worker_exception(
     error: Exception,
     disposition: Disposition,
-) -> tuple[OperationResult | None, bool]:
-    """Replace a raw pre-run failure with fixed terminal or control truth."""
+) -> OperationResult | None:
+    """Replace a raw pre-run failure with fixed terminal truth.
+
+    ``None`` means cancellation. No pause can be accepted before ``RUNNING``,
+    so a ``PauseRequested`` from custody, ``open`` or cancellation settlement
+    is an adapter failure like any other exception, never a pause.
+    """
 
     if isinstance(error, Canceled):
         retire_exception_graph(error)
-        return None, False
-    if isinstance(error, PauseRequested):
-        retire_exception_graph(error)
-        return None, True
+        return None
     try:
         result = normalize_result_diagnostics(
             OperationResult(
@@ -142,7 +147,7 @@ def _project_worker_exception(
     except BaseException as diagnostic_fatal:
         retire_exception_graph(diagnostic_fatal)
         raise
-    return result, False
+    return result
 
 
 class _Control:
@@ -205,6 +210,10 @@ class _WorkerAttempt:
     key: _WorkerKey
     resources: tuple[ResourceId, ...]
     thread: Thread
+    # Set under ``_condition`` when Pause all holds the session before this
+    # attempt entered RUNNING. It belongs to the attempt, not ``_Control``:
+    # a resume resets the control but must not revive this attempt.
+    withdrawn: Event = field(default_factory=Event)
 
 
 @dataclass(slots=True)
@@ -758,13 +767,12 @@ class Dispatcher:
                     return self._missing_control(session_id)
                 if control_decision(
                     ControlAction.RESUME, record.state, record.supports_pause
-                ) is not ControlCode.ACCEPTED:
+                ) is not ControlCode.ACCEPTED or (
+                    record.state is SessionState.PAUSED
+                    and not self._user_may_release(record)
+                ):
                     return self._illegal_control(record, "resume")
-                self._controls[session_id].reset()
-                updated, hub = self._transition_locked(
-                    session_id, SessionState.PENDING
-                )
-                self._enqueue_once_locked(session_id)
+                updated, hub = self._release_locked(session_id)
                 self._condition.notify_all()
             hub.emit(StateChanged(updated.state))
         return ControlResult(
@@ -774,6 +782,150 @@ class Dispatcher:
             updated.state,
             "session returned to the back of resource admission",
         )
+
+    def pause_all(self) -> BulkControlResult:
+        """Pause what can pause and hold what has not started, atomically.
+
+        Point in time, not a mode: sessions admitted afterwards run normally.
+        """
+
+        counts = dict.fromkeys(
+            ("paused", "held", "already_pausing", "still_running"), 0
+        )
+
+        def act(record: SessionRecord) -> tuple[SessionRecord, EventHub] | None:
+            session_id = record.session_id
+            if record.state is SessionState.RUNNING:
+                if not record.supports_pause:
+                    counts["still_running"] += 1
+                    return None
+                self._controls[session_id].request_pause()
+                counts["paused"] += 1
+                return self._transition_locked(session_id, SessionState.PAUSING)
+            if record.state is SessionState.PENDING:
+                if session_progress(record) is SessionProgress.CONTINUATION:
+                    counts["paused"] += 1
+                else:
+                    counts["held"] += 1
+                return self._hold_locked(session_id)
+            if record.state is SessionState.PAUSING:
+                counts["already_pausing"] += 1
+            return None
+
+        self._bulk_control(act)
+        return BulkControlResult(**counts)
+
+    def resume_all(self) -> BulkControlResult:
+        """Release every paused session the user may release, in admission order.
+
+        Each joins the back of resource admission, behind sessions admitted
+        while it was paused. ``INTERRUPTED`` sessions are left for single resume.
+        """
+
+        resumed = 0
+
+        def act(record: SessionRecord) -> tuple[SessionRecord, EventHub] | None:
+            nonlocal resumed
+            if not self._user_may_release(record):
+                return None
+            resumed += 1
+            return self._release_locked(record.session_id)
+
+        self._bulk_control(act)
+        return BulkControlResult(resumed=resumed)
+
+    def _bulk_control(
+        self,
+        act: Callable[[SessionRecord], tuple[SessionRecord, EventHub] | None],
+    ) -> None:
+        """Apply ``act`` to every nonterminal session in one atomic section.
+
+        Bulk control is the only holder of more than one publication lock. It
+        takes them in admission order without holding ``_condition``, as every
+        single-session holder does, so it cannot deadlock with another bulk
+        call or with a single-session control, settlement, close or shutdown.
+        Each lock is released once its session's event is published.
+        """
+
+        with self._condition:
+            candidates = sorted(
+                (
+                    record
+                    for record in self._records.values()
+                    if not is_terminal(record.state)
+                ),
+                key=lambda record: record.admission_order,
+            )
+            locks = {
+                record.session_id: self._state_publication_locks[
+                    record.session_id
+                ]
+                for record in candidates
+            }
+            del candidates
+        held: dict[SessionId, Lock] = {}
+        try:
+            for session_id, lock in locks.items():
+                lock.acquire()
+                held[session_id] = lock
+            changes: list[tuple[SessionId, EventHub, StateChanged]] = []
+            with self._condition:
+                for session_id in held:
+                    record = self._records.get(session_id)
+                    if record is None:
+                        continue
+                    transition = act(record)
+                    if transition is not None:
+                        updated, hub = transition
+                        changes.append(
+                            (session_id, hub, StateChanged(updated.state))
+                        )
+                record = None
+                self._condition.notify_all()
+            changed = {session_id for session_id, _, _ in changes}
+            for session_id in tuple(held):
+                if session_id not in changed:
+                    held.pop(session_id).release()
+            for session_id, hub, body in changes:
+                hub.emit(body)
+                held.pop(session_id).release()
+        finally:
+            for lock in reversed(tuple(held.values())):
+                lock.release()
+
+    def _hold_locked(
+        self,
+        session_id: SessionId,
+    ) -> tuple[SessionRecord, EventHub]:
+        """Move a pending session to PAUSED and withdraw its current attempt."""
+
+        transition = self._transition_locked(session_id, SessionState.PAUSED)
+        key = self._current_workers.get(session_id)
+        if key is not None:
+            self._workers[key].withdrawn.set()
+        if session_id in self._pending:
+            self._pending.remove(session_id)
+        return transition
+
+    def _release_locked(
+        self,
+        session_id: SessionId,
+    ) -> tuple[SessionRecord, EventHub]:
+        self._controls[session_id].reset()
+        transition = self._transition_locked(session_id, SessionState.PENDING)
+        self._enqueue_once_locked(session_id)
+        return transition
+
+    @staticmethod
+    def _user_may_release(record: SessionRecord) -> bool:
+        """Whether a user's resume may release this session's pause or hold.
+
+        Today every ``PAUSED`` session was paused or held by the user. A hold
+        that only a predecessor's settlement ends narrows this one predicate,
+        which single resume and Resume all share.
+        """
+
+        return record.state is SessionState.PAUSED
 
     def cancel(self, session_id: SessionId) -> ControlResult:
         publication_lock = self._publication_lock_for(session_id)
@@ -1177,6 +1329,19 @@ class Dispatcher:
             raise _StaleWorkerAttempt()
         return record
 
+    def _require_acting_worker_locked(self, key: _WorkerKey) -> SessionRecord:
+        """Require a current attempt that Pause all has not withdrawn.
+
+        A withdrawn attempt never changes its session's state: it releases
+        what it holds and retires, and the generation handoff lets a later
+        attempt act for a session since resumed or canceled.
+        """
+
+        record = self._require_current_worker_locked(key)
+        if self._workers[key].withdrawn.is_set():
+            raise _StaleWorkerAttempt()
+        return record
+
     def _register_attempt_locked(
         self,
         record: SessionRecord,
@@ -1275,8 +1440,13 @@ class Dispatcher:
         with self._condition:
             record = self._require_current_worker_locked(attempt.key)
             registration = self._registry[record.kind]
+            withdrawn = attempt.withdrawn.is_set()
         try:
-            if record.state is SessionState.CANCELING:
+            if withdrawn:
+                # Held before it could start: nothing to settle. The handoff
+                # below re-queues a session since resumed or canceled.
+                pass
+            elif record.state is SessionState.CANCELING:
                 self._run_canceled(attempt.key, registration, record)
             else:
                 result = OperationResult(
@@ -1307,31 +1477,34 @@ class Dispatcher:
         session_id = key.session_id
         try:
             with self._condition:
-                record = self._require_current_worker_locked(key)
+                record = self._require_acting_worker_locked(key)
                 registration = self._registry[record.kind]
                 control = self._controls[session_id]
                 publication_lock = self._state_publication_locks[session_id]
+                withdrawn = self._workers[key].withdrawn
             if record.state is SessionState.CANCELING:
                 self._run_canceled(key, registration, record)
                 return
-            projected_failure = None
+            pre_run_failed = False
+            fixed_result = None
             try:
                 lease = self._lock_provider.acquire(
-                    resources, control.cancel_requested
+                    resources,
+                    lambda: control.cancel_requested() or withdrawn.is_set(),
                 )
             except Canceled as error:
                 retire_exception_graph(error)
                 with self._condition:
-                    current = self._require_current_worker_locked(key)
+                    current = self._require_acting_worker_locked(key)
                 self._run_canceled(key, registration, current)
                 return
             except Exception as error:
-                projected_failure = _project_worker_exception(
+                pre_run_failed = True
+                fixed_result = _project_worker_exception(
                     error,
                     Disposition.UNRUN,
                 )
-            if projected_failure is not None:
-                fixed_result, pre_run_pause = projected_failure
+            if pre_run_failed:
                 self._run_core(
                     key,
                     resources,
@@ -1339,13 +1512,12 @@ class Dispatcher:
                     invocation=None,
                     disposition=Disposition.UNRUN,
                     fixed_result=fixed_result,
-                    pre_run_pause=pre_run_pause,
                 )
                 return
             with self._condition:
                 if self._is_current_worker_locked(key):
                     self._leases[key] = lease
-                    current = self._require_current_worker_locked(key)
+                    current = self._require_acting_worker_locked(key)
                     stale = False
                 else:
                     stale = True
@@ -1362,7 +1534,6 @@ class Dispatcher:
             if current.state is SessionState.CANCELING:
                 self._run_canceled(key, registration, current)
                 return
-            projected_failure = None
             try:
                 if current.checkpoint is None:
                     raise RuntimeError(
@@ -1370,12 +1541,12 @@ class Dispatcher:
                     )
                 invocation = registration.open(current.checkpoint)
             except Exception as error:
-                projected_failure = _project_worker_exception(
+                pre_run_failed = True
+                fixed_result = _project_worker_exception(
                     error,
                     Disposition.UNRUN,
                 )
-            if projected_failure is not None:
-                fixed_result, pre_run_pause = projected_failure
+            if pre_run_failed:
                 self._run_core(
                     key,
                     resources,
@@ -1383,14 +1554,16 @@ class Dispatcher:
                     invocation=None,
                     disposition=Disposition.UNRUN,
                     fixed_result=fixed_result,
-                    pre_run_pause=pre_run_pause,
                 )
                 return
             resumed_attempt = current.started_at is not None
             with publication_lock:
                 with self._condition:
-                    current = self._require_current_worker_locked(key)
-                    if current.state is not SessionState.CANCELING:
+                    # Only a PENDING session may start. A held one is PAUSED
+                    # with this attempt withdrawn, so the opened invocation is
+                    # dropped unrun, as it already is when a cancel lands here.
+                    current = self._require_acting_worker_locked(key)
+                    if current.state is SessionState.PENDING:
                         updated, hub = self._transition_locked(
                             session_id, SessionState.RUNNING
                         )
@@ -1433,12 +1606,7 @@ class Dispatcher:
                 disposition,
             )
         except Exception as error:
-            fixed_result, pre_run_pause = _project_worker_exception(
-                error,
-                disposition,
-            )
-        else:
-            pre_run_pause = False
+            fixed_result = _project_worker_exception(error, disposition)
         self._run_core(
             key,
             record.resources,
@@ -1446,7 +1614,6 @@ class Dispatcher:
             invocation=None,
             disposition=disposition,
             fixed_result=fixed_result,
-            pre_run_pause=pre_run_pause,
         )
 
     def _run_core(
@@ -1458,7 +1625,6 @@ class Dispatcher:
         invocation: WorkflowInvocation | None,
         disposition: Disposition,
         fixed_result: OperationResult | None = None,
-        pre_run_pause: bool = False,
         settle_pre_run_canceled: bool = False,
     ) -> None:
         session_id = key.session_id
@@ -1470,8 +1636,6 @@ class Dispatcher:
         def work(context):
             if fixed_result is not None:
                 return fixed_result
-            if pre_run_pause:
-                raise PauseRequested()
             try:
                 try:
                     context.checkpoint()
@@ -1553,7 +1717,9 @@ class Dispatcher:
             raise _StaleWorkerAttempt()
         with publication_lock:
             with self._condition:
-                self._require_current_worker_locked(key)
+                # A pre-run failure or cancellation racing a hold settles
+                # nothing: the held session stays PAUSED.
+                self._require_acting_worker_locked(key)
                 updated, hub = self._transition_locked(
                     session_id, state, transition_result
                 )

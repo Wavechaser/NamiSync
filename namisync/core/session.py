@@ -66,7 +66,12 @@ TERMINAL_STATES = frozenset(
 
 LEGAL_TRANSITIONS: dict[SessionState, frozenset[SessionState]] = {
     SessionState.PENDING: frozenset(
-        {SessionState.RUNNING, SessionState.CANCELING, SessionState.FAILED}
+        {
+            SessionState.RUNNING,
+            SessionState.PAUSED,
+            SessionState.CANCELING,
+            SessionState.FAILED,
+        }
     ),
     SessionState.RUNNING: frozenset(
         {
@@ -684,6 +689,33 @@ class SessionRecord:
     @property
     def result(self) -> OperationResult | None:
         return self.stored.result
+
+
+class SessionProgress(StrEnum):
+    """What a nonterminal session's retained checkpoint holds."""
+
+    NONE = "none"
+    CONTINUATION = "continuation"
+
+
+def session_progress(
+    record: SessionRecord | StoredSessionRecord,
+) -> SessionProgress:
+    """Derive a nonterminal session's progress from its start time.
+
+    ``NONE``: the session never entered ``RUNNING``, so it holds only its
+    admitted checkpoint; resuming it starts it fresh and canceling it ends
+    ``UNRUN``. This includes a ``PAUSED`` session held before it started.
+    ``CONTINUATION``: it has started, so its retained checkpoint is the
+    continuation a resume reopens, and it ends ``RAN``. A terminal record's
+    checkpoint is cleared, so asking for its progress raises ``ValueError``.
+    """
+
+    if is_terminal(record.state):
+        raise ValueError("a terminal session has no progress")
+    if record.started_at is None:
+        return SessionProgress.NONE
+    return SessionProgress.CONTINUATION
 
 
 class SessionStore(Protocol):

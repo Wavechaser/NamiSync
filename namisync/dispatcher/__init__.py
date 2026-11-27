@@ -5,6 +5,7 @@ from namisync.core.session import SessionAdmissionRefused
 from namisync.dispatcher.contracts import (
     AdmissionClosed,
     AuditObserver,
+    BulkControlResult,
     ControlAction,
     ControlCode,
     ControlResult,
@@ -31,6 +32,7 @@ __all__ = [
     "AdmissionClosed",
     "AdmissionAttachment",
     "AuditObserver",
+    "BulkControlResult",
     "ControlAction",
     "ControlCode",
     "ControlResult",

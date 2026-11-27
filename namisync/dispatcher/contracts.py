@@ -148,6 +148,25 @@ class ControlResult:
 
 
 @dataclass(frozen=True, slots=True)
+class BulkControlResult:
+    """Counts from one point-in-time Pause all or Resume all.
+
+    Pause all counts ``paused`` (running sessions asked to pause, and resumed
+    runs returned from pending to paused with their continuation), ``held``
+    (pending sessions that never started, now paused), ``already_pausing``,
+    and ``still_running`` (running sessions whose kind cannot pause); it
+    counts no canceling, paused or terminal session. Resume all counts
+    ``resumed``.
+    """
+
+    paused: int = 0
+    held: int = 0
+    already_pausing: int = 0
+    still_running: int = 0
+    resumed: int = 0
+
+
+@dataclass(frozen=True, slots=True)
 class ShutdownResult:
     complete: bool
     unfinished: tuple[SessionId, ...]

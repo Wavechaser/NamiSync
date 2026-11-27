@@ -251,6 +251,16 @@ request is either a legal transition or a typed rejection with no state change.
 `INTERRUPTED` is resumable and is produced only by durable-store reconciliation;
 it is not a normal runtime terminal.
 
+`PENDING` to `PAUSED` holds a session that is waiting to run. Only the
+dispatcher's Pause all takes it; pausing one pending session stays an illegal
+control request. A held session is an ordinary `PAUSED` record, so there is
+no held state and no stored hold field. `session_progress()` derives a
+nonterminal session's `SessionProgress` from its start time: `NONE` before it
+first enters `RUNNING`, so a held session that never started resumes fresh and
+cancels `UNRUN`; `CONTINUATION` afterwards, so its retained checkpoint is the
+continuation a resume reopens. A terminal record has no progress and the
+function refuses it.
+
 `Checkpoint` never waits. It returns normally, raises `PauseRequested`, or
 raises `Canceled`. Modules normally let either exception unwind to the generic
 runner. Executor alone may catch `PauseRequested` at a durable retry-backoff

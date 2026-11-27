@@ -72,14 +72,17 @@ from namisync.core.session import (
     ResultItem,
     RunOutcome,
     SessionId,
+    SessionProgress,
     SessionRecord,
     SessionState,
     StoredSessionRecord,
+    TERMINAL_STATES,
     is_terminal,
     normalize_result_diagnostics,
     require_transition,
     result_terminal_state,
     run_session,
+    session_progress,
 )
 from namisync.core.scalars import MAX_SAFE_INTEGER
 from namisync.dispatcher.store import InMemorySessionStore
@@ -98,14 +101,123 @@ def _raise_with_private_frame(
     raise error
 
 
+_FROZEN_TRANSITIONS: dict[SessionState, frozenset[SessionState]] = {
+    # PENDING to PAUSED holds a session that has not started (Pause all).
+    SessionState.PENDING: frozenset(
+        {
+            SessionState.RUNNING,
+            SessionState.PAUSED,
+            SessionState.CANCELING,
+            SessionState.FAILED,
+        }
+    ),
+    SessionState.RUNNING: frozenset(
+        {
+            SessionState.PAUSING,
+            SessionState.CANCELING,
+            SessionState.COMPLETED,
+            SessionState.FAILED,
+            SessionState.CANCELED,
+            SessionState.REFUSED,
+        }
+    ),
+    SessionState.PAUSING: frozenset(
+        {
+            SessionState.PAUSED,
+            SessionState.CANCELING,
+            SessionState.COMPLETED,
+            SessionState.FAILED,
+            SessionState.CANCELED,
+            SessionState.REFUSED,
+        }
+    ),
+    SessionState.PAUSED: frozenset(
+        {SessionState.PENDING, SessionState.CANCELING}
+    ),
+    SessionState.CANCELING: frozenset(
+        {
+            SessionState.COMPLETED,
+            SessionState.FAILED,
+            SessionState.CANCELED,
+            SessionState.REFUSED,
+        }
+    ),
+    SessionState.COMPLETED: frozenset(),
+    SessionState.FAILED: frozenset(),
+    SessionState.CANCELED: frozenset(),
+    SessionState.REFUSED: frozenset(),
+    SessionState.INTERRUPTED: frozenset(
+        {SessionState.PENDING, SessionState.CANCELING}
+    ),
+}
+
+
 def test_transition_table_accepts_exactly_the_declared_edges() -> None:
+    assert LEGAL_TRANSITIONS == _FROZEN_TRANSITIONS
     for current in SessionState:
         for requested in SessionState:
-            if requested in LEGAL_TRANSITIONS[current]:
+            if requested in _FROZEN_TRANSITIONS[current]:
                 require_transition(current, requested)
             else:
                 with pytest.raises(IllegalTransition):
                     require_transition(current, requested)
+
+
+def test_session_progress_is_derived_from_the_start_time() -> None:
+    created_at = datetime(2026, 11, 27, tzinfo=timezone.utc)
+    started_at = created_at + timedelta(seconds=1)
+
+    def live(state: SessionState, started: datetime | None) -> SessionRecord:
+        return SessionRecord(
+            SessionId("progress"),
+            "opaque-workflow",
+            state,
+            (),
+            b"checkpoint",
+            True,
+            0,
+            created_at,
+            started_at=started,
+        )
+
+    for state in (
+        SessionState.PENDING,
+        SessionState.PAUSED,
+        SessionState.CANCELING,
+    ):
+        assert session_progress(live(state, None)) is SessionProgress.NONE
+    for state in (
+        SessionState.PENDING,
+        SessionState.RUNNING,
+        SessionState.PAUSING,
+        SessionState.PAUSED,
+        SessionState.CANCELING,
+    ):
+        assert (
+            session_progress(live(state, started_at))
+            is SessionProgress.CONTINUATION
+        )
+    held = live(SessionState.PAUSED, None)
+    assert session_progress(held.stored) is SessionProgress.NONE
+    assert [member.value for member in SessionProgress] == [
+        "none",
+        "continuation",
+    ]
+
+    for state in TERMINAL_STATES:
+        terminal = StoredSessionRecord(
+            SessionId("progress"),
+            "opaque-workflow",
+            state,
+            (),
+            True,
+            0,
+            created_at,
+            started_at=started_at,
+            ended_at=started_at,
+        )
+        with pytest.raises(ValueError, match="terminal session has no progress"):
+            session_progress(terminal)
 
 
 def test_terminal_members_are_frozen() -> None:

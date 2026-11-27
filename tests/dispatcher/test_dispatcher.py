@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from threading import Event, Lock, Thread, current_thread, get_ident
 from time import monotonic, sleep
+from uuid import uuid4
 from weakref import ref
 
 import pytest
@@ -31,19 +32,24 @@ from namisync.core.session import (
     Disposition,
     FailureDetail,
     OperationResult,
+    PauseRequested,
     PhaseResult,
     PhaseStatus,
     ResourceId,
     SessionId,
+    SessionProgress,
     SessionRecord,
     SessionState,
     StoredSessionRecord,
+    session_progress,
 )
 from namisync.dispatcher import (
     AdmissionClosed,
     AdmissionAttachment,
+    BulkControlResult,
     ControlAction,
     ControlCode,
+    ControlResult,
     Dispatcher,
     InProcessResourceLockProvider,
     PreparedSession,
@@ -4973,3 +4979,1114 @@ def test_subscribe_translation_retires_hub_traceback_and_cause_without_chaining(
         release.set()
         wait_for(dispatcher, session_id, SessionState.COMPLETED)
         assert dispatcher.shutdown(2).complete
+
+
+# Pause all and Resume all. These tests order themselves on events; each
+# timeout below only bounds a hang.
+
+HANG_GUARD = 10.0
+
+
+def next_state(stream) -> SessionState:
+    while True:
+        body = stream.next(HANG_GUARD).body
+        if isinstance(body, StateChanged):
+            return body.state
+
+
+def states_through(stream, final: SessionState) -> list[SessionState]:
+    states = [next_state(stream)]
+    while states[-1] is not final:
+        states.append(next_state(stream))
+    return states
+
+
+def states_to_terminal(stream) -> list[SessionState]:
+    """Collect lifecycle states up to the session's sole Terminal event."""
+
+    states = []
+    while True:
+        body = stream.next(HANG_GUARD).body
+        if isinstance(body, StateChanged):
+            states.append(body.state)
+        elif isinstance(body, Terminal):
+            return states
+
+
+def unique_resource(name: str) -> ResourceId:
+    return ResourceId("volume", f"bulk-{name}-{uuid4().hex}")
+
+
+def checkpoint_loop(entered: Event):
+    def pauseable(context):
+        entered.set()
+        while True:
+            context.checkpoint()
+            sleep(0.005)
+
+    return pauseable
+
+
+class FreeLease:
+    def release(self) -> None:
+        return None
+
+
+class LeaseWaitProvider:
+    """Keep acquisition ``wait_on`` in a lease wait that only its predicate ends.
+
+    A ``late`` provider ignores the predicate and grants that lease once
+    released, as any provider can after its last predicate check.
+    """
+
+    def __init__(self, *, late: bool = False, wait_on: int = 1) -> None:
+        self.late = late
+        self.wait_on = wait_on
+        self.entered = Event()
+        self.release = Event()
+        self.acquisitions = 0
+        self._idle = Event()
+        self._lock = Lock()
+
+    def acquire(self, resources, canceled):
+        with self._lock:
+            self.acquisitions += 1
+            waits = self.acquisitions == self.wait_on
+        if waits:
+            self.entered.set()
+            if self.late:
+                assert self.release.wait(HANG_GUARD)
+                return FreeLease()
+            while not canceled():
+                self._idle.wait(0.005)
+            raise Canceled()
+        return FreeLease()
+
+
+class SignalingLock:
+    """Delegate to a session publication lock, signaling a contended acquire.
+
+    The signal is set just before an acquirer that found the lock held
+    starts to wait for it.
+    """
+
+    def __init__(self, inner, waiting: Event) -> None:
+        self._inner = inner
+        self._waiting = waiting
+
+    def acquire(self, blocking: bool = True, timeout: float = -1) -> bool:
+        if self._inner.acquire(False):
+            return True
+        self._waiting.set()
+        return self._inner.acquire(blocking, timeout)
+
+    def release(self) -> None:
+        self._inner.release()
+
+    def __enter__(self):
+        self.acquire()
+        return self
+
+    def __exit__(self, *exc_info) -> None:
+        self.release()
+
+
+def test_pause_all_holds_a_queued_session_so_it_never_opens() -> None:
+    resource = unique_resource("queued")
+    opened: list[bytes] = []
+    blocker_entered = Event()
+    release_blocker = Event()
+
+    def run_for(payload):
+        opened.append(payload)
+        if payload != b"blocker":
+            return completed
+
+        def hold(context):
+            blocker_entered.set()
+            assert release_blocker.wait(HANG_GUARD)
+            return OperationResult(SessionState.COMPLETED)
+
+        return hold
+
+    dispatcher = Dispatcher(
+        {"work": registration(run_for, resources=(resource,))},
+        lock_provider=InProcessResourceLockProvider(),
+    )
+    try:
+        dispatcher.submit("work", b"blocker")
+        assert blocker_entered.wait(HANG_GUARD)
+        queued = dispatcher.submit("work", b"queued")
+        queued_events = dispatcher.subscribe(queued)
+        assert next_state(queued_events) is SessionState.PENDING
+
+        assert dispatcher.pause_all() == BulkControlResult(
+            held=1, still_running=1
+        )
+        assert next_state(queued_events) is SessionState.PAUSED
+        release_blocker.set()
+        # Admission is FIFO per resource: a later probe can finish first only
+        # because the held session left the queue.
+        probe = dispatcher.submit("work", b"probe")
+        states_to_terminal(dispatcher.subscribe(probe))
+        held = dispatcher.get(queued)
+        assert held.state is SessionState.PAUSED
+        assert session_progress(held) is SessionProgress.NONE
+        assert opened == [b"blocker", b"probe"]
+
+        assert dispatcher.resume_all() == BulkControlResult(resumed=1)
+        assert states_to_terminal(queued_events) == [
+            SessionState.PENDING,
+            SessionState.RUNNING,
+            SessionState.COMPLETED,
+        ]
+        assert opened == [b"blocker", b"probe", b"queued"]
+        assert dispatcher.get(queued).result.disposition is Disposition.RAN
+        assert dispatcher.shutdown().complete
+    finally:
+        release_blocker.set()
+        dispatcher.shutdown(2)
+
+
+@pytest.mark.parametrize("late", [False, True])
+def test_pause_all_withdraws_an_attempt_waiting_for_its_lease(late: bool) -> None:
+    resource = unique_resource("lease-wait")
+    provider = LeaseWaitProvider(late=late)
+    opened: list[bytes] = []
+
+    def run_for(payload):
+        opened.append(payload)
+        return completed
+
+    dispatcher = Dispatcher(
+        {"work": registration(run_for, resources=(resource,))},
+        lock_provider=provider,
+    )
+    try:
+        waiting = dispatcher.submit("work", b"waiting")
+        events = dispatcher.subscribe(waiting)
+        assert provider.entered.wait(HANG_GUARD)
+
+        assert dispatcher.pause_all() == BulkControlResult(held=1)
+        provider.release.set()
+        # Withdrawal ends the lease wait, or returns a late lease unopened,
+        # and frees the reservation for a later session on the resource.
+        successor = dispatcher.submit("work", b"successor")
+        assert states_to_terminal(dispatcher.subscribe(successor))[-1] is (
+            SessionState.COMPLETED
+        )
+        held = dispatcher.get(waiting)
+        assert held.state is SessionState.PAUSED
+        assert held.started_at is None
+        assert opened == [b"successor"]
+
+        assert dispatcher.resume_all() == BulkControlResult(resumed=1)
+        assert states_to_terminal(events) == [
+            SessionState.PENDING,
+            SessionState.PAUSED,
+            SessionState.PENDING,
+            SessionState.RUNNING,
+            SessionState.COMPLETED,
+        ]
+        assert opened == [b"successor", b"waiting"]
+        assert provider.acquisitions == 3
+        shutdown = dispatcher.shutdown()
+        assert shutdown.complete
+        assert shutdown.custody_released
+    finally:
+        dispatcher.shutdown(2)
+
+
+@pytest.mark.parametrize(
+    "release_by", ["resume", "resume_after_failed_open", "cancel"]
+)
+def test_session_held_inside_open_never_runs_that_invocation(
+    release_by: str,
+) -> None:
+    open_entered = Event()
+    release_open = Event()
+    opens: list[object] = []
+    runs: list[object] = []
+    settled: list[tuple[object, Disposition]] = []
+
+    def open_session(checkpoint):
+        opens.append(checkpoint)
+        if len(opens) == 1:
+            open_entered.set()
+            assert release_open.wait(HANG_GUARD)
+            if release_by == "resume_after_failed_open":
+                # The withdrawn attempt's failure must not settle the session.
+                raise OSError("open failed after the hold")
+
+        def run(context):
+            runs.append(checkpoint)
+            return OperationResult(SessionState.COMPLETED)
+
+        return Invocation(run)
+
+    def settle_canceled(checkpoint, disposition):
+        settled.append((checkpoint, disposition))
+        return OperationResult(
+            SessionState.CANCELED, disposition=disposition, canceled=True
+        )
+
+    dispatcher = Dispatcher(
+        {
+            "work": WorkflowRegistration(
+                prepare=lambda request: PreparedSession(request),
+                open=open_session,
+                settle_canceled=settle_canceled,
+            )
+        }
+    )
+    try:
+        session_id = dispatcher.submit("work", b"payload")
+        events = dispatcher.subscribe(session_id)
+        assert open_entered.wait(HANG_GUARD)
+        assert dispatcher.pause_all() == BulkControlResult(held=1)
+        # Release the hold while the withdrawn attempt is still inside open.
+        if release_by == "cancel":
+            assert dispatcher.cancel(session_id).accepted
+        else:
+            assert dispatcher.resume(session_id).accepted
+        release_open.set()
+
+        states = states_to_terminal(events)
+        record = dispatcher.get(session_id)
+        assert record.result is not None
+        if release_by != "cancel":
+            assert states == [
+                SessionState.PENDING,
+                SessionState.PAUSED,
+                SessionState.PENDING,
+                SessionState.RUNNING,
+                SessionState.COMPLETED,
+            ]
+            assert opens == [b"payload", b"payload"]
+            assert runs == [b"payload"]
+            assert record.result.disposition is Disposition.RAN
+        else:
+            assert states == [
+                SessionState.PENDING,
+                SessionState.PAUSED,
+                SessionState.CANCELING,
+                SessionState.CANCELED,
+            ]
+            assert opens == [b"payload"]
+            assert runs == []
+            assert settled == []
+            assert record.result.disposition is Disposition.UNRUN
+            assert record.result.canceled
+        assert dispatcher.shutdown().complete
+    finally:
+        release_open.set()
+        dispatcher.shutdown(2)
+
+
+def test_pause_all_holds_a_session_whose_worker_could_not_start(
+    monkeypatch,
+) -> None:
+    start_entered = Event()
+    release_start = Event()
+    opened: list[bytes] = []
+    original_start = Thread.start
+    failed = False
+
+    def start(thread) -> None:
+        nonlocal failed
+        if thread.name.startswith("namisync-session-") and not failed:
+            failed = True
+            start_entered.set()
+            assert release_start.wait(HANG_GUARD)
+            raise OSError("worker thread start failed")
+        original_start(thread)
+
+    def open_work(payload):
+        opened.append(payload)
+        return completed
+
+    monkeypatch.setattr(Thread, "start", start)
+    dispatcher = Dispatcher({"work": registration(open_work)})
+    try:
+        session_id = dispatcher.submit("work", b"payload")
+        events = dispatcher.subscribe(session_id)
+        assert start_entered.wait(HANG_GUARD)
+        assert dispatcher.pause_all() == BulkControlResult(held=1)
+        # Resume before the unstarted attempt retires: it settles nothing,
+        # and the next attempt runs the session.
+        assert dispatcher.resume(session_id).accepted
+        release_start.set()
+
+        assert states_to_terminal(events) == [
+            SessionState.PENDING,
+            SessionState.PAUSED,
+            SessionState.PENDING,
+            SessionState.RUNNING,
+            SessionState.COMPLETED,
+        ]
+        assert opened == [b"payload"]
+        assert dispatcher.shutdown().complete
+    finally:
+        release_start.set()
+        dispatcher.shutdown(2)
+
+
+@pytest.mark.parametrize(
+    "held_while", ["lease_wait", "start_delayed", "start_failed"]
+)
+def test_held_continuation_settles_its_checkpoint_once_after_a_later_cancel(
+    monkeypatch,
+    held_while: str,
+) -> None:
+    resource = unique_resource("held-continuation")
+    entered = Event()
+    # Acquisition 2 is the resumed attempt's; acquisition 1 was the first run.
+    provider = LeaseWaitProvider(wait_on=2)
+    gate_start = Event()
+    start_entered = Event()
+    release_start = Event()
+    original_start = Thread.start
+    settled: list[tuple[object, Disposition, SessionState]] = []
+    sessions: list[SessionId] = []
+
+    def start(thread) -> None:
+        if thread.name.startswith("namisync-session-") and gate_start.is_set():
+            gate_start.clear()
+            start_entered.set()
+            assert release_start.wait(HANG_GUARD)
+            if held_while == "start_failed":
+                raise OSError("resumed worker thread start failed")
+        original_start(thread)
+
+    def run_for(payload):
+        if payload == b"payload":
+            return checkpoint_loop(entered)
+        return completed
+
+    def settle_canceled(checkpoint, disposition):
+        state = dispatcher.get(sessions[0]).state
+        settled.append((checkpoint, disposition, state))
+        return OperationResult(
+            SessionState.CANCELED, disposition=disposition, canceled=True
+        )
+
+    monkeypatch.setattr(Thread, "start", start)
+    dispatcher = Dispatcher(
+        {
+            "work": registration(
+                run_for,
+                supports_pause=True,
+                resources=(resource,),
+                settle_canceled=settle_canceled,
+            ),
+            "plain": registration(run_for, resources=(resource,)),
+        },
+        lock_provider=(
+            provider
+            if held_while == "lease_wait"
+            else InProcessResourceLockProvider()
+        ),
+    )
+    try:
+        session_id = dispatcher.submit("work", b"payload")
+        sessions.append(session_id)
+        events = dispatcher.subscribe(session_id)
+        assert entered.wait(HANG_GUARD)
+        assert dispatcher.pause(session_id).accepted
+        assert states_through(events, SessionState.PAUSED)[-1] is (
+            SessionState.PAUSED
+        )
+        if held_while != "lease_wait":
+            gate_start.set()
+        assert dispatcher.resume(session_id).accepted
+        assert next_state(events) is SessionState.PENDING
+        if held_while == "lease_wait":
+            assert provider.entered.wait(HANG_GUARD)
+        else:
+            assert start_entered.wait(HANG_GUARD)
+
+        assert dispatcher.pause_all() == BulkControlResult(paused=1)
+        assert next_state(events) is SessionState.PAUSED
+        if held_while == "lease_wait":
+            # Withdrawal ends the lease wait, and the attempt retires while
+            # the session is held: only then can a successor take the resource.
+            successor = dispatcher.submit("plain", b"successor")
+            assert states_to_terminal(dispatcher.subscribe(successor))[-1] is (
+                SessionState.COMPLETED
+            )
+        # A hold is not a cancel: nothing settles the retained checkpoint.
+        assert settled == []
+        assert dispatcher.get(session_id).state is SessionState.PAUSED
+
+        # A cancel that lands before a gated attempt starts, or fails to,
+        # leaves that withdrawn attempt to retire without settling either.
+        assert dispatcher.cancel(session_id).accepted
+        release_start.set()
+        assert states_to_terminal(events) == [
+            SessionState.CANCELING,
+            SessionState.CANCELED,
+        ]
+        assert settled == [
+            (b"continued", Disposition.RAN, SessionState.CANCELING)
+        ]
+        record = dispatcher.get(session_id)
+        assert record.result is not None
+        assert record.result.disposition is Disposition.RAN
+        assert record.result.canceled
+        shutdown = dispatcher.shutdown()
+        assert shutdown.complete
+        assert shutdown.custody_released
+    finally:
+        release_start.set()
+        dispatcher.shutdown(2)
+
+
+def test_pause_all_holds_queued_sessions_before_publishing_any_pause() -> None:
+    resource = unique_resource("atomic")
+    opened: list[bytes] = []
+    running_entered = Event()
+
+    def run_for(payload):
+        opened.append(payload)
+        if payload == b"running":
+            return checkpoint_loop(running_entered)
+        return completed
+
+    dispatcher = Dispatcher(
+        {
+            "work": registration(
+                run_for, supports_pause=True, resources=(resource,)
+            )
+        },
+        lock_provider=InProcessResourceLockProvider(),
+    )
+    try:
+        running = dispatcher.submit("work", b"running")
+        assert running_entered.wait(HANG_GUARD)
+        queued = dispatcher.submit("work", b"queued")
+        queued_events = dispatcher.subscribe(queued)
+        running_events = dispatcher.subscribe(running)
+        observed: list[SessionState] = []
+        delivered = Event()
+
+        def watch() -> None:
+            while next_state(running_events) is not SessionState.PAUSING:
+                pass
+            observed.append(dispatcher.get(queued).state)
+            delivered.set()
+
+        Thread(target=watch, daemon=True).start()
+        # Gate the queued session's lock to show Pause all takes every lock
+        # before it changes or publishes any session.
+        waiting = Event()
+        with dispatcher._condition:
+            inner = dispatcher._state_publication_locks[queued]
+            dispatcher._state_publication_locks[queued] = SignalingLock(
+                inner, waiting
+            )
+        results: list[BulkControlResult] = []
+        bulk = Thread(
+            target=lambda: results.append(dispatcher.pause_all()),
+            daemon=True,
+        )
+        with inner:
+            bulk.start()
+            assert waiting.wait(HANG_GUARD)
+            assert dispatcher.get(running).state is SessionState.RUNNING
+        bulk.join(HANG_GUARD)
+        assert results == [BulkControlResult(paused=1, held=1)]
+        assert delivered.wait(HANG_GUARD)
+        assert observed == [SessionState.PAUSED]
+
+        # The pause releases the resource, and the held session stays put.
+        assert next_state(running_events) is SessionState.PAUSED
+        probe = dispatcher.submit("work", b"probe")
+        states_to_terminal(dispatcher.subscribe(probe))
+        assert dispatcher.get(queued).state is SessionState.PAUSED
+        assert opened == [b"running", b"probe"]
+
+        assert dispatcher.resume_all() == BulkControlResult(resumed=2)
+        assert states_to_terminal(running_events)[-1] is SessionState.COMPLETED
+        assert states_to_terminal(queued_events) == [
+            SessionState.PENDING,
+            SessionState.PAUSED,
+            SessionState.PENDING,
+            SessionState.RUNNING,
+            SessionState.COMPLETED,
+        ]
+        assert opened == [b"running", b"probe", b"continued", b"queued"]
+        assert dispatcher.shutdown().complete
+    finally:
+        dispatcher.shutdown(2)
+
+
+def test_bulk_control_publishes_each_change_under_its_session_lock() -> None:
+    resource = unique_resource("publication")
+    blocker_entered = Event()
+    release_blocker = Event()
+
+    def run_for(payload):
+        if payload != b"blocker":
+            return completed
+
+        def hold(context):
+            blocker_entered.set()
+            assert release_blocker.wait(HANG_GUARD)
+            return OperationResult(SessionState.COMPLETED)
+
+        return hold
+
+    dispatcher = Dispatcher(
+        {"work": registration(run_for, resources=(resource,))},
+        lock_provider=InProcessResourceLockProvider(),
+    )
+    try:
+        dispatcher.submit("work", b"blocker")
+        assert blocker_entered.wait(HANG_GUARD)
+        queued = dispatcher.submit("work", b"queued")
+        events = dispatcher.subscribe(queued)
+        assert next_state(events) is SessionState.PENDING
+
+        # Just before Pause all publishes the held session's PAUSED, a probe
+        # resumes that session. The probe either finds the session's lock
+        # still held and waits, or completes first; either ends this wait,
+        # so the resulting event order needs no timing.
+        probe_settled = Event()
+        probes: list[ControlResult] = []
+        with dispatcher._condition:
+            inner = dispatcher._state_publication_locks[queued]
+            dispatcher._state_publication_locks[queued] = SignalingLock(
+                inner, probe_settled
+            )
+            hub = dispatcher._hubs[queued]
+        publish = hub.emit
+        armed = [True]
+
+        def probe() -> None:
+            probes.append(dispatcher.resume(queued))
+            probe_settled.set()
+
+        def emit(body, **options):
+            if (
+                armed
+                and isinstance(body, StateChanged)
+                and body.state is SessionState.PAUSED
+            ):
+                armed.clear()
+                prober.start()
+                assert probe_settled.wait(HANG_GUARD)
+            return publish(body, **options)
+
+        prober = Thread(target=probe, daemon=True)
+        hub.emit = emit
+        assert dispatcher.pause_all() == BulkControlResult(
+            held=1, still_running=1
+        )
+        assert not armed
+        prober.join(HANG_GUARD)
+        assert [result.code for result in probes] == [ControlCode.ACCEPTED]
+
+        # The resume could not publish PENDING before the PAUSED it followed.
+        release_blocker.set()
+        assert states_to_terminal(events) == [
+            SessionState.PAUSED,
+            SessionState.PENDING,
+            SessionState.RUNNING,
+            SessionState.COMPLETED,
+        ]
+        assert dispatcher.shutdown().complete
+    finally:
+        release_blocker.set()
+        dispatcher.shutdown(2)
+
+
+def test_pause_all_returns_a_waiting_resumed_run_to_paused_with_its_continuation(
+) -> None:
+    resource = unique_resource("continuation")
+    opened: list[bytes] = []
+    first_entered = Event()
+    blocker_entered = Event()
+    release_blocker = Event()
+
+    def run_for(payload):
+        opened.append(payload)
+        if payload == b"first":
+            return checkpoint_loop(first_entered)
+        if payload != b"blocker":
+            return completed
+
+        def hold(context):
+            blocker_entered.set()
+            assert release_blocker.wait(HANG_GUARD)
+            return OperationResult(SessionState.COMPLETED)
+
+        return hold
+
+    dispatcher = Dispatcher(
+        {
+            "pausable": registration(
+                run_for, supports_pause=True, resources=(resource,)
+            ),
+            "plain": registration(run_for, resources=(resource,)),
+        },
+        lock_provider=InProcessResourceLockProvider(),
+    )
+    try:
+        first = dispatcher.submit("pausable", b"first")
+        events = dispatcher.subscribe(first)
+        assert first_entered.wait(HANG_GUARD)
+        assert dispatcher.pause(first).accepted
+        assert states_through(events, SessionState.PAUSED)[-1] is (
+            SessionState.PAUSED
+        )
+        dispatcher.submit("plain", b"blocker")
+        assert blocker_entered.wait(HANG_GUARD)
+        assert dispatcher.resume(first).accepted
+        assert next_state(events) is SessionState.PENDING
+        waiting = dispatcher.get(first)
+        assert session_progress(waiting) is SessionProgress.CONTINUATION
+
+        assert dispatcher.pause_all() == BulkControlResult(
+            paused=1, still_running=1
+        )
+        assert next_state(events) is SessionState.PAUSED
+        held = dispatcher.get(first)
+        assert held.checkpoint == b"continued"
+        assert held.started_at == waiting.started_at
+        assert session_progress(held) is SessionProgress.CONTINUATION
+
+        release_blocker.set()
+        probe = dispatcher.submit("plain", b"probe")
+        states_to_terminal(dispatcher.subscribe(probe))
+        assert dispatcher.get(first).state is SessionState.PAUSED
+        assert opened == [b"first", b"blocker", b"probe"]
+
+        assert dispatcher.resume_all() == BulkControlResult(resumed=1)
+        assert states_to_terminal(events) == [
+            SessionState.PENDING,
+            SessionState.RUNNING,
+            SessionState.COMPLETED,
+        ]
+        assert dispatcher.get(first).result.disposition is Disposition.RAN
+        assert opened == [b"first", b"blocker", b"probe", b"continued"]
+        assert dispatcher.shutdown().complete
+    finally:
+        release_blocker.set()
+        dispatcher.shutdown(2)
+
+
+def test_resume_all_queues_released_sessions_behind_later_admissions() -> None:
+    resource = unique_resource("order")
+    started: list[bytes] = []
+    first_entered = Event()
+    later_entered = Event()
+    release_later = Event()
+
+    def run_for(payload):
+        def run(context):
+            started.append(payload)
+            if payload == b"s1":
+                checkpoint_loop(first_entered)(context)
+            if payload == b"s4":
+                later_entered.set()
+                assert release_later.wait(HANG_GUARD)
+            return OperationResult(SessionState.COMPLETED)
+
+        return run
+
+    dispatcher = Dispatcher(
+        {
+            "work": registration(
+                run_for, supports_pause=True, resources=(resource,)
+            )
+        },
+        lock_provider=InProcessResourceLockProvider(),
+    )
+    try:
+        s1 = dispatcher.submit("work", b"s1")
+        first_events = dispatcher.subscribe(s1)
+        assert first_entered.wait(HANG_GUARD)
+        s2 = dispatcher.submit("work", b"s2")
+        s3 = dispatcher.submit("work", b"s3")
+
+        assert dispatcher.pause_all() == BulkControlResult(paused=1, held=2)
+        assert states_through(first_events, SessionState.PAUSED)[-1] is (
+            SessionState.PAUSED
+        )
+        # Pause all is a point in time: a session admitted after it runs.
+        s4 = dispatcher.submit("work", b"s4")
+        assert later_entered.wait(HANG_GUARD)
+        s5 = dispatcher.submit("work", b"s5")
+        assert dispatcher.resume_all() == BulkControlResult(resumed=3)
+        release_later.set()
+
+        for session_id in (s1, s2, s3, s4, s5):
+            assert states_to_terminal(dispatcher.subscribe(session_id))[-1] is (
+                SessionState.COMPLETED
+            )
+        assert started == [b"s1", b"s4", b"s5", b"continued", b"s2", b"s3"]
+        assert dispatcher.shutdown().complete
+    finally:
+        release_later.set()
+        dispatcher.shutdown(2)
+
+
+def test_resume_all_queues_behind_admissions_while_the_scheduler_is_busy(
+    monkeypatch,
+) -> None:
+    resource = unique_resource("busy-order")
+    started: list[bytes] = []
+    first_entered = Event()
+    stall_next = Event()
+    stalled = Event()
+    unstall = Event()
+    original_start = Thread.start
+
+    def start(thread) -> None:
+        if thread.name.startswith("namisync-session-") and stall_next.is_set():
+            stall_next.clear()
+            stalled.set()
+            assert unstall.wait(HANG_GUARD)
+        original_start(thread)
+
+    def run_for(payload):
+        def run(context):
+            if payload != b"free":
+                started.append(payload)
+            if payload == b"s1":
+                checkpoint_loop(first_entered)(context)
+            return OperationResult(SessionState.COMPLETED)
+
+        return run
+
+    monkeypatch.setattr(Thread, "start", start)
+    dispatcher = Dispatcher(
+        {
+            "work": registration(
+                run_for, supports_pause=True, resources=(resource,)
+            ),
+            "free": registration(run_for),
+        },
+        lock_provider=InProcessResourceLockProvider(),
+    )
+    try:
+        s1 = dispatcher.submit("work", b"s1")
+        first_events = dispatcher.subscribe(s1)
+        assert first_entered.wait(HANG_GUARD)
+        s2 = dispatcher.submit("work", b"s2")
+        # Stall the scheduler while it starts an unrelated worker, so it
+        # cannot drop the held session's stale queue entry by itself.
+        stall_next.set()
+        free = dispatcher.submit("free", b"free")
+        assert stalled.wait(HANG_GUARD)
+
+        assert dispatcher.pause_all() == BulkControlResult(paused=1, held=2)
+        assert states_through(first_events, SessionState.PAUSED)[-1] is (
+            SessionState.PAUSED
+        )
+        s4 = dispatcher.submit("work", b"s4")
+        assert dispatcher.resume_all() == BulkControlResult(resumed=3)
+        unstall.set()
+
+        for session_id in (s1, s2, free, s4):
+            assert states_to_terminal(dispatcher.subscribe(session_id))[-1] is (
+                SessionState.COMPLETED
+            )
+        assert started == [b"s1", b"s4", b"continued", b"s2"]
+        assert dispatcher.shutdown().complete
+    finally:
+        unstall.set()
+        dispatcher.shutdown(2)
+
+
+@pytest.mark.parametrize("blocker_pauses", [False, True])
+def test_resume_all_starts_held_sessions_after_one_admitted_during_the_hold(
+    blocker_pauses: bool,
+) -> None:
+    resource = unique_resource("held-order")
+    started: list[bytes] = []
+    blocker_entered = Event()
+    release_blocker = Event()
+    later_entered = Event()
+    release_later = Event()
+
+    def run_for(payload):
+        def run(context):
+            started.append(payload)
+            if payload == b"blocker":
+                blocker_entered.set()
+                while blocker_pauses:
+                    context.checkpoint()
+                    sleep(0.005)
+                assert release_blocker.wait(HANG_GUARD)
+            if payload == b"s4":
+                later_entered.set()
+                assert release_later.wait(HANG_GUARD)
+            return OperationResult(SessionState.COMPLETED)
+
+        return run
+
+    dispatcher = Dispatcher(
+        {
+            "blocker": registration(
+                run_for, supports_pause=blocker_pauses, resources=(resource,)
+            ),
+            "work": registration(run_for, resources=(resource,)),
+        },
+        lock_provider=InProcessResourceLockProvider(),
+    )
+    try:
+        blocker = dispatcher.submit("blocker", b"blocker")
+        blocker_events = dispatcher.subscribe(blocker)
+        assert blocker_entered.wait(HANG_GUARD)
+        held = [
+            dispatcher.submit("work", payload) for payload in (b"s1", b"s2", b"s3")
+        ]
+
+        assert dispatcher.pause_all() == (
+            BulkControlResult(paused=1, held=3)
+            if blocker_pauses
+            else BulkControlResult(held=3, still_running=1)
+        )
+        if blocker_pauses:
+            assert states_through(blocker_events, SessionState.PAUSED)[-1] is (
+                SessionState.PAUSED
+            )
+        s4 = dispatcher.submit("work", b"s4")
+        release_blocker.set()
+        assert later_entered.wait(HANG_GUARD)
+        for session_id in held:
+            record = dispatcher.get(session_id)
+            assert record.state is SessionState.PAUSED
+            assert record.started_at is None
+
+        assert dispatcher.resume_all() == BulkControlResult(
+            resumed=4 if blocker_pauses else 3
+        )
+        release_later.set()
+        for session_id in (blocker, *held, s4):
+            assert states_to_terminal(dispatcher.subscribe(session_id))[-1] is (
+                SessionState.COMPLETED
+            )
+            assert dispatcher.get(session_id).result.disposition is (
+                Disposition.RAN
+            )
+        expected = [b"blocker", b"s4", b"s1", b"s2", b"s3"]
+        if blocker_pauses:
+            # The paused blocker was admitted first, so it is released first.
+            expected.insert(2, b"continued")
+        assert started == expected
+        assert dispatcher.shutdown().complete
+    finally:
+        release_blocker.set()
+        release_later.set()
+        dispatcher.shutdown(2)
+
+
+def test_shutdown_settles_held_sessions_and_releases_custody() -> None:
+    resource = unique_resource("shutdown")
+    open_entered = Event()
+    release_open = Event()
+    opens: list[object] = []
+    settled: list[tuple[object, Disposition]] = []
+
+    def open_session(checkpoint):
+        opens.append(checkpoint)
+        if checkpoint == b"opening":
+            open_entered.set()
+            assert release_open.wait(HANG_GUARD)
+        return Invocation(completed)
+
+    def settle_canceled(checkpoint, disposition):
+        settled.append((checkpoint, disposition))
+        return OperationResult(
+            SessionState.CANCELED, disposition=disposition, canceled=True
+        )
+
+    dispatcher = Dispatcher(
+        {
+            "work": WorkflowRegistration(
+                prepare=lambda request: PreparedSession(
+                    request, frozenset({resource})
+                ),
+                open=open_session,
+                settle_canceled=settle_canceled,
+            )
+        },
+        lock_provider=InProcessResourceLockProvider(),
+    )
+    results = []
+    try:
+        opening = dispatcher.submit("work", b"opening")
+        opening_events = dispatcher.subscribe(opening)
+        assert open_entered.wait(HANG_GUARD)
+        queued = dispatcher.submit("work", b"queued")
+        assert dispatcher.pause_all() == BulkControlResult(held=2)
+
+        stopper = Thread(
+            target=lambda: results.append(dispatcher.shutdown(HANG_GUARD)),
+            daemon=True,
+        )
+        stopper.start()
+        # Shutdown cancels the held session while its withdrawn attempt is
+        # still inside open; that attempt must retire without settling it.
+        assert states_through(opening_events, SessionState.CANCELING) == [
+            SessionState.PENDING,
+            SessionState.PAUSED,
+            SessionState.CANCELING,
+        ]
+        release_open.set()
+        stopper.join(HANG_GUARD)
+        assert len(results) == 1
+        assert results[0].complete
+        assert results[0].custody_released
+        for session_id in (opening, queued):
+            record = dispatcher.get(session_id)
+            assert record.state is SessionState.CANCELED
+            assert record.started_at is None
+            assert record.result is not None
+            assert record.result.disposition is Disposition.UNRUN
+            assert record.result.canceled
+        assert opens == [b"opening"]
+        assert settled == []
+    finally:
+        release_open.set()
+        dispatcher.shutdown(2)
+
+
+def test_bulk_control_counts_each_session_by_its_state() -> None:
+    shared = unique_resource("counts")
+    entered = {name: Event() for name in (b"a", b"b", b"e", b"g")}
+    release = {name: Event() for name in (b"b", b"e", b"g")}
+
+    def run_for(payload):
+        def run(context):
+            if payload in entered:
+                entered[payload].set()
+            if payload in release:
+                assert release[payload].wait(HANG_GUARD)
+            if payload in (b"a", b"e", b"g"):
+                while True:
+                    context.checkpoint()
+                    sleep(0.005)
+            return OperationResult(SessionState.COMPLETED)
+
+        return run
+
+    dispatcher = Dispatcher(
+        {
+            "pausable": registration(run_for, supports_pause=True),
+            "plain": registration(run_for),
+            "shared": registration(run_for, resources=(shared,)),
+            "shared-pausable": registration(
+                run_for, supports_pause=True, resources=(shared,)
+            ),
+        },
+        lock_provider=InProcessResourceLockProvider(),
+    )
+    try:
+        a = dispatcher.submit("pausable", b"a")
+        e = dispatcher.submit("pausable", b"e")
+        g = dispatcher.submit("plain", b"g")
+        b = dispatcher.submit("shared", b"b")
+        for event in entered.values():
+            assert event.wait(HANG_GUARD)
+        c = dispatcher.submit("shared-pausable", b"c")
+        streams = {
+            session_id: dispatcher.subscribe(session_id)
+            for session_id in (a, b, c, e, g)
+        }
+        # Single control is unchanged: one pending session cannot pause.
+        assert dispatcher.pause(c).code is ControlCode.ILLEGAL_STATE
+        assert dispatcher.pause(e).accepted
+        assert dispatcher.cancel(g).accepted
+
+        assert dispatcher.pause_all() == BulkControlResult(
+            paused=1, held=1, already_pausing=1, still_running=1
+        )
+
+        for event in release.values():
+            event.set()
+        assert states_through(streams[a], SessionState.PAUSED)[-1] is (
+            SessionState.PAUSED
+        )
+        assert states_through(streams[e], SessionState.PAUSED)[-1] is (
+            SessionState.PAUSED
+        )
+        assert states_to_terminal(streams[b])[-1] is SessionState.COMPLETED
+        assert states_to_terminal(streams[g])[-1] is SessionState.CANCELED
+        assert dispatcher.get(c).state is SessionState.PAUSED
+
+        assert dispatcher.pause_all() == BulkControlResult()
+        assert dispatcher.resume_all() == BulkControlResult(resumed=3)
+        for session_id in (a, c, e):
+            assert states_to_terminal(streams[session_id])[-1] is (
+                SessionState.COMPLETED
+            )
+        assert dispatcher.resume_all() == BulkControlResult()
+        assert dispatcher.shutdown().complete
+    finally:
+        for event in release.values():
+            event.set()
+        dispatcher.shutdown(2)
+
+
+@pytest.mark.parametrize("stage", ["acquire", "open", "settle_canceled"])
+def test_pause_requested_before_running_is_an_adapter_failure(stage: str) -> None:
+    entered = Event()
+
+    class Locks:
+        def acquire(self, resources, canceled):
+            if stage == "acquire":
+                raise PauseRequested()
+            return FreeLease()
+
+    def open_session(checkpoint):
+        if stage == "open":
+            raise PauseRequested()
+        return Invocation(checkpoint_loop(entered))
+
+    def settle_canceled(checkpoint, disposition):
+        raise PauseRequested()
+
+    dispatcher = Dispatcher(
+        {
+            "work": WorkflowRegistration(
+                prepare=lambda request: PreparedSession(
+                    request, frozenset({unique_resource(stage)})
+                ),
+                open=open_session,
+                supports_pause=True,
+                settle_canceled=settle_canceled,
+            )
+        },
+        lock_provider=Locks(),
+    )
+    try:
+        session_id = dispatcher.submit("work", b"payload")
+        events = dispatcher.subscribe(session_id)
+        if stage == "settle_canceled":
+            assert entered.wait(HANG_GUARD)
+            assert dispatcher.pause(session_id).accepted
+            assert states_through(events, SessionState.PAUSED)[-1] is (
+                SessionState.PAUSED
+            )
+            assert dispatcher.cancel(session_id).accepted
+            expected = [SessionState.CANCELING, SessionState.FAILED]
+            disposition = Disposition.RAN
+        else:
+            expected = [SessionState.PENDING, SessionState.FAILED]
+            disposition = Disposition.UNRUN
+
+        # No pause is accepted before RUNNING, so it never settles PAUSED.
+        assert states_to_terminal(events) == expected
+        record = dispatcher.get(session_id)
+        assert record.result is not None
+        assert record.result.disposition is disposition
+        assert record.result.error is not None
+        assert record.result.error.type_name == "PauseRequested"
+        shutdown = dispatcher.shutdown()
+        assert shutdown.complete
+        assert shutdown.custody_released
+    finally:
+        dispatcher.shutdown(2)
