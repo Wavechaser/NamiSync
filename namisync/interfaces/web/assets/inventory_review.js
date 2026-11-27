@@ -1,5 +1,5 @@
 import { createTableColumns } from "./table_columns.js";
-import { taskStatusDigest } from "./task_status.js";
+import { taskControls, taskStatusDigest } from "./task_status.js";
 import { createFilterMenu } from "./filter_menu.js";
 import { createRowMenu } from "./row_menu.js";
 import { createIcon } from "./icons.js";
@@ -1009,9 +1009,15 @@ export function createInventoryReviewPanel(callbacks, detailsState = { expanded:
     const activityAdvice = auxiliarySession && digest.title === "Baseline created" ? digest.detail
       : auxiliarySession && value.snapshot?.session_id === value.sessionId && value.snapshot?.terminal_result?.error
         ? value.snapshot.terminal_result.error : "";
-    const controlAdvice = auxiliarySession && value.sessionState === "active"
-      ? ({paused: "Activity is paused. Resume when ready.", pausing: "Pausing at the next safe checkpoint.",
-        canceling: "Canceling at the next safe checkpoint."})[value.executionControlState] ?? "" : "";
+    const control = taskControls(value);
+    // Only Verify and baseline activity has a page Resume; a held scan resumes from the rail.
+    const controlMessage = ({held: auxiliarySession
+      ? "Activity was paused before it started. Resume when ready."
+      : "Activity was paused before it started. Use Resume all to start it.",
+      paused: "Activity is paused. Resume when ready.", pausing: "Pausing at the next safe checkpoint.",
+      canceling: "Canceling at the next safe checkpoint."})[control.state];
+    const controlAdvice = (auxiliarySession || control.state === "held") && value.sessionState === "active"
+      ? controlMessage ?? "" : "";
     renderFilesystemText(status, [...new Set([
       publicationAdvice, activityAdvice, controlAdvice,
       guidance, value.inventoryAction?.message,
@@ -1019,10 +1025,7 @@ export function createInventoryReviewPanel(callbacks, detailsState = { expanded:
       available && syncTask && copiedScopeEmpty && value.sessionReleased
         ? "Execution copied no files successfully. Select files and use Verify selected." : "",
     ].filter(Boolean))].join(" ") || (value.sessionState === "active"
-      ? value.executionControlState === "paused" ? "Activity is paused. Resume when ready."
-        : value.executionControlState === "pausing" ? "Pausing at the next safe checkpoint."
-          : value.executionControlState === "canceling" ? "Canceling at the next safe checkpoint."
-            : "Inventory activity is in progress."
+      ? controlMessage ?? "Inventory activity is in progress."
       : "Review items or select files for integrity checks."));
     renderFilesystemText(globalScanFacts, available
       ? `${detailPublication}${hasScan ? ` · ${review.summary.scan_complete ? "complete" : "incomplete"} · ${scanCounts}` : ""}` : "");
@@ -1062,12 +1065,14 @@ export function createInventoryReviewPanel(callbacks, detailsState = { expanded:
     renderText(verify, syncTask ? "Verify selected" : "Verify");
     copiedVerify.hidden = !syncTask || currentAuxiliary;
     copiedVerify.disabled = copiedScopeEmpty || !value.sessionReleased || !currentPublication || Boolean(blocked());
-    pause.hidden = !currentAuxiliary || value.executionControlState === "paused";
-    pause.disabled = !currentAuxiliary || value.executionControlState !== "running" || Boolean(blocked());
-    resume.hidden = !currentAuxiliary || value.executionControlState !== "paused";
-    resume.disabled = !currentAuxiliary || Boolean(blocked());
+    // The server's capabilities decide which control is offered; the
+    // dispatcher still decides each request.
+    pause.hidden = !currentAuxiliary || control.canResume;
+    pause.disabled = !currentAuxiliary || !control.canPause || Boolean(blocked());
+    resume.hidden = !currentAuxiliary || !control.canResume;
+    resume.disabled = !currentAuxiliary || !control.canResume || Boolean(blocked());
     cancel.hidden = !currentAuxiliary;
-    cancel.disabled = !currentAuxiliary || value.executionControlState === "canceling" || Boolean(blocked());
+    cancel.disabled = !currentAuxiliary || !control.canStop || Boolean(blocked());
     const missingCount = selected?.is_container ? selected.rollup.missing
       : selected?.presence === "missing" && !selected.acknowledged ? 1 : 0;
     const acknowledgedCount = selected?.is_container ? selected.rollup.acknowledged

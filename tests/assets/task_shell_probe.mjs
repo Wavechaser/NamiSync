@@ -136,6 +136,13 @@ const pageSnapshot = (taskId, sessionId, facts = {}) => {
   const revision = (snapshotRevisions.get(key) ?? 0) + 1;
   snapshotRevisions.set(key, revision);
   const live = (facts.session_state ?? "active") === "active";
+  // Capabilities follow the server matrix for the named control state: a
+  // paused, pausing or canceling session has run; "running" stays pending-like.
+  const control = facts.control_state ?? "running";
+  const capabilities = !live ? {} : control === "paused"
+    ? { session_progress: "continuation", can_resume: true }
+    : control === "pausing" ? { session_progress: "continuation" }
+      : control === "canceling" ? { session_progress: "continuation", can_stop: false } : {};
   return {
     wire_version: 4, task_id: taskId, session_id: sessionId, revision,
     session_state: "active", control_state: "running", phase: null,
@@ -146,6 +153,7 @@ const pageSnapshot = (taskId, sessionId, facts = {}) => {
       eta_seconds: null, value: 0, determinate: false, indeterminate: true },
     gap_first_missed_seq: null, terminal_result: null, started_at: null, ended_at: null,
     session_progress: live ? "none" : null, can_pause: false, can_resume: false, can_stop: live,
+    ...capabilities,
     ...facts,
   };
 };
@@ -162,6 +170,7 @@ const planAnchors = [];
 const planHighlights = [];
 const planExecutions = [];
 const executionControls = [];
+const bulkControls = [];
 const planAgainStarts = [];
 const setupReads = [];
 const executionDetails = [];
@@ -258,6 +267,10 @@ globalThis.taskHarness = {
     calls.push(["execute-plan", ...args.slice(0, -1)]);
     const promise = deferred(planExecutions, args.at(-1));
     return promise;
+  },
+  controlAllTasks(action, onDelayed) {
+    calls.push(["control-all", action]);
+    return deferred(bulkControls, onDelayed);
   },
   controlExecution(...args) {
     assert.equal(typeof args.at(-1), "function", "execution control exposes delay feedback");
@@ -455,7 +468,7 @@ const railSource = (await readFile(process.argv[3], "utf8"))
 const {createTaskRail} = await import(moduleUrl(railSource));
 {
   const rail = createTaskRail(Object.fromEntries(
-    ["onCreate", "onSelect", "onClose", "onRetryUpdates", "onSettings"].map(name => [name, () => {}])));
+    ["onCreate", "onSelect", "onClose", "onRetryUpdates", "onSettings", "onPauseAll", "onResumeAll"].map(name => [name, () => {}])));
   const list = walk(rail.element).find(element => element.classList.values.has("nami-task-rail__items"));
   const older = {taskId: TASK_A, label: "Task 1"};
   const newer = {taskId: TASK_B, label: "Task 2"};
@@ -476,7 +489,7 @@ const {createTaskRail} = await import(moduleUrl(railSource));
   assert.equal(newestRow.parentNode, null, "removed task row is detached");
 }
 const headlineRail = createTaskRail(Object.fromEntries(
-  ["onCreate", "onSelect", "onClose", "onRetryUpdates", "onSettings"].map(name => [name, () => {}])));
+  ["onCreate", "onSelect", "onClose", "onRetryUpdates", "onSettings", "onPauseAll", "onResumeAll"].map(name => [name, () => {}])));
 const headlineTask = {taskId:"headline", label:"Headline", taskKind:"sync-plan", workPane:"plan",
   sessionId:"8".repeat(32), sessionKind:"sync-execution", sessionState:"active",
   executionStarted:true, executionControlState:"running", error:null,
@@ -525,6 +538,75 @@ for (const [patch, expected] of [
     ?? value.releaseRecovery?.message ?? value.error ?? value.inventoryError
     ?? value.review.window.execution.result.error, longError,
     "compact rail text preserves the task's full explanatory state");
+}
+{
+  // Pause all and Resume all: enablement comes from live capabilities, one
+  // request at a time, and the result stays readable in the header notice.
+  const bulkCalls = [];
+  const bulkRail = createTaskRail({ ...Object.fromEntries(
+    ["onCreate", "onSelect", "onClose", "onRetryUpdates", "onSettings"].map(name => [name, () => {}])),
+  onPauseAll: () => bulkCalls.push("pause"), onResumeAll: () => bulkCalls.push("resume") });
+  const header = walk(bulkRail.element).find(element => element.classList.values.has("nami-task-rail__header"));
+  const [pauseAll, resumeAll] = walk(header).filter(element => element.classList.values.has("nami-task-rail__bulk"));
+  const notice = walk(header).find(element => element.classList.values.has("nami-task-rail__notice"));
+  assert.equal(notice.role, "status", "bulk results are announced");
+  assert.deepEqual([pauseAll.ariaLabel, pauseAll.title, resumeAll.ariaLabel, resumeAll.title],
+    ["Pause all", "Pause all", "Resume all", "Resume all"]);
+  assert.equal(pauseAll.classList.values.has("nami-button"), false, "bulk buttons stay distinct from New task");
+  const session = "6".repeat(32);
+  const live = (patch, label = "Bulk") => ({ taskId: `task-${label}`, label, sessionId: session,
+    sessionKind: "sync-execution", sessionState: "active", executionStarted: true, error: null,
+    snapshot: pageSnapshot(`task-${label}`, session, patch) });
+  const renderBulk = (tasks, bulk = null) => bulkRail.render(tasks, null, null, false, bulk);
+  renderBulk([]);
+  assert.deepEqual([pauseAll.disabled, resumeAll.disabled], [true, true], "an empty rail enables nothing");
+  // Model focus only for the header buttons so the handoff can be observed.
+  const createTask = walk(header).find(element => element.ariaLabel === "New task");
+  for (const button of [pauseAll, resumeAll, createTask]) button.focus = () => { document.activeElement = button; };
+  renderBulk([live({})]);
+  assert.deepEqual([pauseAll.disabled, resumeAll.disabled], [false, true], "a queued session can be held");
+  renderBulk([live({ session_progress: "continuation" })]);
+  assert.deepEqual([pauseAll.disabled, resumeAll.disabled], [true, true],
+    "a running kind that cannot pause enables nothing");
+  const held = live({ control_state: "paused", session_progress: "none" });
+  renderBulk([held]);
+  assert.deepEqual([pauseAll.disabled, resumeAll.disabled], [true, false]);
+  const heldCard = walk(bulkRail.element).find(element => element.dataset?.taskLabel === "Bulk");
+  assert.ok(walk(heldCard).some(element => element.textContent === "Paused, not started"),
+    "a held task reads as not started in the rail");
+  renderBulk([live({ control_state: "paused", can_resume: false })]);
+  assert.deepEqual([pauseAll.disabled, resumeAll.disabled], [false, true],
+    "a released run waiting to start can be held again");
+  assert.ok(!walk(heldCard).some(element => /paused/i.test(element.textContent ?? "")),
+    "a resumed task drops its paused label before it runs");
+  const both = [live({ control_state: "paused" }, "Paused"), live({ session_progress: "continuation",
+    can_pause: true }, "Running")];
+  renderBulk(both);
+  assert.deepEqual([pauseAll.disabled, resumeAll.disabled], [false, false]);
+  pauseAll.click();
+  assert.deepEqual(bulkCalls, ["pause"]);
+  const attempt = { action: "pause", running: true, recovery: null, message: null };
+  resumeAll.focus();
+  renderBulk(both, attempt);
+  assert.equal(document.activeElement, pauseAll, "focus leaves a bulk button that becomes disabled");
+  assert.deepEqual([pauseAll.disabled, pauseAll.ariaDisabled, resumeAll.disabled], [false, "true", true],
+    "the invoked button keeps focus but reports itself unavailable; the other is disabled");
+  assert.equal(notice.textContent, "Pausing all tasks…");
+  attempt.recovery = { canCheck: true, checking: false, message: "Original Pause all outcome is pending." };
+  renderBulk(both, attempt);
+  assert.deepEqual([pauseAll.disabled, pauseAll.ariaDisabled, pauseAll.ariaLabel, pauseAll.title],
+    [false, null, "Check Pause all outcome", "Check Pause all outcome"]);
+  assert.equal(notice.textContent, "Original Pause all outcome is pending.");
+  assert.equal(resumeAll.disabled, true, "the other bulk action waits for the pending one");
+  attempt.recovery.checking = true;
+  renderBulk(both, attempt);
+  assert.equal(pauseAll.ariaDisabled, "true", "a check in progress cannot be repeated");
+  Object.assign(attempt, { running: false, recovery: null, message: "Paused 1." });
+  renderBulk([], attempt);
+  assert.deepEqual([pauseAll.disabled, pauseAll.ariaDisabled, pauseAll.ariaLabel], [true, null, "Pause all"]);
+  assert.equal(document.activeElement, createTask, "with both bulk buttons disabled, focus moves to New task");
+  assert.equal(notice.textContent, "Paused 1.", "the result stays until the next bulk request");
+  delete document.activeElement;
 }
 const panelSource = (await readFile(process.argv[4], "utf8"))
   .replace("./render.js", renderUrl);
@@ -600,6 +682,7 @@ const bridgeUrl = moduleUrl(`
   export const createTask = (...args) => globalThis.taskHarness.createTask(...args);
   export const closeTask = (...args) => globalThis.taskHarness.closeTask(...args);
   export const listTasks = () => globalThis.taskHarness.listTasks();
+  export const controlAllTasks = (...args) => globalThis.taskHarness.controlAllTasks(...args);
   export const controlExecution = (...args) => globalThis.taskHarness.controlExecution(...args);
   export const getPlanAnchor = (...args) => globalThis.taskHarness.getPlanAnchor(...args);
   export const revealPlanMove = (...args) => globalThis.taskHarness.revealPlanMove(...args);
@@ -648,9 +731,19 @@ const themeUrl = moduleUrl(`
   });
 `);
 let appSource = await readFile(process.argv[2], "utf8");
+{
+  // The fixed mock import below must not hide a bridge function the app uses
+  // without importing it.
+  const bridgeImport = /import \{([\s\S]*?)\} from "\.\/bridge\.js";/.exec(appSource);
+  const imported = new Set(bridgeImport[1].split(",").map(name => name.trim()).filter(Boolean));
+  const body = appSource.slice(bridgeImport.index + bridgeImport[0].length);
+  const exported = Object.keys(await import(bridgeUrl));
+  const missing = exported.filter(name => !imported.has(name) && new RegExp(`\\b${name}\\b`).test(body));
+  assert.deepEqual(missing, [], "app.js uses bridge functions it does not import");
+}
 appSource = appSource.replace(
   /import \{[\s\S]*?\} from "\.\/bridge\.js";/,
-  `import { acknowledgeShellReady, acknowledgeInventory, admitLocation, BridgeTransportError, closeTask, controlExecution, createTask, echoReadiness, getExecutionDetail, getPlanDetail, getInventoryDetail, getInventoryItemAnchor, getInventoryWindow, openInventoryView, refreshInventory, restoreInventory, updateInventoryView, getPlanAnchor, getPlanOperationAnchor, getPlanWindow, revealPlanMove, listTasks, markBridgeOperational, mutatePlanHighlight, mutatePlanSelection, mutatePlanHighlightedSelection, openPlanView, OutcomeUnavailableError, pickFolder, planAgain, prepareSetup, readSetup, StartPlanUncertainError, startExecution, startInventory, startPlan, startTaskDrain, TaskCloseUncertainError, TaskCreateUncertainError, TerminalPresentationError, TerminalSessionReleaseError, updatePlanView, whenBridgeApiReady } from "${bridgeUrl}";`,
+  `import { acknowledgeShellReady, acknowledgeInventory, admitLocation, BridgeTransportError, closeTask, controlAllTasks, controlExecution, createTask, echoReadiness, getExecutionDetail, getPlanDetail, getInventoryDetail, getInventoryItemAnchor, getInventoryWindow, openInventoryView, refreshInventory, restoreInventory, updateInventoryView, getPlanAnchor, getPlanOperationAnchor, getPlanWindow, revealPlanMove, listTasks, markBridgeOperational, mutatePlanHighlight, mutatePlanSelection, mutatePlanHighlightedSelection, openPlanView, OutcomeUnavailableError, pickFolder, planAgain, prepareSetup, readSetup, StartPlanUncertainError, startExecution, startInventory, startPlan, startTaskDrain, TaskCloseUncertainError, TaskCreateUncertainError, TerminalPresentationError, TerminalSessionReleaseError, updatePlanView, whenBridgeApiReady } from "${bridgeUrl}";`,
 );
 appSource = appSource
   .replace("./readiness.js", readinessUrl)
@@ -2839,6 +2932,9 @@ async function openActiveUnknownOutcomeTask(hex) {
   await until(() => planWindows.length === windowBase + 1);
   planWindows.at(-1).resolve(planWindow(summary));
   await until(() => task.review !== null);
+  // Controls follow the live session's server capabilities.
+  drains.get(taskId).acceptUpdate(stateUpdate("running"), pageSnapshot(taskId, sessionId, {
+    session_progress: "continuation", can_pause: true }));
   taskButton(task.label).click();
   return task;
 }
@@ -3846,4 +3942,52 @@ assert.equal(planOpens.length, limitOpenCount, "a typed refusal has no Plan to r
 assert.equal(limitTask.error, null, "the obsolete open failure cannot replace the typed refusal");
 assert.equal(taskStatusDigest(limitTask).title, "Plan limit exceeded");
 assert.match(taskStatusDigest(limitTask).detail, /120,000 plan items/);
+
+{
+  // The app owns one bulk request at a time and turns its counts or failure
+  // into a notice that names the next step.
+  const appHeader = walk(app).find(element => element.classList.values.has("nami-task-rail__header"));
+  const [appPauseAll, appResumeAll] = walk(appHeader)
+    .filter(element => element.classList.values.has("nami-task-rail__bulk"));
+  const appNotice = walk(appHeader).find(element => element.classList.values.has("nami-task-rail__notice"));
+  // Invoke listeners directly so the handler's own guard is tested even if
+  // the button state were stale.
+  const press = (button) => { for (const callback of button.listeners.get("click")) callback(); };
+  const bulkCallCount = () => calls.filter(call => call[0] === "control-all").length;
+  for (const [action, button, counts, expected] of [
+    ["pause", appPauseAll, {paused: 2, held: 3, already_pausing: 0, still_running: 1},
+      "Paused 2, held 3; 1 cannot pause and keeps running."],
+    ["pause", appPauseAll, {paused: 0, held: 1, already_pausing: 2, still_running: 2},
+      "Held 1; 2 already pausing; 2 cannot pause and keep running."],
+    ["pause", appPauseAll, {paused: 0, held: 0, already_pausing: 0, still_running: 0}, "Nothing to pause."],
+    ["resume", appResumeAll, {resumed: 4}, "Resumed 4."],
+    ["resume", appResumeAll, {resumed: 0}, "Nothing to resume."],
+  ]) {
+    const before = bulkCallCount();
+    press(button);
+    await turns();
+    assert.equal(bulkCallCount(), before + 1);
+    assert.deepEqual(calls.filter(call => call[0] === "control-all").at(-1), ["control-all", action]);
+    assert.equal(appPauseAll.disabled || appPauseAll.ariaDisabled === "true", true, "in flight blocks Pause all");
+    assert.equal(appResumeAll.disabled || appResumeAll.ariaDisabled === "true", true, "in flight blocks Resume all");
+    press(appPauseAll);
+    press(appResumeAll);
+    await turns();
+    assert.equal(bulkCallCount(), before + 1, "a second press cannot submit a duplicate bulk request");
+    bulkControls.at(-1).resolve(counts);
+    await turns();
+    assert.equal(appNotice.textContent, expected);
+  }
+  press(appPauseAll);
+  await turns();
+  bulkControls.at(-1).reject(new OutcomeUnavailableErrorType(null, false));
+  await turns();
+  assert.equal(appNotice.textContent,
+    "Pause all could not be confirmed. Check the task statuses, then use Pause all again if needed.");
+  press(appResumeAll);
+  await turns();
+  bulkControls.at(-1).reject(new Error("bridge_busy"));
+  await turns();
+  assert.equal(appNotice.textContent, "Resume all did not run. Try again in a moment.");
+}
 process.stdout.write("ok");

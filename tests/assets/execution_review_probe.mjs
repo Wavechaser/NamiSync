@@ -32,7 +32,10 @@ const source = (await readFile(process.argv[2], "utf8"))
   .replace("./task_status.js", taskStatusUrl);
 const { projectExecutionRow, projectExecutionSummary } = await import(moduleUrl(source));
 const {
+  bulkControlAvailability,
   projectActiveOperationProgress,
+  snapshotControlState,
+  taskControls,
   taskStatusDigest,
   terminalStatusLine,
 } = await import(taskStatusUrl);
@@ -103,6 +106,58 @@ const pausedDigest = taskStatusDigest({
 });
 assert.equal(pausedDigest.title, "Execution paused");
 assert.equal(pausedDigest.progress.indeterminate, false);
+
+// Capabilities come from the live v4 snapshot; the dispatcher stays the authority.
+const capability = (patch) => ({ ...unknownSnapshot, control_state: "running", session_progress: "continuation",
+  can_pause: false, can_resume: false, can_stop: true, ...patch });
+const liveControl = (patch, extra = {}) => taskControls({ sessionId: digestSession, snapshot: capability(patch),
+  executionControlState: "running", ...extra });
+assert.deepEqual({ ...liveControl({ can_pause: true }) },
+  { state: "running", canPause: true, canResume: false, canStop: true });
+assert.deepEqual({ ...liveControl({ control_state: "paused", can_resume: true }) },
+  { state: "paused", canPause: false, canResume: true, canStop: true });
+assert.equal(liveControl({ control_state: "paused", session_progress: "none", can_resume: true }).state, "held",
+  "a pause before the first run is held, not paused");
+assert.equal(liveControl({ control_state: "paused" }).state, "pending",
+  "a released run is pending even while control_state still reads paused");
+assert.deepEqual({ ...liveControl({ can_pause: true }, { sessionId: "9".repeat(32) }) },
+  { state: "running", canPause: false, canResume: false, canStop: false },
+  "another session's snapshot grants no control");
+assert.deepEqual({ ...liveControl({ session_progress: null, can_pause: true }) },
+  { state: "running", canPause: false, canResume: false, canStop: false },
+  "a pre-v4 or terminal snapshot grants no control");
+assert.equal(snapshotControlState(capability({ control_state: "canceling", can_stop: false })), "canceling");
+const railTask = (patch) => ({ sessionId: digestSession, snapshot: capability(patch) });
+assert.deepEqual({ ...bulkControlAvailability([]) }, { pause: false, resume: false });
+assert.deepEqual({ ...bulkControlAvailability([railTask({ can_pause: true })]) }, { pause: true, resume: false });
+assert.deepEqual({ ...bulkControlAvailability([railTask({ session_progress: "none" })]) },
+  { pause: true, resume: false }, "a queued session can be held");
+assert.deepEqual({ ...bulkControlAvailability([railTask({ control_state: "paused" })]) },
+  { pause: true, resume: false }, "a released run waiting to start can be held again");
+assert.deepEqual({ ...bulkControlAvailability([railTask({})]) }, { pause: false, resume: false },
+  "a running kind that cannot pause enables nothing");
+assert.deepEqual({ ...bulkControlAvailability([railTask({ control_state: "pausing" })]) },
+  { pause: false, resume: false }, "an already pausing session enables nothing");
+assert.deepEqual({ ...bulkControlAvailability([railTask({ control_state: "paused", can_resume: true })]) },
+  { pause: false, resume: true });
+assert.deepEqual({ ...bulkControlAvailability([railTask({ control_state: "canceling", can_stop: false })]) },
+  { pause: false, resume: false });
+const heldDigest = taskStatusDigest({ sessionId: digestSession, sessionKind: "sync-execution", sessionState: "active",
+  executionStarted: true, executionControlState: "paused",
+  snapshot: capability({ control_state: "paused", session_progress: "none", can_resume: true }) });
+assert.equal(heldDigest.title, "Paused, not started");
+assert.equal(heldDigest.state, "paused");
+assert.equal(heldDigest.detail, "Paused before it started. Resume when ready.");
+assert.equal(heldDigest.progress.indeterminate, false, "a held task shows no running progress");
+const heldScan = taskStatusDigest({ sessionId: digestSession, taskKind: "inventory", sessionKind: "inventory",
+  sessionState: "active",
+  snapshot: capability({ control_state: "paused", session_progress: "none", can_resume: true }) });
+assert.equal(heldScan.title, "Paused, not started");
+assert.equal(heldScan.detail, "Paused before it started. Use Resume all to start it.");
+const releasedDigest = taskStatusDigest({ sessionId: digestSession, sessionKind: "sync-execution",
+  sessionState: "active", executionStarted: true, executionControlState: "paused",
+  snapshot: capability({ control_state: "paused" }) });
+assert.doesNotMatch(releasedDigest.title, /paused/i, "a resumed task drops the paused label before it runs");
 const result = (patch = {}) => ({
   headline: "success", filesystem: "completed", integrity: "verified",
   recording: "ok", audit: "ok", disposition: "ran", canceled: false,

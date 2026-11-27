@@ -120,8 +120,19 @@ Recovery adopts the session record's state and start time before reducing the
 replayed tail, so a later state change in that tail still wins. They are
 presentation, not authority: between state events they reflect the last
 reduced state, and the dispatcher still decides each command. Browser
-admission refuses combinations the matrix cannot produce. Pages may keep their
-own control rules until they switch to these fields.
+admission refuses combinations the matrix cannot produce. Desktop pages and the
+rail take control availability from these fields
+([DESKTOP_UI](DESKTOP_UI.md#live-execution-controls)).
+
+`control_state` is the last control state reduced from a state event:
+`running`, `pausing`, `paused` or `canceling`, and `running` before any such
+event. It is not the lifecycle state. Pending and interrupted do not change
+it, so after Resume moves a paused session to pending it still reads `paused`
+until the next running, pausing or canceling event. Gap recovery does not
+refresh it; recovery refreshes only the capability fields and
+`session_progress`. Pages decide controls from the capability fields and use
+`control_state` only to word a state those fields already allow, such as a
+released session that waits to start.
 
 Snapshot bytes participate in the same complete response ceiling as the event
 prefix. Reduction and byte admission are staged from captured values; failure

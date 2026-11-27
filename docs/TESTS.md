@@ -361,7 +361,8 @@ The launcher creates a uniquely named private Win32 desktop in the current
 interactive session. It starts pytest suspended, admits it to a kill-on-close
 Job before resuming, and returns its exit code. The user's input desktop stays
 selected. The `background_headed` marker selects both task-shell and execution
-review sizes, Inventory, Setup, the keyboard tree, and the component gallery.
+review sizes, Inventory, the rail's Pause all and Resume all, Setup, the keyboard
+tree, and the component gallery.
 Invoking pytest with the marker alone still creates windows on the caller's
 desktop. This route was exercised in a signed-in interactive session. The
 ordinary non-headed default is unchanged.

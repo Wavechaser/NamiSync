@@ -173,6 +173,14 @@ const task = { taskId: "inventory", taskKind: "inventory", sessionState: "comple
   requestId: fixture.views.default.summary.request_id,
   inventoryLoading: false, closePending: false, inventoryError: null, sessionReleased: true,
   inventoryViewUnconfirmed: false, inventoryAction: null };
+// Controls follow the live snapshot's capabilities for a named server state.
+const setControl = (value, state) => {
+  value.executionControlState = state === "held" ? "paused" : state;
+  value.snapshot = { session_id: value.sessionId, session_state: "active", phase: "verify", terminal_result: null,
+    presentation: { value: 0, determinate: false, indeterminate: false },
+    control_state: value.executionControlState, session_progress: state === "held" ? "none" : "continuation",
+    can_pause: state === "running", can_resume: ["paused", "held"].includes(state), can_stop: state !== "canceling" };
+};
 const walk = (root) => [root, ...root.children.flatMap(walk)];
 const find = (predicate) => walk(pane.element).find(predicate);
 const action = (key) => find((value) => value.dataset.action === key);
@@ -302,7 +310,7 @@ task.sessionId = "b".repeat(32);
 task.sessionKind = "verify";
 task.sessionState = "active";
 task.sessionReleased = false;
-task.executionControlState = "running";
+setControl(task, "running");
 review.summary = originalSummary;
 review.window = originalWindow;
 pane.render(task);
@@ -321,12 +329,12 @@ assert.equal(action("inventory-pause").disabled, true,
   "an accepted control remains visibly owned until live state changes");
 assert.equal(action("inventory-cancel").disabled, true);
 task.inventoryAction = null;
-task.executionControlState = "pausing";
+setControl(task, "pausing");
 pane.render(task);
 assert.equal(action("inventory-pause").disabled, true);
 assert.equal(action("inventory-resume").hidden, true,
   "pausing keeps both Pause and Resume unavailable until the checkpoint settles");
-task.executionControlState = "paused";
+setControl(task, "paused");
 pane.render(task);
 assert.equal(action("inventory-resume").hidden, false);
 assert.equal(walk(action("inventory-resume")).find(value => value.classList.contains("nami-icon--play-filled")).ariaHidden, "true");
@@ -334,6 +342,25 @@ action("inventory-resume").click();
 assert.deepEqual(controls.at(-1), [review, "resume"]);
 action("inventory-cancel").click();
 assert.deepEqual(controls.at(-1), [review, "cancel"]);
+setControl(task, "held");
+pane.render(task);
+assert.equal(action("inventory-resume").hidden, false, "a held activity offers Resume");
+assert.equal(action("inventory-pause").hidden, true);
+assert.match(statusLine.textContent, /Activity was paused before it started\. Resume when ready\./);
+task.sessionKind = "inventory";
+pane.render(task);
+assert.equal(action("inventory-resume").hidden, true, "a held scan has no page Resume");
+assert.match(statusLine.textContent, /Activity was paused before it started\. Use Resume all to start it\./,
+  "a held scan points to the rail's Resume all");
+task.sessionKind = "verify";
+setControl(task, "running");
+task.snapshot.can_pause = false;
+pane.render(task);
+assert.equal(action("inventory-pause").disabled, true, "Pause follows can_pause, not the running label");
+setControl(task, "canceling");
+pane.render(task);
+assert.equal(action("inventory-cancel").disabled, true, "Cancel follows can_stop");
+task.snapshot = null;
 task.sessionId = null;
 task.sessionKind = "inventory";
 task.sessionState = "completed";

@@ -1,9 +1,15 @@
 import { createIcon } from "./icons.js";
 import { renderFilesystemText, renderText } from "./render.js";
-import { selectTaskExecution, taskStatusDigest } from "./task_status.js";
+import { bulkControlAvailability, selectTaskExecution, taskStatusDigest } from "./task_status.js";
 
-export function createTaskRail({ onCreate, onSelect, onClose, onRetryUpdates, onSettings }) {
-  if (![onCreate, onSelect, onClose, onRetryUpdates, onSettings].every((callback) => typeof callback === "function")) {
+const BULK_ACTIONS = Object.freeze({
+  pause: Object.freeze({ label: "Pause all", glyph: "pause", running: "Pausing all tasks…" }),
+  resume: Object.freeze({ label: "Resume all", glyph: "play-filled", running: "Resuming all tasks…" }),
+});
+
+export function createTaskRail({ onCreate, onSelect, onClose, onRetryUpdates, onSettings, onPauseAll, onResumeAll }) {
+  if (![onCreate, onSelect, onClose, onRetryUpdates, onSettings, onPauseAll, onResumeAll]
+    .every((callback) => typeof callback === "function")) {
     throw new TypeError("task rail callbacks must be callable");
   }
   const rail = document.createElement("nav");
@@ -21,7 +27,26 @@ export function createTaskRail({ onCreate, onSelect, onClose, onRetryUpdates, on
   create.ariaLabel = "New task";
   create.title = "New task";
   create.addEventListener("click", onCreate);
-  header.append(heading, create);
+  const bulkButtons = new Map();
+  for (const [action, callback] of [["pause", onPauseAll], ["resume", onResumeAll]]) {
+    const button = document.createElement("button");
+    button.classList.add("nami-icon-button", "nami-task-rail__bulk");
+    button.type = "button";
+    button.disabled = true;
+    button.append(createIcon(document, BULK_ACTIONS[action].glyph, "lg"));
+    button.ariaLabel = BULK_ACTIONS[action].label;
+    button.title = BULK_ACTIONS[action].label;
+    button.addEventListener("click", callback);
+    bulkButtons.set(action, button);
+  }
+  const actions = document.createElement("div");
+  actions.classList.add("nami-task-rail__actions");
+  actions.append(bulkButtons.get("pause"), bulkButtons.get("resume"), create);
+  // The bulk result stays readable until the next bulk request replaces it.
+  const notice = document.createElement("p");
+  notice.classList.add("nami-task-rail__notice");
+  notice.setAttribute("role", "status");
+  header.append(heading, actions, notice);
 
   const list = document.createElement("div");
   list.classList.add("nami-task-rail__items");
@@ -43,7 +68,30 @@ export function createTaskRail({ onCreate, onSelect, onClose, onRetryUpdates, on
   emptySlot.append(createIcon(document, "add-square-multiple", "lg"), emptyText);
   emptySlot.addEventListener("click", onCreate);
 
-  function render(tasks, selectedTaskId, createAttempt, settingsVisible = false) {
+  function renderBulkControl(tasks, bulkControl) {
+    const available = bulkControlAvailability(tasks);
+    const running = bulkControl?.running === true;
+    const focused = document.activeElement ?? null;
+    for (const [action, button] of bulkButtons) {
+      const own = running && bulkControl.action === action;
+      const check = own && bulkControl.recovery?.canCheck === true;
+      const blocked = running ? !check || bulkControl.recovery.checking === true : !available[action];
+      // The invoked button keeps focus while its request is in flight; its
+      // click is ignored until the request settles or offers a check.
+      button.disabled = blocked && !own;
+      button.ariaDisabled = blocked && own ? "true" : null;
+      button.ariaLabel = check ? `Check ${BULK_ACTIONS[action].label} outcome` : BULK_ACTIONS[action].label;
+      button.title = button.ariaLabel;
+    }
+    if (focused !== null && [...bulkButtons.values()].includes(focused) && focused.disabled) {
+      const next = [...bulkButtons.values(), create].find((button) => !button.disabled) ?? null;
+      next?.focus?.();
+    }
+    renderText(notice, running ? bulkControl.recovery?.message ?? BULK_ACTIONS[bulkControl.action].running
+      : bulkControl?.message ?? "");
+  }
+
+  function render(tasks, selectedTaskId, createAttempt, settingsVisible = false, bulkControl = null) {
     const checkCreate = createAttempt?.recovery?.canCheck === true;
     create.disabled = createAttempt?.recovery?.state === "fixed-unknown"
       || (createAttempt?.running === true && (!checkCreate || createAttempt.recovery.checking));
@@ -53,6 +101,7 @@ export function createTaskRail({ onCreate, onSelect, onClose, onRetryUpdates, on
     emptySlot.ariaLabel = create.ariaLabel;
     emptySlot.title = create.title;
     settings.ariaCurrent = settingsVisible ? "page" : "false";
+    renderBulkControl(tasks, bulkControl);
     if (tasks.length === 0) {
       for (const entry of entries.values()) {
         entry.row.remove();

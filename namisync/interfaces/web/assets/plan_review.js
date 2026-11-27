@@ -12,6 +12,7 @@ import {
   planReviewRefusal,
   projectActiveOperationProgress,
   selectTaskExecution,
+  taskControls,
   taskStatusDigest,
   terminalStatusLine,
 } from "./task_status.js";
@@ -1423,9 +1424,11 @@ export function createPlanReviewPanel(callbacks, detailsState = { expanded: fals
       displayExecution.result?.audit === "degraded" ? "Audit: Degraded" : null,
       executionIssues.textContent,
     ].filter(Boolean).join(" · ") : "";
+    const control = taskControls(task);
     const controlTitle = task.executionStarted && !terminalState && !settledExecute
       ? (linkedVerify ? {paused: "Verification paused", pausing: "Pausing verification", canceling: "Canceling verification"}
-        : {paused: "Execution paused", pausing: "Pausing execution", canceling: "Canceling execution"})[task.executionControlState]
+        : {held: "Execution paused, not started", paused: "Execution paused", pausing: "Pausing execution",
+          canceling: "Canceling execution"})[control.state]
       : null;
     const executeTitle = executePhase == null ? "Execution phase finished"
       : ({completed: "Execution completed", failed: "Execution failed", canceled: "Execution canceled",
@@ -1459,9 +1462,9 @@ export function createPlanReviewPanel(callbacks, detailsState = { expanded: fals
     summary.dataset.status = settledExecute ? executePhase == null ? "completed"
       : ({completed: "completed", canceled: "canceled"})[executePhase.status] ?? "error"
       : linkedVerify ? terminalState ? ({completed: linkedWarnings === "" ? "completed" : "attention", canceled: "canceled", incomplete: "attention"})[verifyOutcome] ?? "error"
-        : task.executionControlState === "paused" ? "paused" : "verifying"
+        : control.state === "paused" ? "paused" : "verifying"
       : terminalState && displayExecution.result === null
-      ? "error" : task.executionStarted && !terminalState && task.executionControlState === "paused"
+      ? "error" : task.executionStarted && !terminalState && ["paused", "held"].includes(control.state)
         ? "paused" : executionPresentation.status ?? (task.executionStarted ? "executing" : digest.state);
     const progressValue = executionProgress?.value ?? 0;
     progress.hidden = settledExecute;
@@ -1518,7 +1521,9 @@ export function createPlanReviewPanel(callbacks, detailsState = { expanded: fals
     planAgain.title = planAgainLabel;
     planAgain.disabled = (review.pending !== null && !checkPlanAgain) || task.canPlanAgain !== true;
     controls.hidden = !activeExecution;
-    const paused = task.executionControlState === "paused";
+    // The server's capabilities decide which control is offered; the
+    // dispatcher still decides each request.
+    const paused = control.canResume;
     pause.dataset.action = paused ? "resume" : "pause";
     pause.ariaLabel = paused ? "Resume execution" : "Pause execution";
     pause.title = pause.ariaLabel;
@@ -1527,10 +1532,10 @@ export function createPlanReviewPanel(callbacks, detailsState = { expanded: fals
     pauseIcon.hidden = paused;
     playIcon.hidden = !paused;
     pause.disabled = review.pending !== null || controlUnavailable
-      || !["running", "paused"].includes(task.executionControlState);
+      || !(paused || control.canPause);
     cancel.disabled = (review.pending !== null && !task.canCancelAfterFixedReviewOutcome)
       || controlUnavailable
-      || task.executionControlState === "canceling";
+      || !control.canStop;
     if (controls.hidden || cancel.disabled
         || (cancelDeadline !== null && performance.now() >= cancelDeadline)) disarmCancel();
     const controlAttempt = task.executionControlAttempt?.sessionId === task.sessionId
@@ -1539,10 +1544,12 @@ export function createPlanReviewPanel(callbacks, detailsState = { expanded: fals
     const primaryRecovery = review.pending === "execute" || task.executionAttempt?.state === "uncertain"
       ? task.executionAttempt?.recovery
       : review.pending === "plan-again" ? task.form?.attempt?.recovery : review.recovery;
-    const controlGuidance = task.executionControlState === "paused"
+    const controlGuidance = control.state === "held"
+      ? "Execution was paused before it started. Resume when ready."
+      : control.state === "paused"
       ? `${linkedVerify ? "Verification" : "Execution"} is paused. Resume when ready.`
-      : task.executionControlState === "pausing" ? "Pausing at the next safe checkpoint."
-        : task.executionControlState === "canceling" ? "Canceling at the next safe checkpoint."
+      : control.state === "pausing" ? "Pausing at the next safe checkpoint."
+        : control.state === "canceling" ? "Canceling at the next safe checkpoint."
           : linkedVerify ? "Verifying successfully copied files. The Plan's tree and filters apply."
             : "Execution is in progress.";
     const controlMessages = [primaryRecovery?.message ?? review.message,

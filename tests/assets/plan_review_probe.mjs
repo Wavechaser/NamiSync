@@ -366,6 +366,25 @@ const task = {
   executionAttempt: null,
 };
 
+// Pages read control capabilities from the live snapshot; restate the server's
+// matrix for a named state. "pending" is a released run waiting to start (its
+// control_state is still "paused"); "held" is paused before it ever started.
+function withControl(value, state) {
+  const controlState = ["pending", "held"].includes(state) ? "paused" : state;
+  value.executionControlState = controlState;
+  value.snapshot = {
+    phase: null, terminal_result: null, progress_inconsistent: false,
+    presentation: { value: 0, determinate: false, indeterminate: false, items_done: null,
+      items_total: null, throughput_bytes_per_second: null, eta_seconds: null },
+    ...(value.snapshot ?? {}),
+    session_id: value.sessionId, session_state: "active", control_state: controlState,
+    session_progress: state === "held" ? "none" : "continuation",
+    can_pause: state === "running", can_resume: ["paused", "held"].includes(state),
+    can_stop: state !== "canceling",
+  };
+  return value;
+}
+
 const notice = {
   ...row,
   node_id: `node-${"4".repeat(32)}`,
@@ -848,6 +867,7 @@ assert.ok(findByDataset(panel.element, "action", "destructive-confirmation") ===
 task.executionStarted = true;
 task.sessionKind = "sync-execution";
 task.sessionState = "active";
+withControl(task, "running");
 panel.render(task);
 assert.equal(planAgainButton.hidden, true, "active execution cannot expose Plan again");
 const beforeHiddenPlanAgain = calls.length;
@@ -862,12 +882,12 @@ assert.equal(pauseToggle.ariaLabel, "Pause execution");
 assert.equal(pauseToggle.title, "Pause execution");
 pauseToggle.dispatch("click");
 assert.deepEqual(calls.at(-1), ["onControl", review, "pause"]);
-task.executionControlState = "pausing";
+withControl(task, "pausing");
 panel.render(task);
 assert.equal(findAction(panel.element, "pause").disabled, true);
 assert.equal(findByDataset(panel.element, "action", "resume"), null);
 assert.equal(findAction(panel.element, "cancel").disabled, false);
-task.executionControlState = "paused";
+withControl(task, "paused");
 panel.render(task);
 assert.equal(statusCard.dataset.status, "paused", "paused execution headline uses the attention color");
 assertSameNode(findAction(panel.element, "resume"), pauseToggle,
@@ -880,12 +900,28 @@ assert.equal(findByClass(pauseToggle, "nami-icon--play-filled").hidden, false);
 assert.equal(findByClass(pauseToggle, "nami-icon--pause").hidden, true);
 findAction(panel.element, "resume").dispatch("click");
 assert.deepEqual(calls.at(-1), ["onControl", review, "resume"]);
-task.executionControlState = "pending";
+withControl(task, "pending");
 panel.render(task);
 assert.equal(findAction(panel.element, "pause").disabled, true);
 assert.equal(findByDataset(panel.element, "action", "resume"), null);
 assert.equal(findAction(panel.element, "cancel").disabled, false);
-task.executionControlState = "running";
+assert.doesNotMatch(statusCard.textContent, /paused/i, "a released run does not keep the stale paused label");
+withControl(task, "held");
+panel.render(task);
+assertSameNode(findAction(panel.element, "resume"), pauseToggle, "a held run offers Resume");
+assert.equal(pauseToggle.disabled, false);
+assert.equal(findByClass(panel.element, "nami-plan-review__status-title").textContent,
+  "Execution paused, not started", "a held run is distinct from a paused run with progress");
+assert.ok(footerMessage.textContent.includes("Execution was paused before it started. Resume when ready."));
+withControl(task, "running");
+task.snapshot.can_pause = false;
+panel.render(task);
+assert.equal(findAction(panel.element, "pause").disabled, true,
+  "Pause follows the server capability, not the running label");
+task.snapshot.can_stop = false;
+panel.render(task);
+assert.equal(findAction(panel.element, "cancel").disabled, true, "Cancel follows can_stop");
+withControl(task, "running");
 panel.render(task);
 const cancelButton = findAction(panel.element, "cancel");
 const originalNow = performance.now;
@@ -1949,7 +1985,7 @@ liveReview.message = "Execution running.";
 livePanel.render(liveTask);
 assert.equal(findByClass(livePanel.element, "nami-plan-review__status-title").textContent, "Verifying");
 assert.equal(findByClass(livePanel.element, "nami-plan-review__status").textContent.includes("Verification running."), true);
-liveTask.executionControlState = "paused";
+withControl(liveTask, "paused");
 liveReview.message = "Execution paused. Resume available.";
 livePanel.render(liveTask);
 assert.equal(findByClass(livePanel.element, "nami-plan-review__status-title").textContent, "Verification paused");
@@ -2000,7 +2036,7 @@ livePanel.render(liveTask);
 assert.equal(findByClass(livePanel.element, "nami-plan-review__summary").dataset.status, "error",
   "independent warnings do not downgrade a verification mismatch");
 liveTask.snapshot = linkedSnapshotBefore;
-liveTask.executionControlState = "running";
+withControl(liveTask, "running");
 liveReview.message = linkedMessageBefore;
 liveRow.execution.automatic_verification = {result:"verified", reason:null, recording:"ok", detail_omitted_count:0};
 liveTask.executionPresentation = {phase:"verify", activeItem:null, itemPercent:null};
@@ -2046,6 +2082,7 @@ liveTask.snapshot = {
     throughput_bytes_per_second: 18014398509481984, eta_seconds: 12.4,
   },
 };
+withControl(liveTask, "running");
 livePanel.render(liveTask);
 const liveFacts = findByClass(livePanel.element, "nami-plan-review__status-summary");
 const liveProgressFacts = "Executing · 0 of 1 items · 16.00 PiB/s";
@@ -2091,7 +2128,7 @@ for (const [controlState, headline, advisory] of [
   ["pausing", "Pausing execution", "Pausing at the next safe checkpoint."],
   ["canceling", "Canceling execution", "Canceling at the next safe checkpoint."],
 ]) {
-  livePanel.render({...liveTask, executionControlState: controlState});
+  livePanel.render(withControl({...liveTask}, controlState));
   assert.equal(findByClass(livePanel.element, "nami-plan-review__status-title").textContent, headline);
   assert.ok(findByClass(livePanel.element, "nami-plan-review__status").textContent.includes(advisory));
 }

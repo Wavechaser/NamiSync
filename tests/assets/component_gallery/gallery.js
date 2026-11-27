@@ -597,6 +597,8 @@ window.addEventListener("unhandledrejection", (event) => {
     onClose() {},
     onRetryUpdates() {},
     onSettings() {},
+    onPauseAll() {},
+    onResumeAll() {},
   });
   galleryRail.render([
     {
@@ -4050,6 +4052,20 @@ window.addEventListener("unhandledrejection", (event) => {
     recentPanels.push(panel.element);
     return panel;
   }
+  // Pages read control capabilities from the live snapshot; restate them for a previewed state.
+  function withControlState(task, controlState) {
+    task.executionControlState = controlState;
+    task.snapshot = {
+      phase: null, terminal_result: null, progress_inconsistent: false,
+      presentation: { item_percent: null, items_done: null, items_total: null, value: 0,
+        determinate: false, indeterminate: false, throughput_bytes_per_second: null, eta_seconds: null },
+      ...(task.snapshot ?? {}),
+      session_id: task.sessionId, session_state: "active", control_state: controlState,
+      session_progress: "continuation", can_pause: controlState === "running",
+      can_resume: controlState === "paused", can_stop: controlState !== "canceling",
+    };
+    return task;
+  }
   function recentTask(rows = []) {
     return {
       ...planReviewTask, taskId: "gallery-recent", requestId: "7".repeat(32),
@@ -4233,13 +4249,14 @@ window.addEventListener("unhandledrejection", (event) => {
   const controlTask = recentTask();
   controlTask.executionStarted = true;
   controlTask.sessionState = "active";
+  withControlState(controlTask, "running");
   controlTask.review.summary.selection_state = "committed";
   controlTask.review.window.execution = { ...controlTask.review.window.execution, session_id: controlTask.sessionId };
   const localCommands = [];
   const controlPanel = recentPanel("Pause / Resume and two-click Cancel preview", controlTask, {
     onControl: (review, action) => {
       localCommands.push(action);
-      controlTask.executionControlState = action === "pause" ? "paused" : "running";
+      withControlState(controlTask, action === "pause" ? "paused" : "running");
       review.message = action === "cancel"
         ? "Gallery preview canceled. No files were changed; controls are ready to try again."
         : `Gallery preview ${action === "pause" ? "paused" : "resumed"}. No files were changed.`;
@@ -4247,7 +4264,7 @@ window.addEventListener("unhandledrejection", (event) => {
     },
   });
   const controlRail = createTaskRail(Object.fromEntries(
-    ["onCreate", "onSelect", "onClose", "onRetryUpdates", "onSettings"].map(name => [name, () => {}])));
+    ["onCreate", "onSelect", "onClose", "onRetryUpdates", "onSettings", "onPauseAll", "onResumeAll"].map(name => [name, () => {}])));
   recentSection.append(controlRail.element);
   const actionGeometry = { plan: {}, inventory: {} };
   function actionSnapshot(action) {
@@ -4270,10 +4287,10 @@ window.addEventListener("unhandledrejection", (event) => {
   controlPanel.element.querySelector('[data-action="pause"]').click();
   pauseStates.push(actionSnapshot("resume"));
   controlPanel.element.querySelector('[data-action="resume"]').click();
-  controlTask.executionControlState = "pausing";
+  withControlState(controlTask, "pausing");
   controlPanel.render(controlTask);
   pauseStates.push(actionSnapshot("pause"));
-  controlTask.executionControlState = "running";
+  withControlState(controlTask, "running");
   controlPanel.render(controlTask);
   const cancelStates = [actionSnapshot("cancel")];
   const cancelButton = controlPanel.element.querySelector('[data-action="cancel"]');
@@ -4397,12 +4414,10 @@ window.addEventListener("unhandledrejection", (event) => {
         throw new Error("Rebaseline menu must match the full split button width and leading edge");
       }
       baselinePopup.dispatchEvent(new KeyboardEvent("keydown", {key: "Escape", bubbles: true}));
-      panel.render({...task, sessionState: "active", sessionKind: "verify", sessionReleased: false,
-        executionControlState: "running"});
+      panel.render(withControlState({...task, sessionState: "active", sessionKind: "verify", sessionReleased: false}, "running"));
       capture("pause");
       capture("cancel");
-      panel.render({...task, sessionState: "active", sessionKind: "verify", sessionReleased: false,
-        executionControlState: "paused"});
+      panel.render(withControlState({...task, sessionState: "active", sessionKind: "verify", sessionReleased: false}, "paused"));
       capture("resume");
       panel.render(task);
     }

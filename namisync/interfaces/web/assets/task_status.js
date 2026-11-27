@@ -22,6 +22,48 @@ export function projectActiveOperationProgress(presentation, operationId) {
   });
 }
 
+function liveSnapshot(task) {
+  const snapshot = task?.snapshot;
+  return snapshot != null && snapshot.session_id === task.sessionId
+    && snapshot.session_state === "active" && snapshot.session_progress != null ? snapshot : null;
+}
+
+// control_state keeps its last running/pausing/paused/canceling value while a
+// released session waits in pending, so pause state comes from the server's
+// capabilities: resumable is paused, held when it never started.
+export function snapshotControlState(snapshot) {
+  if (snapshot.can_resume) return snapshot.session_progress === "none" ? "held" : "paused";
+  return snapshot.control_state === "paused" && snapshot.can_stop ? "pending" : snapshot.control_state;
+}
+
+// Presentation only: the dispatcher still decides every control command.
+export function taskControls(task) {
+  const snapshot = liveSnapshot(task);
+  return Object.freeze({
+    state: snapshot === null ? task?.executionControlState ?? null : snapshotControlState(snapshot),
+    canPause: snapshot?.can_pause === true,
+    canResume: snapshot?.can_resume === true,
+    canStop: snapshot?.can_stop === true,
+  });
+}
+
+// Pause all pauses running sessions and holds waiting ones; Resume all
+// releases paused ones. Each button is offered while some rail task shows a
+// session it would act on; the dispatcher decides at the moment of the call.
+export function bulkControlAvailability(tasks) {
+  let pause = false;
+  let resume = false;
+  for (const task of tasks) {
+    const snapshot = liveSnapshot(task);
+    if (snapshot === null) continue;
+    const waiting = snapshot.can_stop && !snapshot.can_resume
+      && (snapshot.session_progress === "none" || snapshotControlState(snapshot) === "pending");
+    pause ||= snapshot.can_pause || waiting;
+    resume ||= snapshot.can_resume;
+  }
+  return Object.freeze({ pause, resume });
+}
+
 const CAPACITY_INTEGRITY_RESULTS = new Set(["not-run", "verified", "baselined"]);
 
 export function isCapacityOnlyExecution(execution) {
@@ -208,7 +250,11 @@ export function taskStatusDigest(task) {
     || (["sync-plan", "plan-again"].includes(form?.attempt?.kind)
       && form.attempt.dispatched === true && form.attempt.running === true)
   );
-  const progress = checkingFolders || (scanning && snapshot === null) || planning
+  const control = taskControls(task);
+  // Pause all holds a waiting session before it starts; it is paused, not running.
+  const held = control.state === "held" && task?.error == null && task?.releaseRecovery?.message == null;
+  const progress = held ? { value: 0, determinate: false, indeterminate: false, phase: null }
+    : checkingFolders || (scanning && snapshot === null) || planning
     ? { value: 0, determinate: false, indeterminate: true, phase: "plan" }
     : (summary !== null || task?.error != null) && !task?.executionStarted
       ? { value: 0, determinate: false, indeterminate: false, phase: null }
@@ -246,6 +292,7 @@ export function taskStatusDigest(task) {
   else if (refusal !== null) [title, state] = ["Plan limit exceeded", "error"];
   else if (checkingFolders) [title, state] = ["Checking folders", "planning"];
   else if (attempt !== null && !attempt.running) [title, state] = ["Outcome unknown", "error"];
+  else if (held) [title, state] = ["Paused, not started", "paused"];
   else if (scanning) [title, state] = ["Scanning", "planning"];
   else if (planning) [title, state] = ["Planning", "planning"];
   else if (summary !== null && !task?.executionStarted && task?.sessionKind !== "inventory") [title, state] = ["Plan ready", "plan"];
@@ -258,13 +305,13 @@ export function taskStatusDigest(task) {
     state = ({completed: "completed", canceled: "canceled"})[executionState] ?? "error";
   }
   else if (task?.executionStarted && currentExecution) {
-    title = ({paused: "Execution paused", pausing: "Pausing execution", canceling: "Canceling execution"})[task.executionControlState]
+    title = ({paused: "Execution paused", pausing: "Pausing execution", canceling: "Canceling execution"})[control.state]
       ?? (progress.phase === "verify" ? "Verifying" : "Execution in progress");
-    state = task.executionControlState === "paused" ? "paused" : progress.phase === "verify" ? "verifying" : "executing";
+    state = control.state === "paused" ? "paused" : progress.phase === "verify" ? "verifying" : "executing";
   } else if (executionState === "active" && ["inventory", "baseline", "verify", "rebaseline"].includes(task?.sessionKind)) {
     const activeLabel = ({inventory: "Scanning", baseline: "Baselining", verify: "Verifying",
       rebaseline: "Rebaselining"})[task.sessionKind];
-    title = task.executionControlState === "paused" ? "Paused" : activeLabel;
+    title = control.state === "paused" ? "Paused" : activeLabel;
     state = title.toLowerCase();
   } else if (executionState === "active") {
     title = task?.taskKind === "inventory" ? "Inventory" : "Planning";
@@ -276,6 +323,8 @@ export function taskStatusDigest(task) {
   else if (refusal !== null) detail = planLimitDetail(refusal);
   else if (attempt?.recovery?.message) detail = attempt.recovery.message;
   else if (checkingFolders) detail = "Checking the selected folders before starting.";
+  else if (held) detail = currentExecution || currentOrdinary !== null
+    ? "Paused before it started. Resume when ready." : "Paused before it started. Use Resume all to start it.";
   else if (scanning) detail = "Inventory scan in progress.";
   else if (planning) detail = "Planning in progress.";
   else if (summary !== null && !task?.executionStarted) detail = planItemCount === 0 && !planHasItems ? "Plan is empty."

@@ -710,6 +710,21 @@ stay attached during same-order repaint so trusted press/release survives.
 Rail keeps its 18 rem cap, compact 14 px headlines and one-line path/detail text;
 headlines may wrap at native minimum instead of forcing horizontal overflow.
 
+Pause all and Resume all sit before New task in the rail header as transparent
+icon-only 32 px buttons (Regular Pause, Filled Play) named and titled by action.
+Each is enabled from the live snapshots' server capabilities, never from labels:
+Pause all when some session can pause or is waiting to start
+(`can_stop` without `can_resume`, not yet run or released after a pause), Resume all
+when some session has `can_resume`. A running scan or plan that cannot pause, or a
+session already pausing, enables nothing. One bulk request runs at a time: the
+invoked button stays focusable but `aria-disabled` and ignores clicks, the other is
+disabled, and a delayed reply turns the invoked button into Check outcome. A
+`role="status"` notice under the header shows the request, then its counts with
+zero counts omitted (Paused 2, held 3; 1 cannot pause and keeps running.), Nothing to
+pause/resume, or a next step on failure; it stays until the next bulk request.
+A task held before it ran reads Paused, not started, distinct from a paused run
+with a continuation; once released it drops the paused label while it waits.
+
 Settings has Setup defaults, Appearance and About cards. Explicit Save defaults
 patches only changed supported options; excludes Add/Remove preserve exact pattern
 spelling and ADS stays unavailable. Reads preserve unsaved edits while refreshing
@@ -734,6 +749,12 @@ Pause/Resume, Cancel, Refresh and Baseline dropdown use square 32 px targets.
 Pause is icon-only neutral Regular Pause; authoritative Paused becomes accented
 Filled Play Resume. Accessible action/tooltip follows state; waiting/pausing disables
 repeat but keeps Cancel. Pausing remains Pausing until actual Paused settlement.
+Pause, Resume and Cancel availability follows the current session snapshot's
+`can_pause`, `can_resume` and `can_stop`; the page never infers it from
+`control_state`, which still reads paused while a resumed run waits to start
+and is not refreshed by Gap recovery ([BRIDGE](BRIDGE.md#authoritative-task-snapshots)). A
+held session offers Resume and reads paused before it started; a held scan, which
+has no page Resume, points to Resume all.
 
 Cancel is neutral Regular Stop. First click arms accented Filled Stop for a
 monotonic five-second deadline; second submits. Arming does nothing to execution,

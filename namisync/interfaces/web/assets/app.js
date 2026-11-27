@@ -4,6 +4,7 @@ import {
   admitLocation,
   BridgeTransportError,
   closeTask,
+  controlAllTasks,
   controlIntegrity,
   controlExecution,
   createTask,
@@ -58,7 +59,7 @@ import { installAboutNotices } from "./about.js";
 import { createExecutionConfirmation } from "./execution_confirmation.js";
 import { createWorkPanel } from "./panels.js";
 import { createTaskRail } from "./rail.js";
-import { planReviewRefusal } from "./task_status.js";
+import { planReviewRefusal, snapshotControlState, taskControls } from "./task_status.js";
 import { renderText } from "./render.js";
 
 const app = document.querySelector("#app");
@@ -136,6 +137,7 @@ let settingsVisible = false;
 let navigationRevision = 0;
 let taskMutationRevision = 0;
 let createAttempt = null;
+let bulkControl = null;
 let nextTaskNumber = 1;
 let defaultSetup = null;
 let defaultSetupRevision = 0;
@@ -219,6 +221,7 @@ function executionControlMessage(state) {
     case "running": return "Execution running.";
     case "pausing": return "Pausing execution…";
     case "paused": return "Execution paused. Resume available.";
+    case "held": return "Execution paused before it started. Resume available.";
     case "canceling": return "Canceling execution…";
     default: return "Follow live execution status.";
   }
@@ -301,6 +304,8 @@ const rail = createTaskRail({
   onClose: (taskId) => { void closeRetainedTask(taskId); },
   onRetryUpdates: retryTaskUpdates,
   onSettings: showSettings,
+  onPauseAll: () => { void controlAllRailTasks("pause"); },
+  onResumeAll: () => { void controlAllRailTasks("resume"); },
 });
 app.append(rail.element, panel.element);
 const executionConfirmation = createExecutionConfirmation([app, themeOptions]);
@@ -348,7 +353,7 @@ function canCancelAfterFixedReviewOutcome(task, review) {
     && !task.drainUnavailable && !task.closePending && !checkableOutcome(task.closeRecovery)
     && !fixedOutcome(task.closeRecovery) && !fixedOutcome(task.startRecovery)
     && !fixedOutcome(task.releaseRecovery) && task.executionAttempt === null
-    && task.executionControlState !== "canceling"
+    && taskControls(task).canStop
     && (attempt === null || (!attempt.pending && !checkableOutcome(attempt.recovery)
       && !(attempt.independent && (fixedOutcome(attempt.recovery) || attempt.accepted))));
 }
@@ -416,6 +421,7 @@ function renderTasks() {
     selectedTaskId,
     createAttempt,
     settingsVisible,
+    bulkControl,
   );
   if (settingsVisible) panel.renderSettings();
   else panel.render(selectedTaskId === null ? null : tasks.get(selectedTaskId) ?? null);
@@ -1004,6 +1010,7 @@ function adoptTask(summary) {
       executionStarted: false,
       executionAttempt: null,
       executionControlState: "running",
+      executionControlView: null,
       executionControlRevision: 0,
       executionControlAttempt: null,
       executionWindowDirty: false,
@@ -1040,6 +1047,7 @@ function adoptTask(summary) {
       task.snapshot = null;
       task.progressPresentation = null;
       task.executionControlState = "running";
+      task.executionControlView = null;
       task.executionControlRevision += 1;
     }
     if (task.sessionId !== summary.session_id || summary.session_state !== "active") {
@@ -1165,7 +1173,13 @@ function acceptTaskUpdate(task, sessionId, update, snapshot = null) {
     }
     return;
   }
+  // A released session keeps control_state "paused" while it waits, so the
+  // derived view also marks a control change.
+  const controlView = snapshot === null ? null : snapshotControlState(snapshot);
+  const controlViewChanged = controlView !== null && task.executionControlView !== null
+    && task.executionControlView !== controlView;
   const immediate = task.snapshot === null || task.executionControlState !== snapshot?.control_state
+    || controlViewChanged
     || task.snapshot?.session_state !== snapshot?.session_state
     || task.snapshot?.phase !== snapshot?.phase
     || update?.update_type === "record" || update?.event?.body_type === "Gap"
@@ -1192,12 +1206,13 @@ function acceptTaskUpdate(task, sessionId, update, snapshot = null) {
       task.executionPresentation = task.progressPresentation;
       task.executionSessionState = snapshot.session_state;
     }
-    if (task.executionControlState !== snapshot.control_state) {
+    if (task.executionControlState !== snapshot.control_state || controlViewChanged) {
       task.executionControlRevision += 1;
       task.executionControlState = snapshot.control_state;
+      task.executionControlView = controlView;
       if (task.executionControlAttempt?.sessionId === sessionId) {
         if (task.executionControlAttempt.pending) {
-          task.executionControlAttempt.message = executionControlMessage(snapshot.control_state);
+          task.executionControlAttempt.message = executionControlMessage(controlView);
         } else if (!checkableOutcome(task.executionControlAttempt.recovery)
             && !fixedOutcome(task.executionControlAttempt.recovery)
             && !(task.executionControlAttempt.independent
@@ -1210,9 +1225,10 @@ function acceptTaskUpdate(task, sessionId, update, snapshot = null) {
         task.inventoryAction = null;
       }
       if (task.sessionKind === "sync-execution" && task.review !== null && !fixedOutcome(task.review.recovery)) {
-        task.review.message = executionControlMessage(snapshot.control_state);
+        task.review.message = executionControlMessage(controlView);
       }
     }
+    task.executionControlView = controlView;
     if (task.review?.follow != null && task.sessionKind === "sync-execution") {
       task.review.follow.hasTarget = planFollowTarget(task) !== null;
     }
@@ -1303,7 +1319,7 @@ function acceptTaskRecovery(task, sessionId) {
   if (!checkableOutcome(task.releaseRecovery)) clearTaskRecoveryError(task);
   if (task.review?.message === STOPPED_TASK_UPDATES_MESSAGE) {
     task.review.message = task.executionControlAttempt?.sessionId === sessionId
-      ? task.executionControlAttempt.message : executionControlMessage(task.executionControlState);
+      ? task.executionControlAttempt.message : executionControlMessage(taskControls(task).state);
   }
   renderTasks();
   if (task.executionWindowDirty || task.inventoryOverlayDirty) scheduleAutomaticReview(task, true);
@@ -1417,6 +1433,52 @@ async function createBlankTask() {
   } finally {
     if (createAttempt === attempt && !fixedOutcome(attempt.recovery)) createAttempt = null;
     renderTasks();
+  }
+}
+
+function bulkControlNotice(action, counts) {
+  if (action === "resume") return counts.resumed > 0 ? `Resumed ${counts.resumed}.` : "Nothing to resume.";
+  const parts = [
+    [counts.paused > 0 ? `paused ${counts.paused}` : null,
+      counts.held > 0 ? `held ${counts.held}` : null].filter(Boolean).join(", "),
+    counts.already_pausing > 0 ? `${counts.already_pausing} already pausing` : "",
+    counts.still_running > 0
+      ? `${counts.still_running} cannot pause and keep${counts.still_running === 1 ? "s" : ""} running` : "",
+  ].filter(Boolean);
+  if (parts.length === 0) return "Nothing to pause.";
+  const text = parts.join("; ");
+  return `${text[0].toUpperCase()}${text.slice(1)}.`;
+}
+
+// One bulk request at a time: the rail disables both buttons while it is in
+// flight, except to check a delayed outcome of the same request.
+async function controlAllRailTasks(action) {
+  if (bulkControl?.running) {
+    if (bulkControl.action === action && checkableOutcome(bulkControl.recovery)
+        && !bulkControl.recovery.checking) await bulkControl.recovery.check();
+    return;
+  }
+  const name = action === "pause" ? "Pause all" : "Resume all";
+  const attempt = { action, running: true, recovery: null, message: null };
+  bulkControl = attempt;
+  renderTasks();
+  try {
+    const counts = await controlAllTasks(action, (recovery) => {
+      if (bulkControl !== attempt) return;
+      attempt.recovery = recovery;
+      renderTasks();
+    });
+    attempt.message = bulkControlNotice(action, counts);
+  } catch (error) {
+    // Bulk control is safe to repeat: a second request acts only on sessions
+    // that still need it, so an unconfirmed outcome guides a retry, not a reopen.
+    attempt.message = error instanceof OutcomeUnavailableError
+      ? `${name} could not be confirmed. Check the task statuses, then use ${name} again if needed.`
+      : `${name} did not run. Try again in a moment.`;
+  } finally {
+    attempt.running = false;
+    attempt.recovery = null;
+    if (bulkControl === attempt) renderTasks();
   }
 }
 
@@ -2921,7 +2983,7 @@ async function loadPlanReview(task, force = false) {
     }
     const message = task.executionStarted
       ? task.sessionKind === "sync-execution" && task.sessionState === "active"
-        ? executionControlMessage(task.executionControlState)
+        ? executionControlMessage(taskControls(task).state)
         : task.executionSessionState === "completed" ? null
           : summary.execution.refusal !== null
             ? executionRefusalMessage(summary.execution.refusal)
@@ -3698,6 +3760,7 @@ async function submitReviewedExecution(task, attempt) {
       task.executionWindowDirtyRevision += 1;
       task.executionControlRevision += 1;
       task.executionControlState = "running";
+      task.executionControlView = null;
       task.reviewSessionId = result.session_id;
       if (attempt.review.follow !== null) {
         attempt.review.follow.eligible = followEligible(attempt.review);
@@ -3708,7 +3771,7 @@ async function submitReviewedExecution(task, attempt) {
       }
       attachTaskDrain(task);
       if (task.review === attempt.review) {
-        attempt.review.message = executionControlMessage(task.executionControlState);
+        attempt.review.message = executionControlMessage(taskControls(task).state);
         attempt.review.pending = null;
       }
       renderTasks();
