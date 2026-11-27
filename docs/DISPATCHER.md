@@ -243,11 +243,12 @@ also accepts `INTERRUPTED`; Resume all leaves `INTERRUPTED` alone. Each released
 session joins the back of its resource queues, behind sessions admitted while it
 was paused, and never preempts.
 
-Bulk calls run one at a time. Each snapshots the nonterminal sessions; that
-snapshot is the call's moment, so a session admitted while the call waits for
-locks is not acted on. It takes the pending sessions' publication locks first,
-then the others, each group in admission order, so it never waits on a running
-session's lock while a pending one's is still free. A pending session can still
+Bulk calls run one at a time. Each takes the publication lock of every
+nonterminal session, then of every session admitted while it waited, until it
+holds them all; no session can start, be controlled or settle without its own
+lock, so the call reads membership and state, and acts, at that one moment. A
+session admitted after it is not acted on. Pending sessions' locks come first,
+then the others, each group in admission order. A pending session can still
 start just before its own lock is taken, and is then acted on as running; while
 the call waits, single controls and subscriptions of the sessions it holds wait
 behind it. It

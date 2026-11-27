@@ -838,6 +838,18 @@ entries to fit a batch; use explicit record offsets/limits.
   all three paths, both orders of a race with Pause all, and the real service
   through History.
 
+<a id="bug-0328"></a>
+
+- MINOR - FIXED (2026-11-28). Bulk pause moment split. While Pause all
+  waited on a running session's publication lock, a held execution was
+  resumed and a new scan admitted; Pause all re-held the execution and left
+  the scan queued, a result no single moment explains. Cause: the call fixed
+  its membership at its first snapshot but read each session's state only
+  after taking its lock. Found by independent re-review of the BUG-0324 fix.
+  Fixed by taking the locks of every nonterminal session, including those
+  admitted while it waits, and reading and acting on all of them in one
+  section once none is missing; a failing-first regression repeats the race.
+
 ### M1 Hardening
 
 <a id="bug-0060"></a>

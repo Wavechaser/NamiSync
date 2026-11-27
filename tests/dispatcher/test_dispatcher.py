@@ -6189,7 +6189,11 @@ def test_shutdown_settles_held_sessions_and_releases_custody() -> None:
 
 
 def test_pause_all_holds_a_pending_session_while_it_waits_on_another_lock() -> None:
-    """A session pending at the call's snapshot cannot start during the call."""
+    """A pending session cannot start while the call waits on another lock.
+
+    A session admitted meanwhile is held too: the call's moment is when it
+    holds every nonterminal session's lock.
+    """
 
     release = Event()
     opening = Event()
@@ -6240,14 +6244,78 @@ def test_pause_all_holds_a_pending_session_while_it_waits_on_another_lock() -> N
             assert dispatcher.get(old).state is SessionState.PENDING
         bulk.join(HANG_GUARD)
         assert not bulk.is_alive()
-        assert results == [BulkControlResult(held=1, still_running=1)]
-        held = dispatcher.get(old)
-        assert held.state is SessionState.PAUSED
-        assert held.started_at is None
-        # Admitted after the snapshot, so the call left it alone.
-        wait_for(dispatcher, later, SessionState.RUNNING)
+        assert results == [BulkControlResult(held=2, still_running=1)]
+        for session_id in (old, later):
+            held = dispatcher.get(session_id)
+            assert held.state is SessionState.PAUSED
+            assert held.started_at is None
     finally:
         proceed.set()
+        release.set()
+        if bulk is not None:
+            bulk.join(HANG_GUARD)
+        assert dispatcher.shutdown(HANG_GUARD).complete
+
+
+def test_pause_all_acts_at_one_moment_across_a_resume_and_an_admission() -> None:
+    """Membership and state come from the same moment.
+
+    While the call waits on a running session's lock, a held session is
+    resumed and a new one admitted; both are pending when it acts, so both
+    are held, never one re-held and the other left queued.
+    """
+
+    entered = Event()
+    release = Event()
+    contended = Event()
+
+    def run_for(payload):
+        def run(context):
+            if payload == b"anchor":
+                entered.set()
+                assert release.wait(HANG_GUARD)
+            return OperationResult(SessionState.COMPLETED)
+
+        return run
+
+    resources = (unique_resource("one-moment"),)
+    dispatcher = Dispatcher(
+        {
+            "scan": registration(run_for, resources=resources),
+            "execution": registration(
+                run_for, resources=resources, supports_pause=True
+            ),
+        },
+        lock_provider=InProcessResourceLockProvider(),
+    )
+    bulk = None
+    try:
+        anchor = dispatcher.submit("scan", b"anchor")
+        assert entered.wait(HANG_GUARD)
+        old = dispatcher.submit("execution", b"old")
+        assert dispatcher.pause_all() == BulkControlResult(
+            held=1, still_running=1
+        )
+        with dispatcher._condition:
+            inner = dispatcher._state_publication_locks[anchor]
+            dispatcher._state_publication_locks[anchor] = SignalingLock(
+                inner, contended
+            )
+        results: list[BulkControlResult] = []
+        bulk = Thread(target=lambda: results.append(dispatcher.pause_all()))
+        with inner:
+            bulk.start()
+            assert contended.wait(HANG_GUARD)
+            later = dispatcher.submit("scan", b"later")
+            assert dispatcher.resume(old).accepted
+            assert dispatcher.get(old).state is SessionState.PENDING
+            assert dispatcher.get(later).state is SessionState.PENDING
+        bulk.join(HANG_GUARD)
+        assert not bulk.is_alive()
+        assert results == [BulkControlResult(held=2, still_running=1)]
+        assert dispatcher.get(old).state is SessionState.PAUSED
+        assert dispatcher.get(later).state is SessionState.PAUSED
+    finally:
         release.set()
         if bulk is not None:
             bulk.join(HANG_GUARD)

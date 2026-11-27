@@ -867,17 +867,19 @@ class Dispatcher:
     ) -> None:
         """Apply ``act`` to every nonterminal session in one atomic section.
 
-        The call's moment is its snapshot of nonterminal sessions; sessions
-        admitted later are not acted on. Bulk control is the only holder of
-        more than one publication lock, and bulk calls run one at a time. It
-        takes them without holding ``_condition``, as every single-session
-        holder does, so it cannot deadlock with another bulk call or with a
-        single-session control, settlement, close or shutdown. Pending
-        sessions' locks come first, in admission order, so the call never
-        waits on a running session's lock while a pending one's is still free.
-        A pending session can still start before its own lock is taken; it is
-        then acted on as running. Each lock is released once its session's
-        event is published.
+        The call takes the publication lock of every nonterminal session,
+        taking those of sessions admitted meanwhile until none is missing, and
+        then reads and acts on every nonterminal session in the same
+        ``_condition`` section. No session can start, be controlled or settle
+        without its lock, so membership and state come from that one moment;
+        a session admitted after it is not acted on. Bulk control is the only
+        holder of more than one publication lock, and bulk calls run one at a
+        time. It takes them without holding ``_condition``, as every
+        single-session holder does, so it cannot deadlock with another bulk
+        call or with a single-session control, settlement, close or shutdown.
+        Pending sessions' locks come first, in admission order; one that starts
+        before its lock is taken is acted on as running. Each lock is released
+        once its session's event is published.
         """
 
         with self._bulk_control_lock:
@@ -887,51 +889,64 @@ class Dispatcher:
         self,
         act: Callable[[SessionRecord], tuple[SessionRecord, EventHub] | None],
     ) -> None:
-        with self._condition:
-            candidates = sorted(
-                (
-                    record
-                    for record in self._records.values()
-                    if not is_terminal(record.state)
-                ),
-                key=lambda record: (
-                    record.state is not SessionState.PENDING,
-                    record.admission_order,
-                ),
-            )
-            locks = {
-                record.session_id: self._state_publication_locks[
-                    record.session_id
-                ]
-                for record in candidates
-            }
-            del candidates
         held: dict[SessionId, Lock] = {}
         try:
-            for session_id, lock in locks.items():
-                lock.acquire()
-                held[session_id] = lock
             changes: list[tuple[SessionId, EventHub, StateChanged]] = []
-            with self._condition:
-                current = sorted(
-                    (
-                        self._records[session_id]
-                        for session_id in held
-                        if session_id in self._records
-                    ),
-                    key=lambda record: record.admission_order,
-                )
-                for record in current:
-                    session_id = record.session_id
-                    transition = act(record)
-                    if transition is not None:
-                        updated, hub = transition
-                        changes.append(
-                            (session_id, hub, StateChanged(updated.state))
+            acted = False
+            while not acted:
+                with self._condition:
+                    missing = sorted(
+                        (
+                            record
+                            for record in self._records.values()
+                            if not is_terminal(record.state)
+                            and record.session_id not in held
+                        ),
+                        key=lambda record: (
+                            record.state is not SessionState.PENDING,
+                            record.admission_order,
+                        ),
+                    )
+                    if missing:
+                        locks = {
+                            record.session_id: self._state_publication_locks[
+                                record.session_id
+                            ]
+                            for record in missing
+                        }
+                    else:
+                        # Every nonterminal session's lock is held, so no
+                        # session can start, be controlled or settle: this is
+                        # the call's one moment for membership and state.
+                        locks = {}
+                        current = sorted(
+                            (
+                                record
+                                for record in self._records.values()
+                                if not is_terminal(record.state)
+                            ),
+                            key=lambda record: record.admission_order,
                         )
-                record = None
-                current = None
-                self._condition.notify_all()
+                        for record in current:
+                            transition = act(record)
+                            if transition is not None:
+                                updated, hub = transition
+                                changes.append(
+                                    (
+                                        record.session_id,
+                                        hub,
+                                        StateChanged(updated.state),
+                                    )
+                                )
+                        record = None
+                        current = None
+                        acted = True
+                        self._condition.notify_all()
+                    missing = None
+                for session_id, lock in locks.items():
+                    lock.acquire()
+                    held[session_id] = lock
+                locks = None
             changed = {session_id for session_id, _, _ in changes}
             for session_id in tuple(held):
                 if session_id not in changed:
