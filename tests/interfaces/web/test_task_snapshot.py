@@ -55,7 +55,7 @@ def _progress(
 
 
 def _state() -> TaskPresentationState:
-    return TaskPresentationState(TASK, SESSION)
+    return TaskPresentationState(TASK, SESSION, supports_pause=True)
 
 
 def test_reliable_phase_rejects_disagreement_and_gap_allows_self_described_tail() -> None:
@@ -386,3 +386,95 @@ def test_progress_conflict_is_sticky_but_terminal_replay_mismatch_stays_strict()
     ))
     with pytest.raises(ValueError, match="terminal replay changed"):
         state.advance(changed, 4)
+
+
+def _capabilities(snapshot: dict[str, object]) -> tuple[object, ...]:
+    return (
+        snapshot["session_progress"], snapshot["can_pause"],
+        snapshot["can_resume"], snapshot["can_stop"],
+    )
+
+
+@pytest.mark.parametrize("supports_pause", (True, False))
+@pytest.mark.parametrize("state", tuple(SessionState))
+def test_capabilities_agree_with_the_dispatcher_control_matrix(
+    state: SessionState, supports_pause: bool,
+) -> None:
+    from namisync.core.session import is_terminal
+    from namisync.dispatcher import ControlAction, ControlCode
+    from namisync.dispatcher.contracts import control_decision
+
+    def accepted(action: ControlAction) -> bool:
+        return control_decision(action, state, supports_pause) is ControlCode.ACCEPTED
+
+    reduced = TaskPresentationState(
+        TASK, SESSION, supports_pause=supports_pause,
+    ).advance(_event(1, StateChanged(state)), 0)
+    snapshot = reduced.snapshot()
+
+    assert snapshot["wire_version"] == 4
+    assert snapshot["can_pause"] is accepted(ControlAction.PAUSE)
+    assert snapshot["can_resume"] is accepted(ControlAction.RESUME)
+    assert snapshot["can_stop"] is accepted(ControlAction.CANCEL)
+    started = state in {SessionState.RUNNING, SessionState.PAUSING}
+    assert snapshot["session_progress"] == (
+        None if is_terminal(state) else "continuation" if started else "none"
+    )
+
+
+def test_progress_follows_the_start_time_through_hold_pause_and_resume() -> None:
+    fresh = _state()
+    assert _capabilities(fresh.snapshot()) == ("none", False, False, True)
+
+    held = fresh.advance(_event(1, StateChanged(SessionState.PENDING)), 0)
+    held = held.advance(_event(2, StateChanged(SessionState.PAUSED)), 0)
+    assert _capabilities(held.snapshot()) == ("none", False, True, True)
+    assert held.snapshot()["control_state"] == "paused"
+
+    released = held.advance(_event(3, StateChanged(SessionState.PENDING)), 0)
+    assert _capabilities(released.snapshot()) == ("none", False, False, True)
+    running = released.advance(_event(4, StateChanged(SessionState.RUNNING)), 0)
+    assert _capabilities(running.snapshot()) == ("continuation", True, False, True)
+    pausing = running.advance(_event(5, StateChanged(SessionState.PAUSING)), 0)
+    assert _capabilities(pausing.snapshot()) == ("continuation", False, False, True)
+    paused = pausing.advance(_event(6, StateChanged(SessionState.PAUSED)), 0)
+    assert _capabilities(paused.snapshot()) == ("continuation", False, True, True)
+    # A resumed run waiting in pending keeps its continuation, also when held again.
+    pending = paused.advance(_event(7, StateChanged(SessionState.PENDING)), 0)
+    assert _capabilities(pending.snapshot()) == ("continuation", False, False, True)
+    rehold = pending.advance(_event(8, StateChanged(SessionState.PAUSED)), 0)
+    assert _capabilities(rehold.snapshot()) == ("continuation", False, True, True)
+    canceling = rehold.advance(_event(9, StateChanged(SessionState.CANCELING)), 0)
+    assert _capabilities(canceling.snapshot()) == ("continuation", False, False, False)
+
+    unpausable = TaskPresentationState(TASK, SESSION, supports_pause=False).advance(
+        _event(1, StateChanged(SessionState.RUNNING)), 0,
+    )
+    assert _capabilities(unpausable.snapshot()) == ("continuation", False, False, True)
+
+    terminal = running.advance(_record(), 1)
+    assert terminal.snapshot()["session_state"] == "failed"
+    assert _capabilities(terminal.snapshot()) == (None, False, False, False)
+
+
+def test_pause_support_is_an_exact_boolean() -> None:
+    with pytest.raises(TypeError, match="pause support"):
+        TaskPresentationState(TASK, SESSION, supports_pause=1)
+    with pytest.raises(TypeError):
+        TaskPresentationState(TASK, SESSION)
+
+
+def test_recovered_lifecycle_is_monotonic_in_start_and_inert_after_terminal() -> None:
+    fresh = _state()
+    recovered = fresh.recover_lifecycle("running", True)
+    assert _capabilities(recovered.snapshot()) == ("continuation", True, False, True)
+    assert recovered.revision == fresh.revision + 1
+    assert recovered.recover_lifecycle("running", True) is recovered
+    # A record without a start time never clears an observed start.
+    assert recovered.recover_lifecycle("paused", False).snapshot()["session_progress"] == "continuation"
+    with pytest.raises(ValueError, match="recovered task lifecycle"):
+        fresh.recover_lifecycle("stopped", False)
+    with pytest.raises(ValueError, match="recovered task lifecycle"):
+        fresh.recover_lifecycle("running", 1)
+    terminal = recovered.advance(_record(), 1)
+    assert terminal.recover_lifecycle("running", True) is terminal

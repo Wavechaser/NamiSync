@@ -281,7 +281,7 @@ function snapshotFor(pending, updates, overrides = {}) {
   const record = updates.findLast((update) => update.update_type === "record")?.record;
   const terminalResult = record?.result ?? null;
   return {
-    wire_version: 3,
+    wire_version: 4,
     task_id: taskId,
     session_id: sessionId,
     revision,
@@ -306,6 +306,10 @@ function snapshotFor(pending, updates, overrides = {}) {
     terminal_result: terminalResult,
     started_at: record?.started_at ?? null,
     ended_at: record?.ended_at ?? null,
+    session_progress: record === undefined ? "none" : null,
+    can_pause: false,
+    can_resume: false,
+    can_stop: record === undefined,
     ...overrides,
   };
 }
@@ -750,6 +754,9 @@ assert.equal(acceptedSnapshots[1].update.event.body.bytes_done,
 assert.deepEqual(acceptedSnapshots[1].snapshot.active_item, activeItem);
 assert.equal(acceptedSnapshots[1].snapshot.last_settled_operation_id, activeFacts.last_settled_operation_id);
 assert.equal(acceptedSnapshots[1].snapshot.last_settled_integrity_item_id, activeFacts.last_settled_integrity_item_id);
+assert.equal(acceptedSnapshots[1].snapshot.session_progress, "none");
+assert.deepEqual([acceptedSnapshots[1].snapshot.can_pause, acceptedSnapshots[1].snapshot.can_resume,
+  acceptedSnapshots[1].snapshot.can_stop], [false, false, true]);
 assert.ok(Object.isFrozen(acceptedSnapshots[1].snapshot));
 assert.ok(Object.isFrozen(acceptedSnapshots[1].snapshot.active_item));
 assert.equal(refusedSnapshots.length, 0);
@@ -764,6 +771,16 @@ const invalidSnapshots = [
   ["foreign task", { task_id: task("f") }],
   ["foreign session", { session_id: session("f") }],
   ["retired wire version", { wire_version: 2 }],
+  ["retired version 3", { wire_version: 3 }],
+  ["missing capability", { can_stop: undefined }],
+  ["unknown progress", { session_progress: "unknown" }],
+  ["non-Boolean capability", { can_resume: 1 }],
+  ["capability without progress", { session_progress: null }],
+  ["pause without continuation", { can_pause: true }],
+  ["pause beside resume", {
+    session_progress: "continuation", can_pause: true, can_resume: true,
+  }],
+  ["resume without stop", { can_resume: true, can_stop: false }],
   ["Boolean revision", { revision: true }],
   ["stale revision", { revision: 0 }],
   ["invalid active identity", {

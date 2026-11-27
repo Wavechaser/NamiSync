@@ -330,7 +330,8 @@ let delivery = (exchange) => {
   return exchange.admission;
 };
 let cleanupPolicy = null;
-let observationPolicy = (exchange) => exchange === undefined ? "unavailable" : "ready";
+let bulkResult = null;
+let observationPolicy =(exchange) => exchange === undefined ? "unavailable" : "ready";
 
 function send(message) {
   for (const { handler } of [...(messages.listeners.get("message") ?? [])]) {
@@ -367,6 +368,8 @@ function success(request) {
     result = { task_id: request.payload.task_id, request_id: identity, session_id: identity };
   } else if (request.command === "close_task") {
     result = { ...request.payload, disposition: "closed" };
+  } else if (request.command === "control_all_tasks") {
+    result = bulkResult;
   } else {
     assert.equal(request.command, "release_terminal_session");
     result = { ...request.payload };
@@ -555,6 +558,53 @@ for (const malformed of [
     [`observe:${asyncRequests[requestCount].request_id}:create_task`]);
   assert.equal(asyncTimers.size, 0);
 }
+
+// Pause all and Resume all complete on the async-small path with exact counts.
+assert.throws(() => asyncBridge.controlAllTasks("stop"), TypeError);
+const bulkCounts = (counts) => ({
+  paused: 0, held: 0, already_pausing: 0, still_running: 0, resumed: 0, ...counts,
+});
+for (const [action, counts] of [
+  ["pause", bulkCounts({ paused: 1, held: 2, already_pausing: 3, still_running: 4 })],
+  ["pause", bulkCounts({})],
+  ["resume", bulkCounts({ resumed: 5 })],
+]) {
+  let captured;
+  delivery = (exchange) => { captured = exchange; return immediate(exchange); };
+  bulkResult = counts;
+  const requestCount = asyncRequests.length;
+  const observationCount = asyncObservations.length;
+  assert.deepEqual(await asyncBridge.controlAllTasks(action), counts);
+  assert.equal(asyncRequests.length, requestCount + 1);
+  assert.equal(captured.request.command, "control_all_tasks");
+  assert.deepEqual(captured.request.payload, { action });
+  assert.equal(asyncObservations.length, observationCount, "completion needs no observation");
+  assert.ok(cleanup.includes(`ack:completion:${hostGeneration}:${captured.request.request_id}`
+    + `:${captured.message.completion_token}`), "bulk control completes on the async-small path");
+  assert.equal(asyncTimers.size, 0);
+}
+for (const [action, counts] of [
+  ["pause", bulkCounts({ resumed: 1 })],
+  ["resume", bulkCounts({ resumed: 1, paused: 1 })],
+  ["resume", bulkCounts({ resumed: 1, held: 1 })],
+  ["resume", bulkCounts({ resumed: 1, already_pausing: 1 })],
+  ["resume", bulkCounts({ resumed: 1, still_running: 1 })],
+  ["pause", bulkCounts({ paused: -1 })],
+  ["pause", bulkCounts({ held: 1.5 })],
+  ["pause", bulkCounts({ held: "1" })],
+  ["resume", bulkCounts({ resumed: Number.MAX_SAFE_INTEGER + 1 })],
+  ["pause", (({ held, ...rest }) => rest)(bulkCounts({}))],
+  ["resume", { ...bulkCounts({ resumed: 1 }), extra: 0 }],
+]) {
+  delivery = immediate;
+  bulkResult = counts;
+  const requestCount = asyncRequests.length;
+  await assert.rejects(asyncBridge.controlAllTasks(action));
+  await flush();
+  assert.equal(asyncRequests.length, requestCount + 1, "invalid counts cannot replay bulk control");
+  assert.equal(asyncTimers.size, 0);
+}
+bulkResult = null;
 
 for (const phase of ["native", "completion"]) {
   let captured;

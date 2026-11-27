@@ -10,6 +10,7 @@ from pathlib import Path
 from types import MappingProxyType
 
 from namisync.interfaces.service import (
+    BulkControlView,
     ControlView,
     DatabaseContractView,
     ExecutionAdmissionView,
@@ -743,6 +744,19 @@ PUBLIC_VIEW_WITNESSES: dict[
             },
         ),
     ),
+    BulkControlView: (
+        PublicViewWitness(
+            "bulk-control",
+            BulkControlView(1, 2, 3, 4, 0),
+            {
+                "paused": 1,
+                "held": 2,
+                "already_pausing": 3,
+                "still_running": 4,
+                "resumed": 0,
+            },
+        ),
+    ),
     ShutdownView: (
         PublicViewWitness(
             "shutdown",
@@ -1240,14 +1254,14 @@ PUBLIC_VIEW_WITNESSES: dict[
                 SESSION_ID,
                 DRAIN_ID,
                 (TASK_EVENT_UPDATE, TASK_RECORD_UPDATE),
-                TaskPresentationState(TASK_ID, SESSION_ID).snapshot(),
+                TaskPresentationState(TASK_ID, SESSION_ID, supports_pause=False).snapshot(),
             ),
             {
                 "task_id": TASK_ID,
                 "session_id": SESSION_ID,
                 "drain_id": DRAIN_ID,
                 "updates": [TASK_EVENT_UPDATE_JSON, TASK_RECORD_UPDATE_JSON],
-                "snapshot": TaskPresentationState(TASK_ID, SESSION_ID).snapshot(),
+                "snapshot": TaskPresentationState(TASK_ID, SESSION_ID, supports_pause=False).snapshot(),
             },
         ),
     ),

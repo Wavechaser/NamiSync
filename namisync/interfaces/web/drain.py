@@ -16,6 +16,7 @@ from typing import Never
 
 from namisync.interfaces.ui_state import MAX_JAVASCRIPT_SAFE_INTEGER
 from namisync.interfaces.task_port import (
+    _TASK_RECORD_PAUSE_SUPPORT,
     _validate_task_observation,
     TaskCloseRequestView,
     TaskCloseView,
@@ -2356,6 +2357,18 @@ class TaskRegistry:
             raise ValueError("execution control action is invalid")
         return result
 
+    def control_all_tasks(self, action: str) -> object:
+        """Pause all or Resume all; blocking, so only a command worker calls it."""
+
+        with self._condition:
+            if self._closing:
+                raise TaskUnavailableError("task registry is closing")
+        if action == "pause":
+            return self._lifecycle.pause_all_task_sessions()
+        if action == "resume":
+            return self._lifecycle.resume_all_task_sessions()
+        raise ValueError("bulk control action is invalid")
+
     @staticmethod
     def _abandon_execution_transition(task: _TaskState) -> None:
         with task.condition:
@@ -2873,7 +2886,10 @@ class TaskRegistry:
                 stage = TaskSnapshotStage(
                     task.presentation_state
                     if task.presentation_state is not None
-                    else TaskPresentationState(task_id, session_id),
+                    else TaskPresentationState(
+                        task_id, session_id,
+                        supports_pause=_TASK_RECORD_PAUSE_SUPPORT[task.session_kind],
+                    ),
                     task.progress_sample_at,
                     replay_from,
                 )
@@ -2962,6 +2978,7 @@ class TaskRegistry:
             task.condition.notify_all()
 
         terminal: SessionRecordView | None = None
+        recovered: tuple[str, bool] | None = None
         failure_code: str | None = None
         current: object | None = None
         try:
@@ -2981,6 +2998,8 @@ class TaskRegistry:
             if current.result is not None:
                 _validate_task_observation(current, expected_session_id=session_id)
                 terminal = current
+            else:
+                recovered = (current.state, current.started_at is not None)
         except BaseException as error:
             failure_code = _classify_recovery_failure(error)
             _retire_exception_graph(error)
@@ -3008,6 +3027,18 @@ class TaskRegistry:
                     task.terminal_pending = False
                 else:
                     task.terminal_pending = True
+            if not stale and failure_code is None and recovered is not None:
+                # The record predates the replay subscription, so adopting it
+                # before the queued tail is reduced lets a later StateChanged win.
+                base = (
+                    task.presentation_state
+                    if task.presentation_state is not None
+                    else TaskPresentationState(
+                        task.task_id, session_id,
+                        supports_pause=_TASK_RECORD_PAUSE_SUPPORT[task.session_kind],
+                    )
+                )
+                task.presentation_state = base.recover_lifecycle(*recovered)
             if not stale and task.generation == generation:
                 task.transition = False
             task.condition.notify_all()

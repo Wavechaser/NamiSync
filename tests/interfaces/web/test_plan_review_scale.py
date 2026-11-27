@@ -774,7 +774,7 @@ def test_large_plan_task_snapshot_does_not_publish_an_outcome_map() -> None:
     artifact = build_plan_fixture(information_heavy=True)
     assert len(artifact.plan.operations) == 100_000
     session_id = "c2" * 16
-    state = TaskPresentationState("task-" + "b1" * 16, session_id)
+    state = TaskPresentationState("task-" + "b1" * 16, session_id, supports_pause=True)
     observed_at = datetime(2026, 1, 1, tzinfo=timezone.utc)
 
     def population(value):

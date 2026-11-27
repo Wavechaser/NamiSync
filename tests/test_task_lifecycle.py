@@ -1349,6 +1349,8 @@ def test_task_lifecycle_port_surface_is_exact() -> None:
         "cancel_task_session",
         "pause_task_session",
         "resume_task_session",
+        "pause_all_task_sessions",
+        "resume_all_task_sessions",
         "start_task_plan",
         "read_setup_options",
         "commit_setup_defaults",

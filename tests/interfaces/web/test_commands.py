@@ -125,7 +125,7 @@ SESSION_ID = "5" * 32
 
 
 def _task_snapshot(task_id: str = TASK_ID, session_id: str = SESSION_ID) -> dict[str, object]:
-    return TaskPresentationState(task_id, session_id).snapshot()
+    return TaskPresentationState(task_id, session_id, supports_pause=False).snapshot()
 DRAIN_ID = "d6" * 16
 BOOTSTRAP_CONTEXT = ReadinessContext(CommandPhase.BOOTSTRAP, 7)
 OPEN_CONTEXT = ReadinessContext(CommandPhase.OPEN, 7)
@@ -556,6 +556,12 @@ class _Service:
             "accepted", session_id, "running", "paused", "", True
         )
 
+    def control_all_tasks(self, action):
+        self.calls.append(("control-all-tasks", action))
+        if action == "pause":
+            return service_module.BulkControlView(1, 2, 3, 4, 0)
+        return service_module.BulkControlView(0, 0, 0, 0, 5)
+
     def drain(
         self,
         task_id: str,
@@ -594,7 +600,7 @@ class _Service:
             result.session_id,
             result.drain_id,
             result.updates,
-            TaskSnapshotStage(TaskPresentationState(result.task_id, result.session_id), 0.0),
+            TaskSnapshotStage(TaskPresentationState(result.task_id, result.session_id, supports_pause=False), 0.0),
         )
 
     def request_task_close(
@@ -1213,6 +1219,60 @@ def test_m1_7_control_execution_refuses_malformed_registry_result(result) -> Non
     assert registry.calls == [
         ("control-execution", TASK_ID, SESSION_ID, "pause")
     ]
+
+
+def test_bulk_control_command_is_bounded_and_returns_exact_counts() -> None:
+    commands, _slots, service = _commands()
+    spec = commands["control_all_tasks"]
+    assert spec.work is CommandWork.ASYNC_SMALL
+
+    assert dispatch_result(_invoke(spec, {"action": "pause"}))["result"] == {
+        "paused": 1, "held": 2, "already_pausing": 3, "still_running": 4, "resumed": 0,
+    }
+    assert dispatch_result(_invoke(spec, {"action": "resume"}))["result"] == {
+        "paused": 0, "held": 0, "already_pausing": 0, "still_running": 0, "resumed": 5,
+    }
+    before = len(service.calls)
+    for invalid in (
+        {}, {"action": "cancel"}, {"action": "Pause"}, {"action": None},
+        {"action": "pause", "task_id": TASK_ID}, ["pause"],
+    ):
+        with pytest.raises(CommandPayloadError):
+            _invoke(spec, invalid)
+    assert len(service.calls) == before
+    assert service.calls[-2:] == [("control-all-tasks", "pause"), ("control-all-tasks", "resume")]
+
+
+@pytest.mark.parametrize(
+    ("action", "result"),
+    (
+        ("pause", object()),
+        ("pause", service_module.BulkControlView(0, 0, 0, 0, 1)),
+        ("resume", service_module.BulkControlView(0, 1, 0, 0, 1)),
+        ("pause", service_module.BulkControlView(-1, 0, 0, 0, 0)),
+        ("pause", service_module.BulkControlView(True, 0, 0, 0, 0)),
+        ("resume", service_module.BulkControlView(0, 0, 0, 0, MAX_JAVASCRIPT_SAFE_INTEGER + 1)),
+    ),
+)
+def test_bulk_control_command_refuses_malformed_registry_result(action, result) -> None:
+    class Registry(_Service):
+        def control_all_tasks(self, requested):
+            self.calls.append(("control-all-tasks", requested))
+            return result
+
+    registry = Registry()
+    commands = production_command_specs(
+        picker=lambda: None,
+        slots=_Slots(),
+        registry=registry,
+        cosmetics=_Cosmetics(),
+        shell_ready=lambda _generation: None,
+        readiness_echo=lambda _generation, _challenge: False,
+    )
+
+    with pytest.raises(RuntimeError, match="invalid bulk control data"):
+        _invoke(commands["control_all_tasks"], {"action": action})
+    assert registry.calls == [("control-all-tasks", action)]
 
 
 def test_async_small_real_command_projections_have_exact_bounded_completion_shapes() -> None:

@@ -5462,3 +5462,39 @@ def test_task_controls_require_exact_live_task_association() -> None:
         ("resume", f"{53_301:032x}"),
         ("cancel", f"{53_301:032x}"),
     ]
+
+
+def test_bulk_task_controls_return_dispatcher_counts_and_refuse_after_close() -> None:
+    from namisync.dispatcher import BulkControlResult
+
+    calls: list[str] = []
+
+    class Dispatcher:
+        def pause_all(self) -> BulkControlResult:
+            calls.append("pause_all")
+            return BulkControlResult(paused=1, held=2, already_pausing=3, still_running=4)
+
+        def resume_all(self) -> BulkControlResult:
+            calls.append("resume_all")
+            return BulkControlResult(resumed=5)
+
+        def shutdown(self, timeout: float) -> object:
+            return SimpleNamespace(complete=True, unfinished=(), custody_released=True)
+
+    class Observer:
+        def close(self) -> None:
+            pass
+
+    class Runtime:
+        def close(self) -> None:
+            pass
+
+    service = make_service(dispatcher=Dispatcher(), observer=Observer(), runtime=Runtime())
+
+    assert service.pause_all_task_sessions() == service_module.BulkControlView(1, 2, 3, 4, 0)
+    assert service.resume_all_task_sessions() == service_module.BulkControlView(0, 0, 0, 0, 5)
+    service.close()
+    for control in (service.pause_all_task_sessions, service.resume_all_task_sessions):
+        with pytest.raises(TaskUnavailableError):
+            control()
+    assert calls == ["pause_all", "resume_all"]

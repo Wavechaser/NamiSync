@@ -38,6 +38,7 @@ from namisync.interfaces.web.readiness import (
 )
 from namisync.interfaces.web.slots import SlotUnavailableError
 from namisync.interfaces.service import (
+    BulkControlView,
     CommandIdConflictError,
     ControlView,
     DatabaseContractView,
@@ -100,6 +101,7 @@ _TASK_ID = re.compile(r"task-[0-9a-f]{32}")
 
 SERVICE_PUBLIC_VIEW_DATACLASSES: frozenset[type[object]] = frozenset(
     {
+        BulkControlView,
         ControlView,
         DatabaseContractView,
         ExecutionAdmissionView,
@@ -305,6 +307,7 @@ class TaskAuthority(Protocol):
 
     def control_execution(self, *args, **kwargs) -> object: ...
     def control_integrity(self, *args, **kwargs) -> object: ...
+    def control_all_tasks(self, action: str) -> object: ...
     def start_inventory_integrity(self, *args, **kwargs) -> object: ...
 
     def replay_start(
@@ -667,6 +670,11 @@ class _StartInventoryIntegrityPayload:
 class _ControlExecutionPayload:
     task_id: str
     session_id: str
+    action: str
+
+
+@dataclass(frozen=True, slots=True)
+class _ControlAllTasksPayload:
     action: str
 
 
@@ -1328,6 +1336,22 @@ def production_command_specs(
             raise RuntimeError("task registry returned invalid control data")
         return result
 
+    def control_all_tasks(payload: object) -> object:
+        if type(payload) is not _ControlAllTasksPayload:
+            raise TypeError("control_all_tasks received an unvalidated payload")
+        result = registry.control_all_tasks(payload.action)
+        if type(result) is not BulkControlView:
+            raise RuntimeError("task registry returned invalid bulk control data")
+        unused = ("resumed",) if payload.action == "pause" else (
+            "paused", "held", "already_pausing", "still_running"
+        )
+        if not all(
+            _is_javascript_safe_integer(getattr(result, name))
+            for name in BulkControlView.__slots__
+        ) or any(getattr(result, name) != 0 for name in unused):
+            raise RuntimeError("task registry returned invalid bulk control data")
+        return result
+
     def create_task(payload: object) -> object:
         if not isinstance(payload, _CreateTaskPayload):
             raise TypeError("create_task received an unvalidated payload")
@@ -1765,6 +1789,18 @@ def production_command_specs(
                 revision=FieldRequirement.FORBIDDEN,
                 response_policy=CommandResponsePolicy.MUTATION_OBSERVED,
                 retry=CommandRetry.NONE,
+            ),
+            # Bulk control can block behind a wedged audit writer, so it runs
+            # on a command worker, never on a thread that must stay responsive.
+            "control_all_tasks": CommandSpec(
+                validate_payload=_validate_control_all_tasks,
+                handler=control_all_tasks,
+                access=CommandAccess.MUTATING,
+                command_id=FieldRequirement.FORBIDDEN,
+                revision=FieldRequirement.FORBIDDEN,
+                response_policy=CommandResponsePolicy.MUTATION_OBSERVED,
+                retry=CommandRetry.NONE,
+                work=CommandWork.ASYNC_SMALL,
             ),
             "next_events": CommandSpec(
                 validate_payload=_validate_next_events,
@@ -2447,6 +2483,15 @@ def _validate_control_execution(value: object) -> _ControlExecutionPayload:
     ):
         raise CommandPayloadError("control_execution payload is invalid")
     return _ControlExecutionPayload(task_id, session_id, action)
+
+
+def _validate_control_all_tasks(value: object) -> _ControlAllTasksPayload:
+    if type(value) is not dict or set(value) != {"action"}:
+        raise CommandPayloadError("control_all_tasks payload is invalid")
+    action = value["action"]
+    if type(action) is not str or action not in {"pause", "resume"}:
+        raise CommandPayloadError("control_all_tasks payload is invalid")
+    return _ControlAllTasksPayload(action)
 
 
 def _validate_create_task(value: object) -> _CreateTaskPayload:

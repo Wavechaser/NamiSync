@@ -65,6 +65,7 @@ const COMMAND_POLICY_JSON = `{
   "mutate_plan_highlighted_selection": {"response_policy": "mutation-observed", "retry": "none", "phase": "open"},
   "start_execution": {"response_policy": "mutation-observed", "retry": "none", "phase": "open"},
   "control_execution": {"response_policy": "mutation-observed", "retry": "none", "phase": "open"},
+  "control_all_tasks": {"response_policy": "mutation-observed", "retry": "none", "phase": "open"},
   "next_events": {"response_policy": "drain-30-seconds", "retry": "none", "phase": "open"},
   "release_terminal_session": {"response_policy": "mutation-observed", "retry": "none", "phase": "open"},
   "close_task": {"response_policy": "mutation-observed", "retry": "none", "phase": "open"}
@@ -1250,6 +1251,19 @@ export function controlExecution(taskId, sessionId, action, onDelayed = null) {
     Object.freeze({ task_id: taskId, session_id: sessionId, action }),
     (value) => validateControlReceipt(value, sessionId),
     PLAN_VIEW_TIMEOUT_MS, false, onDelayed,
+  );
+}
+
+export function controlAllTasks(action, onDelayed = null) {
+  if (!["pause", "resume"].includes(action)) {
+    throw new TypeError("controlAllTasks requires pause or resume");
+  }
+  return dispatchAttempt(
+    "control_all_tasks",
+    Object.freeze({ action }),
+    (value) => validateBulkControlCounts(value, action),
+    TIMEOUT_MS_BY_POLICY[COMMAND_POLICY_CONTRACT.control_all_tasks.response_policy],
+    true, onDelayed,
   );
 }
 
@@ -2558,7 +2572,8 @@ function validateTaskSnapshot(snapshot, task, updates) {
     "control_state", "phase", "active_item", "last_settled_operation_id",
     "last_settled_integrity_item_id", "progress_inconsistent",
     "presentation", "gap_first_missed_seq", "terminal_result", "started_at", "ended_at",
-  ]) || snapshot.wire_version !== 3 || snapshot.task_id !== task.taskId
+    "session_progress", "can_pause", "can_resume", "can_stop",
+  ]) || snapshot.wire_version !== 4 || snapshot.task_id !== task.taskId
     || snapshot.session_id !== task.sessionId || !isNonnegativeInteger(snapshot.revision)
     || (task.snapshotRevision !== null && snapshot.revision < task.snapshotRevision)
     || !isOneOf(snapshot.session_state, ["active", ...TERMINAL_STATES])
@@ -2574,6 +2589,17 @@ function validateTaskSnapshot(snapshot, task, updates) {
     || snapshot.gap_first_missed_seq === 0
     || !(snapshot.started_at === null || isUtcTimestamp(snapshot.started_at))
     || !(snapshot.ended_at === null || isUtcTimestamp(snapshot.ended_at))) return false;
+  // Capabilities are server-derived; admit only combinations the control
+  // matrix can produce: none without progress, and pause only while running.
+  if (!(snapshot.session_progress === null || isOneOf(snapshot.session_progress, ["none", "continuation"]))
+    || typeof snapshot.can_pause !== "boolean" || typeof snapshot.can_resume !== "boolean"
+    || typeof snapshot.can_stop !== "boolean"
+    || (snapshot.session_state !== "active" && snapshot.session_progress !== null)
+    || (snapshot.session_progress === null
+      && (snapshot.can_pause || snapshot.can_resume || snapshot.can_stop))
+    || (snapshot.can_pause && (snapshot.can_resume || !snapshot.can_stop
+      || snapshot.session_progress !== "continuation"))
+    || (snapshot.can_resume && !snapshot.can_stop)) return false;
   if (snapshot.session_state === "active" && snapshot.ended_at !== null) return false;
   if (snapshot.session_state !== "active" && (snapshot.ended_at === null
     || snapshot.phase !== null || snapshot.active_item !== null)) return false;
@@ -3610,6 +3636,14 @@ function validateControlReceipt(value, sessionId) {
     && (value.before === null || typeof value.before === "string")
     && (value.after === null || typeof value.after === "string")
     && isValidUnicode(value.detail) && typeof value.accepted === "boolean";
+}
+
+function validateBulkControlCounts(value, action) {
+  const keys = ["paused", "held", "already_pausing", "still_running", "resumed"];
+  const unused = action === "pause" ? ["resumed"] : keys.slice(0, 4);
+  return isExactObject(value, keys)
+    && keys.every((key) => isNonnegativeInteger(value[key]))
+    && unused.every((key) => value[key] === 0);
 }
 
 function isLocationId(value) {

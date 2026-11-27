@@ -329,6 +329,17 @@ class ControlView:
 
 
 @dataclass(frozen=True, slots=True)
+class BulkControlView:
+    """Counts from one Pause all or Resume all; the dispatcher owns their meaning."""
+
+    paused: int
+    held: int
+    already_pausing: int
+    still_running: int
+    resumed: int
+
+
+@dataclass(frozen=True, slots=True)
 class ShutdownView:
     complete: bool
     unfinished: tuple[str, ...]
@@ -1985,6 +1996,26 @@ class NamiSyncService:
             raise TaskUnavailableError("task is unavailable") from None
         return _control_view(self._dispatcher.resume(session_id))
 
+    def pause_all_task_sessions(self) -> BulkControlView:
+        """Pause or hold every live session at once (every desktop session is a task's).
+
+        May block behind a wedged audit writer; callers run it off responsive threads.
+        """
+
+        self._require_bulk_control_open()
+        return _bulk_control_view(self._dispatcher.pause_all())
+
+    def resume_all_task_sessions(self) -> BulkControlView:
+        """Release every paused session in admission order; see ``pause_all_task_sessions``."""
+
+        self._require_bulk_control_open()
+        return _bulk_control_view(self._dispatcher.resume_all())
+
+    def _require_bulk_control_open(self) -> None:
+        with self._lock:
+            if self._closed:
+                raise TaskUnavailableError("task is unavailable")
+
     def close_task_shell(self, task_id: str) -> TaskShellView:
         try:
             self._lifecycle.close_task_shell(task_id)
@@ -3236,6 +3267,16 @@ def _control_view(result) -> ControlView:
     )
 
 
+def _bulk_control_view(result) -> BulkControlView:
+    return BulkControlView(
+        paused=result.paused,
+        held=result.held,
+        already_pausing=result.already_pausing,
+        still_running=result.still_running,
+        resumed=result.resumed,
+    )
+
+
 def _database_contract_view(
     contract: DatabasePairContract,
 ) -> DatabaseContractView:
@@ -3341,6 +3382,7 @@ def _setup_location(value: LocationCandidateResult) -> TaskSetupLocationView:
 
 
 __all__ = [
+    "BulkControlView",
     "CommandIdConflictError",
     "ControlView",
     "DatabaseContractView",

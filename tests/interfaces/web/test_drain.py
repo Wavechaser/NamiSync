@@ -330,6 +330,14 @@ class _Service:
             "accepted", session_id, "paused", "running", "", True
         )
 
+    def pause_all_task_sessions(self):
+        self.lifecycle_calls.append(("pause_all_task_sessions",))
+        return service_module.BulkControlView(1, 2, 0, 0, 0)
+
+    def resume_all_task_sessions(self):
+        self.lifecycle_calls.append(("resume_all_task_sessions",))
+        return service_module.BulkControlView(0, 0, 0, 0, 3)
+
     def start_task_plan(
         self,
         source,
@@ -4379,6 +4387,24 @@ def test_m1_7_execution_controls_require_exact_current_task_session() -> None:
     ]
 
 
+def test_bulk_control_routes_to_the_lifecycle_and_refuses_after_close() -> None:
+    service = _Service()
+    registry = TaskRegistry(service)
+
+    assert registry.control_all_tasks("pause") == service_module.BulkControlView(1, 2, 0, 0, 0)
+    assert registry.control_all_tasks("resume") == service_module.BulkControlView(0, 0, 0, 0, 3)
+    with pytest.raises(ValueError, match="bulk control action"):
+        registry.control_all_tasks("cancel")
+    assert service.lifecycle_calls == [
+        ("pause_all_task_sessions",), ("resume_all_task_sessions",)
+    ]
+
+    registry.begin_close()
+    with pytest.raises(TaskUnavailableError):
+        registry.control_all_tasks("pause")
+    assert len(service.lifecycle_calls) == 2
+
+
 def test_m1_8_live_execution_overlay_is_bounded_replay_exact_and_copy_safe() -> None:
     registry, service, planned, execution = _start_execution_overlay()
     assert service.execution_sink is not None
@@ -7955,3 +7981,88 @@ def test_inventory_ordinary_failed_admission_preserves_publication_and_exact_ori
     assert len(calls) == 1
     with pytest.raises(TaskIntentConflictError):
         attempt(intent=("changed",))
+
+
+def _capabilities(snapshot: dict[str, object]) -> tuple[object, ...]:
+    return (
+        snapshot["session_progress"], snapshot["can_pause"],
+        snapshot["can_resume"], snapshot["can_stop"],
+    )
+
+
+@pytest.mark.parametrize(
+    ("kind", "can_pause"),
+    ((PLAN_KIND, False), (INVENTORY_KIND, False), (EXECUTION_KIND, True)),
+)
+def test_running_snapshot_offers_pause_only_for_a_pausable_kind(
+    kind: str, can_pause: bool,
+) -> None:
+    registry, _ = _registry()
+    start = _start(registry)
+    registry._tasks[start.task_id].session_kind = kind
+
+    drained = registry.drain(start.task_id, SESSION, DRAIN, replay_from=None)
+
+    assert drained.updates[0].event.body["state"] == "running"
+    assert _capabilities(drained.snapshot) == ("continuation", can_pause, False, True)
+
+
+class _LostRunningService(_Service):
+    """Delivers early states, then recovers past a Gap that swallowed RUNNING."""
+
+    def __init__(self, states, tail) -> None:
+        super().__init__()
+        self.states = states
+        self.tail = tail
+        self.reobserve_result = replace(
+            _record(terminal=False, kind=EXECUTION_KIND, supports_pause=True),
+            state="running", started_at="2026-01-01T00:00:01+00:00",
+        )
+
+    def start_plan(self, source, target, **kwargs):
+        self.sink = kwargs["observation_sink"]
+        for sequence, state in enumerate(self.states, start=1):
+            self.sink(_execution_event(SESSION, sequence, StateChanged(state)))
+        return PlanSession(REQUEST, SESSION)
+
+    def reobserve(self, session_id, sink, from_sequence):
+        self.reobserve_calls.append((session_id, sink, from_sequence))
+        sink(_execution_event(SESSION, 400, Gap(from_sequence)))
+        for sequence, state in self.tail:
+            sink(_execution_event(SESSION, sequence, StateChanged(state)))
+        return self.reobserve_result
+
+
+@pytest.mark.parametrize(
+    ("states", "tail", "expected"),
+    (
+        # First run: the Gap lost RUNNING after PENDING.
+        ((SessionState.PENDING,), (), ("continuation", True, False, True)),
+        # Resumed run: the Gap lost RUNNING after the resumed PENDING.
+        (
+            (SessionState.PENDING, SessionState.RUNNING, SessionState.PAUSING,
+             SessionState.PAUSED, SessionState.PENDING),
+            (), ("continuation", True, False, True),
+        ),
+        # A state change after the record read still wins over the record.
+        (
+            (SessionState.PENDING,), ((401, SessionState.PAUSING), (402, SessionState.PAUSED)),
+            ("continuation", False, True, True),
+        ),
+    ),
+)
+def test_recovery_adopts_the_session_record_beneath_the_replayed_tail(
+    states, tail, expected,
+) -> None:
+    service = _LostRunningService(states, tail)
+    registry, _ = _registry(service)
+    start = _start(registry)
+    registry._tasks[start.task_id].session_kind = EXECUTION_KIND
+    registry.drain(start.task_id, SESSION, DRAIN, replay_from=None)
+
+    recovered = registry.drain(
+        start.task_id, SESSION, "5" * 32, replay_from=len(states) + 1,
+    )
+
+    assert recovered.updates[0].event.body_type == "Gap"
+    assert _capabilities(recovered.snapshot) == expected

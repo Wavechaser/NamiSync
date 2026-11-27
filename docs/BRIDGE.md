@@ -102,12 +102,26 @@ snapshot fields and reduces captured observations under the drain's existing
 task owner. Browser
 admission checks version, identity, revision, canonical scalars and renderable
 shape before one atomic adoption. It does not replay progress or attempt rules.
-The current internal snapshot version is 3. It publishes derived display facts,
-active item identity and separate latest settled execution and integrity item
-IDs. It omits raw Progress, phase authority, attempt counters and duplicate
-aggregate percentages. Each settled ID comes from its reliable outcome in the
-admitted prefix. A new Gap clears both IDs. Terminal delivery retains them, as
-does replay of an older Gap when the reducer is already ahead.
+The current internal snapshot version is 4. It publishes derived display facts,
+active item identity, separate latest settled execution and integrity item
+IDs, and session progress and control capabilities. It omits raw Progress,
+phase authority, attempt counters and duplicate aggregate percentages. Each
+settled ID comes from its reliable outcome in the admitted prefix. A new Gap
+clears both IDs. Terminal delivery retains them, as does replay of an older Gap
+when the reducer is already ahead.
+
+`session_progress` is `"none"` until the session first runs and
+`"continuation"` after, so a session held by Pause all before it started reads
+`"none"`; it is null once the session is terminal. `can_pause`, `can_resume`
+and `can_stop` restate the dispatcher's control matrix for the session's
+reduced state and its kind's pause support: pause only while running, resume
+from paused or interrupted, stop from any nonterminal state except canceling.
+Recovery adopts the session record's state and start time before reducing the
+replayed tail, so a later state change in that tail still wins. They are
+presentation, not authority: between state events they reflect the last
+reduced state, and the dispatcher still decides each command. Browser
+admission refuses combinations the matrix cannot produce. Pages may keep their
+own control rules until they switch to these fields.
 
 Snapshot bytes participate in the same complete response ceiling as the event
 prefix. Reduction and byte admission are staged from captured values; failure
@@ -286,8 +300,10 @@ admitted native and command worker.
 
 Only `create_task`, `start_plan`, `start_inventory`, `refresh_inventory`,
 `acknowledge_inventory`, `restore_inventory`, `plan_again`, `start_execution`,
-`release_terminal_session`, `close_task` and `probe_recent_pairs`
-select the `CommandSpec` small asynchronous work class. Native dispatch
+`control_all_tasks`, `release_terminal_session`, `close_task` and
+`probe_recent_pairs` select the `CommandSpec` small asynchronous work class.
+`control_all_tasks` is there because bulk control can block behind a wedged
+audit writer ([DISPATCHER](DISPATCHER.md)); it must not hold a responsive thread. Native dispatch
 validates the request and admitted context before starting one command worker.
 Ordinary `BridgeDispatcher.dispatch()` and `CommandSpec.invoke()` remain
 synchronous. Custom rows default to direct delivery, as do bootstrap, picker,
@@ -350,7 +366,7 @@ Original-result retention applies to `create_task`, `start_plan`,
 `acknowledge_inventory`, `restore_inventory`,
 `plan_again`, `start_execution`, `mutate_plan_selection`,
 `mutate_plan_scope`, `mutate_plan_highlighted_selection`, `control_execution`,
-`release_terminal_session` and `close_task`. Existing domain receipts do not
+`control_all_tasks`, `release_terminal_session` and `close_task`. Existing domain receipts do not
 provide a complete replacement: they can expire with retirement, replay a current
 projection or omit a no-effect disposition. No identical resend is introduced.
 
@@ -576,6 +592,7 @@ BOOTSTRAP rows, commands require OPEN.
 | `mutate_plan_highlighted_selection` | `{task_id:TaskId,command_id:HexId,expected_view_revision:SafeInt,expected_highlight_revision:SafeInt,expected_selection_revision:SafeInt,selected:boolean}` | `PlanViewSummary` | observed original result; 5 s feedback; no mutation replay |
 | `start_execution` | `{task_id:TaskId,request_id:HexId,command_id:HexId,expected_revision:SafeInt,destructive_acknowledged:boolean}` | task/session start or `{disposition:"in-flight"\|"frozen"\|"conflict"\|"confirmation-required",revision:SafeInt,state:"reviewing"\|"committing"\|"committed",session:null\|{request_id:HexId,session_id:HexId}}` | observed original result; 5 s feedback; no mutation replay |
 | `control_execution` | `{task_id:TaskId,session_id:HexId,action:"pause"\|"resume"\|"cancel"}` | `{code:string,session_id:HexId,before:null\|string,after:null\|string,detail:string,accepted:boolean}` | observed original result; 5 s feedback; no mutation replay |
+| `control_all_tasks` | `{action:"pause"\|"resume"}` | `{paused:SafeInt,held:SafeInt,already_pausing:SafeInt,still_running:SafeInt,resumed:SafeInt}`; Pause all reports `resumed:0`, Resume all only `resumed` | async-small; observed original result; 5 s feedback; no mutation replay |
 | `next_events` | `{task_id:TaskId,session_id:HexId,drain_id:HexId,replay_from:null\|positive-integer}` | `{task_id:TaskId,session_id:HexId,drain_id:HexId,updates:array}` | 30 s client / 25 s server; recovery mints a new drain id |
 | `release_terminal_session` | `{task_id:TaskId,session_id:HexId}` | `{task_id:TaskId,session_id:HexId}` | observed original result; 5 s feedback; no mutation replay |
 | `close_task` | `{task_id:TaskId,session_id:null\|HexId}` | `{task_id:TaskId,session_id:null\|HexId,disposition:"pending"\|"closed"}` | observed original result; 5 s feedback; no mutation replay |

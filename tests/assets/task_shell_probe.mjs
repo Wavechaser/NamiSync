@@ -135,8 +135,9 @@ const pageSnapshot = (taskId, sessionId, facts = {}) => {
   const key = `${taskId}:${sessionId}`;
   const revision = (snapshotRevisions.get(key) ?? 0) + 1;
   snapshotRevisions.set(key, revision);
+  const live = (facts.session_state ?? "active") === "active";
   return {
-    wire_version: 3, task_id: taskId, session_id: sessionId, revision,
+    wire_version: 4, task_id: taskId, session_id: sessionId, revision,
     session_state: "active", control_state: "running", phase: null,
     progress_inconsistent: false, active_item: null, last_settled_operation_id: null,
     last_settled_integrity_item_id: null,
@@ -144,6 +145,7 @@ const pageSnapshot = (taskId, sessionId, facts = {}) => {
       items_done: null, items_total: null, throughput_bytes_per_second: null,
       eta_seconds: null, value: 0, determinate: false, indeterminate: true },
     gap_first_missed_seq: null, terminal_result: null, started_at: null, ended_at: null,
+    session_progress: live ? "none" : null, can_pause: false, can_resume: false, can_stop: live,
     ...facts,
   };
 };
@@ -361,7 +363,7 @@ assert.equal(taskStatusDigest({ sessionKind: "sync-execution", executionStarted:
   executionControlState: "paused" }).title, "Execution paused");
 assert.equal(taskStatusDigest({ sessionKind: "sync-execution", executionStarted: true, sessionState: "active",
   sessionId: "8".repeat(32),
-  snapshot: { wire_version: 3, session_id: "8".repeat(32),
+  snapshot: { wire_version: 4, session_id: "8".repeat(32),
     session_state: "active", progress_inconsistent: false, phase: "verify", presentation: {
     value: 50, determinate: true, indeterminate: false,
     items_done: 2, items_total: 4,
@@ -439,7 +441,7 @@ assert.equal(taskStatusDigest({
 }).title, "Needs target space");
 assert.equal(taskStatusDigest({
   sessionKind: "sync-execution", executionStarted: true, sessionId: "8".repeat(32), sessionState: "failed",
-  snapshot: { wire_version: 3, session_id: "8".repeat(32), session_state: "failed",
+  snapshot: { wire_version: 4, session_id: "8".repeat(32), session_state: "failed",
     terminal_result: { ...capacityRailResult, integrity: "mismatch" },
     presentation: { value: 0, determinate: false, indeterminate: false,
       items_done: null, items_total: null, throughput_bytes_per_second: null,

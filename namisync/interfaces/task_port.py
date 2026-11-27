@@ -342,7 +342,7 @@ class TaskDrainView:
             raise ValueError("task snapshot must be a detached dictionary")
         if (
             type(self.snapshot.get("wire_version")) is not int
-            or self.snapshot.get("wire_version") != 3
+            or self.snapshot.get("wire_version") != 4
             or self.snapshot.get("task_id") != self.task_id
             or self.snapshot.get("session_id") != self.session_id
             or type(self.snapshot.get("revision")) is not int
@@ -514,6 +514,10 @@ class TaskLifecyclePort(Protocol):
     def pause_task_session(self, task_id: str, session_id: str) -> object: ...
 
     def resume_task_session(self, task_id: str, session_id: str) -> object: ...
+
+    def pause_all_task_sessions(self) -> object: ...
+
+    def resume_all_task_sessions(self) -> object: ...
 
     def close_task(
         self,

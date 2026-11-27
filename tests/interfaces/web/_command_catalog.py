@@ -96,6 +96,8 @@ COMMAND_POLICY = MappingProxyType({
         "mutation-observed", "none", "open"),
     "control_execution": CommandPolicy("mutating", "forbidden", "forbidden", "direct",
         "mutation-observed", "none", "open"),
+    "control_all_tasks": CommandPolicy("mutating", "forbidden", "forbidden", "async-small",
+        "mutation-observed", "none", "open"),
     "next_events": CommandPolicy("read-only", "forbidden", "forbidden", "direct",
         "drain-30-seconds", "none", "open"),
     "release_terminal_session": CommandPolicy("mutating", "forbidden", "forbidden", "async-small",

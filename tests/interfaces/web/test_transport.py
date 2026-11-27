@@ -808,7 +808,7 @@ def _real_deferred_mkdir_drain_fixture(tmp_path: Path) -> dict[str, object]:
     )
 
     task_id = "task-" + "b1" * 16
-    state = TaskPresentationState(task_id, session_id)
+    state = TaskPresentationState(task_id, session_id, supports_pause=True)
     snapshots = []
     for batch in batches:
         for update in batch:
@@ -949,7 +949,7 @@ def test_br_g_33_next_events_crosses_production_dispatch_as_exact_tagged_views()
                     TaskEventUpdateView("event", event),
                     TaskRecordUpdateView("record", record),
                 ),
-                TaskSnapshotStage(TaskPresentationState(task_id, session_id), None),
+                TaskSnapshotStage(TaskPresentationState(task_id, session_id, supports_pause=False), None),
             )
 
     commands = production_command_specs(
@@ -976,7 +976,7 @@ def test_br_g_33_next_events_crosses_production_dispatch_as_exact_tagged_views()
             },
         )
     )
-    expected_snapshot = TaskPresentationState(task_id, session_id)
+    expected_snapshot = TaskPresentationState(task_id, session_id, supports_pause=False)
     expected_snapshot = expected_snapshot.advance(TaskEventUpdateView("event", event), 0.0)
     expected_snapshot = expected_snapshot.advance(TaskRecordUpdateView("record", record), 0.0)
 

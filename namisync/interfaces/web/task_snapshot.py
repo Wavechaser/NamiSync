@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass, replace
+from dataclasses import asdict, dataclass, field, replace
 from math import exp, isfinite
 from copy import deepcopy
 
@@ -10,6 +10,19 @@ from namisync.interfaces.task_port import TaskEventUpdateView, TaskRecordUpdateV
 
 
 _RATE_HORIZON_SECONDS = 5.0
+# The dispatcher control matrix (``control_decision``) restated over wire state
+# names, because the drain may not import the dispatcher. A test enumerates
+# every session state and both pause supports against the matrix itself.
+_SESSION_STATES = frozenset({
+    "pending", "running", "pausing", "paused", "canceling",
+    "completed", "failed", "canceled", "refused", "interrupted",
+})
+_TERMINAL_STATES = frozenset({"completed", "failed", "canceled", "refused"})
+_PAUSABLE_STATES = frozenset({"running"})
+_RESUMABLE_STATES = frozenset({"paused", "interrupted"})
+_STOPPABLE_STATES = _SESSION_STATES - _TERMINAL_STATES - {"canceling"}
+# Entering RUNNING sets the session's start time; PAUSING is reached only from it.
+_STARTED_STATES = frozenset({"running", "pausing"})
 
 
 class ProgressPresentationError(ValueError):
@@ -87,6 +100,13 @@ class TaskPresentationState:
     terminal_result: dict[str, object] | None = None
     started_at: str | None = None
     ended_at: str | None = None
+    lifecycle_state: str = "pending"
+    started: bool = False
+    supports_pause: bool = field(kw_only=True)
+
+    def __post_init__(self) -> None:
+        if type(self.supports_pause) is not bool:
+            raise TypeError("task presentation pause support must be a Boolean")
 
     def _clear_progress(self, *, phase: str | None = None, authority: str = "unknown") -> TaskPresentationState:
         return replace(
@@ -95,6 +115,22 @@ class TaskPresentationState:
             sample_at=None, sample_bytes_done=None, smoothed_rate=None,
             throughput_bytes_per_second=None, eta_seconds=None,
         )
+
+    def recover_lifecycle(self, state: str, started: bool) -> TaskPresentationState:
+        """Adopt the record read by recovery before its replayed tail is reduced.
+
+        The record is read before the replay subscription opens, so it is newer
+        than every reduced event; a later StateChanged in the tail reduces over it.
+        """
+
+        if state not in _SESSION_STATES or type(started) is not bool:
+            raise ValueError("recovered task lifecycle is invalid")
+        if self.session_state != "active":
+            return self
+        recovered = replace(self, lifecycle_state=state, started=self.started or started)
+        if recovered == self:
+            return self
+        return replace(recovered, revision=self.revision + 1)
 
     def advance(self, update: TaskUpdateView, now: float) -> TaskPresentationState:
         """Apply one byte-admitted update; old replay cannot regress newer facts."""
@@ -114,7 +150,8 @@ class TaskPresentationState:
             axes = None if result is None else asdict(result)
             return replace(
                 self._clear_progress(), revision=self.revision + 1,
-                session_state=record.state, terminal_result=axes,
+                session_state=record.state, lifecycle_state=record.state,
+                terminal_result=axes,
                 started_at=record.started_at, ended_at=record.ended_at,
             )
 
@@ -169,6 +206,12 @@ class TaskPresentationState:
                     state = replace(state, active_item=None, item_high_water=None)
         elif kind == "StateChanged":
             value = body["state"]
+            if value not in _SESSION_STATES:
+                raise ValueError("task state change names an unknown state")
+            state = replace(
+                state, lifecycle_state=value,
+                started=state.started or value in _STARTED_STATES,
+            )
             if value in {"running", "pausing", "paused", "canceling"}:
                 state = replace(
                     state, control_state=value, sample_at=None,
@@ -278,8 +321,10 @@ class TaskPresentationState:
         ):
             display_percent = max(0.0, min(100.0, progress["items_done"] / progress["items_total"] * 100))
         active_session = self.session_state == "active" and self.control_state != "paused"
+        lifecycle = self.lifecycle_state
+        live = self.session_state == "active" and lifecycle not in _TERMINAL_STATES
         return {
-            "wire_version": 3,
+            "wire_version": 4,
             "task_id": self.task_id,
             "session_id": self.session_id,
             "revision": self.revision,
@@ -306,6 +351,12 @@ class TaskPresentationState:
             "terminal_result": None if self.terminal_result is None else deepcopy(self.terminal_result),
             "started_at": self.started_at,
             "ended_at": self.ended_at,
+            "session_progress": (
+                None if not live else "continuation" if self.started else "none"
+            ),
+            "can_pause": live and self.supports_pause and lifecycle in _PAUSABLE_STATES,
+            "can_resume": live and lifecycle in _RESUMABLE_STATES,
+            "can_stop": live and lifecycle in _STOPPABLE_STATES,
         }
 
 
