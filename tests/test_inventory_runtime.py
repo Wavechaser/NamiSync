@@ -408,6 +408,18 @@ def test_runtime_registers_inventory_and_all_integrity_modes_with_one_factory(
             registrations[REBASELINE_KIND].settle_canceled
             == runtime.settle_canceled_rebaseline
         )
+        assert (
+            registrations[EXECUTION_KIND].settle_failed
+            == runtime.settle_failed_execution
+        )
+        assert all(
+            registrations[kind].settle_failed is None
+            for kind in ("sync-plan", INVENTORY_KIND)
+        )
+        assert all(
+            registrations[kind].settle_failed == runtime.settle_failed_integrity
+            for kind in (BASELINE_KIND, VERIFY_KIND, REBASELINE_KIND)
+        )
         dispatcher = Dispatcher(
             registrations,
             lock_provider=InProcessResourceLockProvider(),

@@ -818,6 +818,26 @@ entries to fit a batch; use explicit record offsets/limits.
   later pending session opens. A session admitted during the call is still not
   acted on, by the point-in-time rule.
 
+<a id="bug-0327"></a>
+
+- MODERATE - FIXED (2026-11-28). Resumed pre-run failure work loss. A sync
+  run that copied a 26-byte file, was paused during Verify and failed custody
+  reacquisition after Resume all ended `FAILED+RAN` correctly, but History
+  recorded 0/0 bytes and no phases, the ledger run stayed unfinished and the
+  runtime kept the run's start token. The target bytes were intact. Cause: a
+  resumed session's custody, `open` or worker-start failure was settled by
+  the dispatcher with a generic failure result, and no registration hook
+  could settle it from its checkpoint, as `settle_canceled` does for
+  cancellation. Found by independent re-review of the BUG-0323 fix. Fixed by
+  an optional `settle_failed` registration callback that execution and
+  integrity supply, reusing the workflow's settlement for a resume refused at
+  preflight, so the result keeps the completed phases and bytes, the run is
+  finished and the token released. The settlement begins only once the
+  attempt is marked settling under its publication lock, and Pause all leaves
+  such a session alone. Failing-first regressions cover the dispatcher seam on
+  all three paths, both orders of a race with Pause all, and the real service
+  through History.
+
 ### M1 Hardening
 
 <a id="bug-0060"></a>

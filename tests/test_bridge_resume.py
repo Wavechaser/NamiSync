@@ -543,6 +543,86 @@ def test_br_g_10_dispatcher_pause_resume_reopens_the_same_run(
     assert row[1] == SessionState.COMPLETED.value
 
 
+@pytest.mark.parametrize("bulk", [False, True])
+def test_a_resume_failing_before_it_runs_keeps_its_completed_work(
+    tmp_path,
+    bulk: bool,
+) -> None:
+    """A copy finished before a pause in Verify stays in History and the ledger."""
+
+    class LockProvider(InProcessResourceLockProvider):
+        failing = False
+
+        def acquire(self, resources, canceled):
+            if self.failing:
+                raise PermissionError("reacquisition failed")
+            return super().acquire(resources, canceled)
+
+    source, target = tmp_path / "source", tmp_path / "target"
+    source.mkdir()
+    target.mkdir()
+    (source / "proof.bin").write_bytes(b"published before the pause")
+    runtime = LocalWorkflowRuntime(tmp_path / "ledger.db", tmp_path / "history.db")
+    verifying = Event()
+
+    def verifier(selection, context, recorder):
+        verifying.set()
+        while True:
+            context.run.checkpoint()
+            sleep(0.005)
+
+    runtime._deps = replace(runtime._deps, verifier=verifier)
+    provider = LockProvider()
+    dispatcher = Dispatcher(
+        _workflow_registry(runtime),
+        lock_provider=provider,
+        clock=runtime.clock,
+        audit_observer_factory=runtime.audit_observer,
+    )
+    try:
+        execution = _plan_and_commit(
+            runtime, source, target, "3" * 32, "4" * 32, verify_after_execute=True
+        )
+        session_id = dispatcher.submit(EXECUTION_KIND, execution)
+        assert verifying.wait(8)
+        assert dispatcher.pause(session_id).accepted
+        deadline = monotonic() + 5
+        while dispatcher.get(session_id).state is not SessionState.PAUSED:
+            assert monotonic() < deadline
+            sleep(0.01)
+        provider.failing = True
+        if bulk:
+            assert dispatcher.resume_all().resumed == 1
+        else:
+            assert dispatcher.resume(session_id).accepted
+        record = _settled(dispatcher, session_id)
+        dispatcher.close(session_id)
+        assert runtime._execution_started == {}
+    finally:
+        dispatcher.shutdown(8)
+        runtime.close()
+
+    result = record.result
+    assert record.state is SessionState.FAILED
+    assert result.disposition is Disposition.RAN
+    assert (result.bytes_done, result.bytes_total) == (26, 26)
+    assert [(phase.phase, phase.status) for phase in result.phases] == [
+        ("execute", PhaseStatus.COMPLETED),
+        ("verify", PhaseStatus.INCOMPLETE),
+    ]
+    assert (target / "proof.bin").read_bytes() == b"published before the pause"
+    ended_at, filesystem_status = _ledger_rows(
+        tmp_path / "ledger.db", "runs", "ended_at, filesystem_status"
+    )[0]
+    assert ended_at is not None
+    assert filesystem_status == SessionState.COMPLETED.value
+    phases = _ledger_rows(tmp_path / "history.db", "history_phases")
+    assert [row[2:8] for row in phases] == [
+        ("execute", "completed", 1, 1, 26, 26),
+        ("verify", "incomplete", 0, 1, 0, 26),
+    ]
+
+
 def _ledger_rows(ledger, table: str, columns: str = "*") -> list[tuple]:
     connection = sqlite3.connect(ledger)
     try:

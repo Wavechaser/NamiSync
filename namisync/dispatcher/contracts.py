@@ -11,6 +11,7 @@ from namisync.core.events import Envelope
 from namisync.core.evidence import RecordingStatus
 from namisync.core.session import (
     Disposition,
+    FailureDetail,
     OperationResult,
     ResourceId,
     RunContext,
@@ -64,8 +65,16 @@ class WorkflowRegistration:
     """Detached-checkpoint adapter contract and capability metadata.
 
     ``prepare`` and invocation ``snapshot`` transfer detached checkpoints;
-    ``open``, ``settle_canceled`` and ``read_scheduling_keys`` treat them as
-    read-only, and ``open`` materializes fresh invocation-owned state.
+    ``open``, ``settle_canceled``, ``settle_failed`` and
+    ``read_scheduling_keys`` treat them as read-only, and ``open``
+    materializes fresh invocation-owned state.
+
+    ``settle_failed``, when present, finishes a session that has already run
+    but failed before running again (custody, ``open`` or worker start), from
+    its checkpoint and the failure, so the result keeps its completed work. It
+    must return a result projecting to ``FAILED`` with the given disposition;
+    otherwise, or if it raises, the generic failure stands with the callback
+    failure appended.
 
     ``read_scheduling_keys``, when present, is called with the current
     checkpoint on the scheduler thread, outside every dispatcher lock, on
@@ -84,6 +93,9 @@ class WorkflowRegistration:
     open: Callable[[object], WorkflowInvocation]
     supports_pause: bool = False
     settle_canceled: Callable[[object, Disposition], OperationResult] | None = None
+    settle_failed: (
+        Callable[[object, Disposition, FailureDetail], OperationResult] | None
+    ) = None
     read_scheduling_keys: Callable[[object], frozenset[Hashable]] | None = None
 
 

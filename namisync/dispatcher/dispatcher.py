@@ -218,6 +218,10 @@ class _WorkerAttempt:
     # attempt entered RUNNING. It belongs to the attempt, not ``_Control``:
     # a resume resets the control but must not revive this attempt.
     withdrawn: Event = field(default_factory=Event)
+    # Set under ``_condition`` and the session's publication lock once a
+    # pre-run failure of a started session commits to ``settle_failed``; Pause
+    # all then leaves the still-PENDING session alone instead of holding it.
+    settling: Event = field(default_factory=Event)
 
 
 @dataclass(slots=True)
@@ -819,6 +823,12 @@ class Dispatcher:
                 counts["paused"] += 1
                 return self._transition_locked(session_id, SessionState.PAUSING)
             if record.state is SessionState.PENDING:
+                key = self._current_workers.get(session_id)
+                attempt = None if key is None else self._workers.get(key)
+                if attempt is not None and attempt.settling.is_set():
+                    # Already failing before it could run again: its
+                    # settlement has begun, so it ends FAILED, not held.
+                    return None
                 if session_progress(record) is SessionProgress.CONTINUATION:
                     counts["paused"] += 1
                 else:
@@ -1598,14 +1608,20 @@ class Dispatcher:
             elif record.state is SessionState.CANCELING:
                 self._run_canceled(attempt.key, registration, record)
             else:
-                result = OperationResult(
-                    status=SessionState.FAILED,
-                    disposition=self._disposition(record),
-                    error=FailureDetail(
-                        "RuntimeError",
-                        "session worker could not start",
+                result = self._settled_failure(
+                    attempt.key,
+                    registration,
+                    record,
+                    OperationResult(
+                        status=SessionState.FAILED,
+                        disposition=self._disposition(record),
+                        error=FailureDetail(
+                            "RuntimeError",
+                            "session worker could not start",
+                        ),
                     ),
                 )
+                assert result is not None
                 self._run_core(
                     attempt.key,
                     attempt.resources,
@@ -1652,9 +1668,11 @@ class Dispatcher:
                 return
             except Exception as error:
                 pre_run_failed = True
-                fixed_result = _project_worker_exception(
-                    error,
-                    pre_run_disposition,
+                fixed_result = self._settled_failure(
+                    key,
+                    registration,
+                    record,
+                    _project_worker_exception(error, pre_run_disposition),
                 )
             if pre_run_failed:
                 self._run_core(
@@ -1694,9 +1712,11 @@ class Dispatcher:
                 invocation = registration.open(current.checkpoint)
             except Exception as error:
                 pre_run_failed = True
-                fixed_result = _project_worker_exception(
-                    error,
-                    pre_run_disposition,
+                fixed_result = self._settled_failure(
+                    key,
+                    registration,
+                    current,
+                    _project_worker_exception(error, pre_run_disposition),
                 )
             if pre_run_failed:
                 self._run_core(
@@ -1833,6 +1853,74 @@ class Dispatcher:
         if not outcome.paused:
             with self._condition:
                 self._item_events.pop(session_id, None)
+
+    def _settled_failure(
+        self,
+        key: _WorkerKey,
+        registration: WorkflowRegistration,
+        record: SessionRecord,
+        result: OperationResult | None,
+    ) -> OperationResult | None:
+        """Let a started session's registration keep its work in a pre-run failure.
+
+        Without a start time, a callback or a checkpoint, and for cancellation
+        (``None``), ``result`` stands. So it does when Pause all has already
+        held the session: that attempt settles nothing. Otherwise the attempt
+        is marked settling under the session's publication lock, so a later
+        Pause all leaves it alone, before the callback runs. A callback that
+        raises or answers out of contract leaves ``result`` with the callback
+        failure appended.
+        """
+
+        if (
+            result is None
+            or result.error is None
+            or record.started_at is None
+            or record.checkpoint is None
+            or registration.settle_failed is None
+        ):
+            return result
+        publication_lock = self._publication_lock_for(key.session_id)
+        if publication_lock is None:
+            return result
+        with publication_lock:
+            with self._condition:
+                attempt = self._workers.get(key)
+                if (
+                    attempt is None
+                    or attempt.withdrawn.is_set()
+                    or not self._is_current_worker_locked(key)
+                ):
+                    return result
+                attempt.settling.set()
+        try:
+            settled = registration.settle_failed(
+                record.checkpoint, result.disposition, result.error
+            )
+            if (
+                result_terminal_state(settled) is not SessionState.FAILED
+                or settled.disposition is not result.disposition
+            ):
+                raise ValueError(
+                    "failed settlement must project to FAILED with its disposition"
+                )
+        except Exception as error:
+            detail = retired_failure_detail(error)
+            try:
+                return normalize_result_diagnostics(
+                    replace(
+                        result,
+                        error=FailureDetail(
+                            result.error.type_name,
+                            f"{result.error.message}; settlement also failed: "
+                            f"{detail.type_name}: {detail.message}",
+                        ),
+                    )
+                )
+            except Exception as diagnostic_error:
+                retire_exception_graph(diagnostic_error)
+                return result
+        return settled
 
     @staticmethod
     def _settled_cancellation(

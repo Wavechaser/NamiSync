@@ -65,6 +65,7 @@ from namisync.core.root_authority import (
 from namisync.core.session import (
     Canceled,
     Disposition,
+    FailureDetail,
     OperationResult,
     PauseRequested,
     RunContext,
@@ -114,6 +115,7 @@ from namisync.workflows.inventory import (
     run_integrity,
     run_inventory,
     settle_canceled_integrity,
+    settle_failed_integrity,
 )
 
 from _db_fixtures import FakeClock, NOW, attestation, plan, setup_recorder
@@ -4076,6 +4078,19 @@ def test_paused_integrity_cancellation_uses_persisted_total_high_water() -> None
     assert result.omitted_detail_count == 2
     with pytest.raises(ValueError, match="retain RAN"):
         settle_canceled_integrity(request, Disposition.UNRUN)
+
+    failure = FailureDetail("PermissionError", "reacquisition failed")
+    failed = settle_failed_integrity(request, Disposition.RAN, failure)
+
+    assert failed.status is SessionState.FAILED
+    assert failed.canceled is False
+    assert failed.disposition is Disposition.RAN
+    assert failed.error == failure
+    assert failed.recording is RecordingStatus.DEGRADED
+    assert (failed.bytes_done, failed.bytes_total) == (11, 23)
+    assert failed.omitted_detail_count == 2
+    with pytest.raises(ValueError, match="retain RAN"):
+        settle_failed_integrity(request, Disposition.UNRUN, failure)
 
 
 def test_integrity_resume_uses_a_new_inventory_refresh_receipt(tmp_path: Path) -> None:

@@ -2949,16 +2949,25 @@ def test_pre_run_failure_retires_raw_graph_before_terminal_store(
     assert dispatcher.shutdown().complete
 
 
-@pytest.mark.parametrize("failure_stage", ["acquire", "open"])
+@pytest.mark.parametrize("failure_stage", ["acquire", "open", "start"])
 @pytest.mark.parametrize("bulk", [False, True])
+@pytest.mark.parametrize("settlement", [None, "kept", "raises", "wrong-state"])
 def test_a_resumed_session_failing_before_it_runs_again_still_reports_ran(
+    monkeypatch,
     failure_stage: str,
     bulk: bool,
+    settlement: str | None,
 ) -> None:
-    """Its earlier attempt may have changed the filesystem, so it is not UNRUN."""
+    """Its earlier attempt may have changed the filesystem, so it is not UNRUN.
+
+    A ``settle_failed`` registration settles it from its checkpoint, keeping
+    that earlier work; one that raises or answers out of contract leaves the
+    generic failure with its own failure appended.
+    """
 
     failing = Event()
     entered = Event()
+    settled: list[tuple[object, Disposition, FailureDetail]] = []
 
     class LockProvider(InProcessResourceLockProvider):
         def acquire(self, resources, canceled):
@@ -2966,11 +2975,27 @@ def test_a_resumed_session_failing_before_it_runs_again_still_reports_ran(
                 raise PermissionError("reacquisition failed")
             return super().acquire(resources, canceled)
 
+    def settle_failed(checkpoint, disposition, failure):
+        settled.append((checkpoint, disposition, failure))
+        if settlement == "raises":
+            raise OSError("settlement broke")
+        if settlement == "wrong-state":
+            return OperationResult(SessionState.COMPLETED, disposition=disposition)
+        return OperationResult(
+            SessionState.FAILED,
+            disposition=disposition,
+            bytes_done=26,
+            bytes_total=26,
+            error=failure,
+        )
+
     work = registration(
         lambda payload: checkpoint_loop(entered),
         supports_pause=True,
         resources=(unique_resource("resumed-pre-run"),),
     )
+    if settlement is not None:
+        work = replace(work, settle_failed=settle_failed)
     open_first = work.open
 
     def open_invocation(checkpoint):
@@ -2978,6 +3003,18 @@ def test_a_resumed_session_failing_before_it_runs_again_still_reports_ran(
             raise OSError("reopen failed")
         return open_first(checkpoint)
 
+    original_start = Thread.start
+
+    def start(thread):
+        if (
+            failure_stage == "start"
+            and failing.is_set()
+            and thread.name.startswith("namisync-session-")
+        ):
+            raise RuntimeError("thread start failed")
+        original_start(thread)
+
+    monkeypatch.setattr(Thread, "start", start)
     dispatcher = Dispatcher(
         {"work": replace(work, open=open_invocation)},
         lock_provider=LockProvider(),
@@ -2996,6 +3033,128 @@ def test_a_resumed_session_failing_before_it_runs_again_still_reports_ran(
         assert record.started_at is not None
         assert record.result is not None
         assert record.result.disposition is Disposition.RAN
+        failure = {
+            "acquire": FailureDetail("PermissionError", "reacquisition failed"),
+            "open": FailureDetail("OSError", "reopen failed"),
+            "start": FailureDetail("RuntimeError", "session worker could not start"),
+        }[failure_stage]
+        if settlement is None:
+            assert settled == []
+            assert record.result.error == failure
+            return
+        assert settled == [(b"continued", Disposition.RAN, failure)]
+        if settlement == "kept":
+            assert record.result.bytes_done == 26
+            assert record.result.error == failure
+        else:
+            assert record.result.bytes_done == 0
+            assert record.result.error is not None
+            assert record.result.error.type_name == failure.type_name
+            assert record.result.error.message.startswith(
+                f"{failure.message}; settlement also failed: "
+            )
+    finally:
+        failing.clear()
+        assert dispatcher.shutdown(2).complete
+
+
+@pytest.mark.parametrize("hold_first", [False, True])
+def test_pause_all_and_a_failed_settlement_never_both_act(hold_first: bool) -> None:
+    """Either the hold wins and nothing is settled, or the settlement wins.
+
+    A settlement's durable effects must never land on a session that then
+    stays held and settles again on its next resume.
+    """
+
+    entered = Event()
+    failing = Event()
+    in_acquire = Event()
+    release_acquire = Event()
+    in_settle = Event()
+    release_settle = Event()
+    calls = []
+
+    class LockProvider(InProcessResourceLockProvider):
+        def acquire(self, resources, canceled):
+            if failing.is_set():
+                in_acquire.set()
+                assert release_acquire.wait(HANG_GUARD)
+                raise PermissionError("reacquisition failed")
+            return super().acquire(resources, canceled)
+
+    def settle_failed(checkpoint, disposition, failure):
+        calls.append(failure)
+        in_settle.set()
+        assert release_settle.wait(HANG_GUARD)
+        return OperationResult(
+            SessionState.FAILED, disposition=disposition, error=failure
+        )
+
+    work = replace(
+        registration(
+            lambda payload: checkpoint_loop(entered),
+            supports_pause=True,
+            resources=(unique_resource("hold-or-settle"),),
+        ),
+        settle_failed=settle_failed,
+    )
+    dispatcher = Dispatcher({"work": work}, lock_provider=LockProvider())
+    try:
+        session_id = dispatcher.submit("work", b"payload")
+        assert entered.wait(HANG_GUARD)
+        assert dispatcher.pause(session_id).accepted
+        wait_for(dispatcher, session_id, SessionState.PAUSED)
+        failing.set()
+        assert dispatcher.resume(session_id).accepted
+        assert in_acquire.wait(HANG_GUARD)
+        if hold_first:
+            assert dispatcher.pause_all() == BulkControlResult(paused=1)
+            release_acquire.set()
+            sleep(0.1)
+            assert calls == []
+            assert dispatcher.get(session_id).state is SessionState.PAUSED
+            failing.clear()
+            assert dispatcher.resume_all().resumed == 1
+            wait_for(dispatcher, session_id, SessionState.RUNNING)
+            assert calls == []
+        else:
+            release_acquire.set()
+            assert in_settle.wait(HANG_GUARD)
+            assert dispatcher.pause_all() == BulkControlResult()
+            release_settle.set()
+            record = wait_for(dispatcher, session_id, SessionState.FAILED)
+            assert record.result is not None
+            assert record.result.disposition is Disposition.RAN
+            assert len(calls) == 1
+    finally:
+        failing.clear()
+        release_acquire.set()
+        release_settle.set()
+        dispatcher.shutdown(HANG_GUARD)
+
+
+def test_a_fresh_session_failing_before_it_runs_is_not_settled_as_started() -> None:
+    settled = []
+
+    class LockProvider(InProcessResourceLockProvider):
+        def acquire(self, resources, canceled):
+            raise PermissionError("acquisition failed")
+
+    dispatcher = Dispatcher(
+        {
+            "work": replace(
+                registration(completed, resources=(unique_resource("fresh"),)),
+                settle_failed=lambda *args: settled.append(args),
+            )
+        },
+        lock_provider=LockProvider(),
+    )
+    try:
+        session_id = dispatcher.submit("work", b"payload")
+        record = wait_for(dispatcher, session_id, SessionState.FAILED)
+        assert record.result is not None
+        assert record.result.disposition is Disposition.UNRUN
+        assert settled == []
     finally:
         assert dispatcher.shutdown(2).complete
 

@@ -44,8 +44,9 @@ detached from request- and workflow-owned mutable state plus a set of generic
 `ResourceId` values. `snapshot()` has the same detachment obligation after a
 cooperative pause. `open(checkpoint)` belongs to the adapter, treats the retained
 checkpoint as read-only, and materializes a fresh invocation with `run(ctx)` and
-`snapshot()` methods. `settle_canceled` and `read_scheduling_keys`, when
-present, likewise treat the checkpoint as read-only. The dispatcher calls those methods but never reflects
+`snapshot()` methods. `settle_canceled`, `settle_failed` and
+`read_scheduling_keys`, when present, likewise treat the checkpoint as
+read-only. The dispatcher calls those methods but never reflects
 over or otherwise interprets or certifies the checkpoint. Reopening the
 invocation on every resume is the generic seam through which the owning workflow
 runs its fresh guard.
@@ -112,6 +113,21 @@ returned result projects to lifecycle `CANCELED`, then follows the ordinary
 audit/Terminal/custody path. Registrations without the callback retain the
 generic canceled result. A callback failure is an explicit adapter failure and
 terminals `FAILED`; it is never masked as clean cancellation.
+
+A second optional callback,
+`settle_failed(checkpoint, disposition, failure) -> OperationResult`, finishes
+work that already has a start time but failed before running again: custody
+reacquisition, `open` or worker start after a resume. Dispatcher passes the
+opaque checkpoint, the generic disposition (`RAN`) and the failure, and
+requires the result to project to `FAILED` with that disposition. A callback
+that raises or answers otherwise leaves the generic failure, with the callback
+failure appended to its message. Sessions that never started and canceled
+sessions do not reach it. The callback starts only after the attempt is
+marked settling under the session's publication lock: a Pause all that held
+the session first leaves it `PAUSED` and nothing is settled, and a later
+Pause all leaves a settling session alone, so its settlement never lands on a
+session that stays held. A resume refused inside the workflow's own preflight
+is settled by the workflow and does not use it.
 
 One optional registration reader,
 `read_scheduling_keys(checkpoint) -> frozenset`, returns opaque hashable
@@ -303,10 +319,11 @@ Python references have been erased.
 Required local physical-volume ids are sorted deterministically before locks to
 prevent deadlock. Sessions with disjoint required volumes may run concurrently;
 contenders queue. Planning sessions may release locks when complete; execution
-reacquires and revalidates volumes. A custody or `open` failure before an
-attempt runs ends the session `FAILED`: `UNRUN` when it never started, and
-`RAN` for a resumed session, whose earlier attempts may have changed the
-filesystem.
+reacquires and revalidates volumes. A custody, `open` or worker-start failure
+before an attempt runs ends the session `FAILED`: `UNRUN` when it never
+started, and `RAN` for a resumed session, whose earlier attempts may have
+changed the filesystem. A resumed session whose registration has
+`settle_failed` is settled by it, so its result keeps that earlier work.
 
 Scheduler selection installs the current generation, its worker registration,
 and all reservations atomically before removing the pending entry or starting

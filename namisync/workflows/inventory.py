@@ -2252,6 +2252,27 @@ def settle_canceled_integrity(
     )
 
 
+def settle_failed_integrity(
+    request: IntegrityWorkflowRequest,
+    disposition: Disposition,
+    failure: FailureDetail,
+) -> OperationResult:
+    """Settle one started integrity session that failed before running again."""
+
+    if disposition is not Disposition.RAN:
+        raise ValueError("started integrity failure must retain RAN disposition")
+    return OperationResult(
+        SessionState.FAILED,
+        recording=request.recording,
+        disposition=disposition,
+        bytes_done=request.processed_bytes,
+        bytes_total=request.bytes_total_high_water,
+        recording_issues=request.recording_issues,
+        omitted_detail_count=request.omitted_detail_count,
+        error=failure,
+    )
+
+
 @contextmanager
 def _integrity_recorder(
     deps: IntegrityDependencies,

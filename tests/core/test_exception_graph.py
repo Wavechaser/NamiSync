@@ -477,6 +477,7 @@ def test_direct_failure_detail_construction_has_exact_static_owners() -> None:
                 "namisync/dispatcher/dispatcher.py",
                 "Dispatcher._complete_unstarted_attempt",
             ): 1,
+            ("namisync/dispatcher/dispatcher.py", "Dispatcher._settled_failure"): 1,
             ("namisync/workflows/inventory.py", "run_integrity"): 1,
             ("namisync/workflows/inventory.py", "_refused_resolution"): 1,
             ("namisync/workflows/sync.py", "_run_execution"): 5,

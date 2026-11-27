@@ -466,6 +466,7 @@ def test_xv_11_execution_and_preflight_have_no_live_settings_dependency() -> Non
             "prepare_execution",
             "open_execution",
             "settle_canceled_execution",
+            "settle_failed_execution",
         }
     }
     assert set(execution_methods) == {
@@ -473,6 +474,7 @@ def test_xv_11_execution_and_preflight_have_no_live_settings_dependency() -> Non
         "prepare_execution",
         "open_execution",
         "settle_canceled_execution",
+        "settle_failed_execution",
     }
     assert all(
         "_settings_store" not in source

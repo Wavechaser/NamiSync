@@ -263,8 +263,9 @@ desktop recovery command.
 Folder gestures expand only toggleable descendants; a
 safety-disabled row remains disabled without making selectable siblings inert.
 The execution, baseline, verify and rebaseline registrations supply their
-runtime's `settle_canceled_*` settlement; the service does not decode
-continuations or decide cancellation policy. Retained `HistoryRunSummaryView`
+runtime's `settle_canceled_*` settlement and its `settle_failed_*` settlement
+for a resumed session that fails before running again; the service does not
+decode continuations or decide cancellation or failure policy. Retained `HistoryRunSummaryView`
 exposes primitive lifecycle/watermark fields, filesystem/integrity/recording/
 audit axes, disposition, cancellation, headline, counts, and bounded phases,
 using the same workflow classification source as live result views, plus the

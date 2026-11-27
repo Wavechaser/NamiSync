@@ -3187,6 +3187,7 @@ def _workflow_registry(
         *,
         supports_pause: bool = False,
         settle_canceled=None,
+        settle_failed=None,
     ) -> WorkflowRegistration:
         def prepare_session(request: object) -> PreparedSession:
             prepared = prepare(request)
@@ -3194,11 +3195,14 @@ def _workflow_registry(
                 prepared.checkpoint, prepared.resources
             )
 
-        optional = (
-            {}
-            if settle_canceled is None
-            else {"settle_canceled": settle_canceled}
-        )
+        optional = {
+            name: value
+            for name, value in (
+                ("settle_canceled", settle_canceled),
+                ("settle_failed", settle_failed),
+            )
+            if value is not None
+        }
         return WorkflowRegistration(
             prepare_session,
             open_invocation,
@@ -3214,6 +3218,7 @@ def _workflow_registry(
             runtime.open_execution,
             supports_pause=True,
             settle_canceled=runtime.settle_canceled_execution,
+            settle_failed=runtime.settle_failed_execution,
         ),
         INVENTORY_KIND: registration(
             runtime.prepare_inventory,
@@ -3224,18 +3229,21 @@ def _workflow_registry(
             runtime.open_baseline,
             supports_pause=True,
             settle_canceled=runtime.settle_canceled_baseline,
+            settle_failed=runtime.settle_failed_integrity,
         ),
         VERIFY_KIND: registration(
             runtime.prepare_verify,
             runtime.open_verify,
             supports_pause=True,
             settle_canceled=runtime.settle_canceled_verify,
+            settle_failed=runtime.settle_failed_integrity,
         ),
         REBASELINE_KIND: registration(
             runtime.prepare_rebaseline,
             runtime.open_rebaseline,
             supports_pause=True,
             settle_canceled=runtime.settle_canceled_rebaseline,
+            settle_failed=runtime.settle_failed_integrity,
         ),
     }
 

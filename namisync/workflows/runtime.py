@@ -56,6 +56,7 @@ from namisync.core.recording import (
 )
 from namisync.core.session import (
     Disposition,
+    FailureDetail,
     OperationResult,
     PauseRequested,
     PhaseResult,
@@ -130,6 +131,7 @@ from .inventory import (
     remembered_locations as project_remembered_locations,
     resolve_reviewed_binding,
     settle_canceled_integrity,
+    settle_failed_integrity,
     validate_location_candidate_pair,
 )
 from .execution_review import (
@@ -191,6 +193,7 @@ from .sync import (
     run_execution,
     run_plan,
     settle_canceled_execution as settle_canceled_sync_execution,
+    settle_failed_execution as settle_failed_sync_execution,
 )
 from .node_tree import NodeTree, NodeTreeKind, NodeTreeMember, build_node_tree
 from .selection import (
@@ -859,6 +862,50 @@ class LocalWorkflowRuntime:
             )
         finally:
             self._release_execution_start(request)
+
+    def settle_failed_execution(
+        self,
+        checkpoint: object,
+        disposition: Disposition,
+        failure: FailureDetail,
+    ) -> OperationResult:
+        """Settle a started execution that failed before running again."""
+
+        self._require_open()
+        if type(checkpoint) is not ExecutionCheckpoint:
+            raise TypeError("sync execution requires an ExecutionCheckpoint")
+        request = checkpoint.materialize()
+        if request.started_at is None:
+            raise ValueError("started execution failure lacks its original start time")
+        _require_utc(request.started_at, "execution start")
+        with self._lock:
+            established = self._execution_started.get(
+                str(request.execution_set.run_id)
+            )
+            if established != request.started_at:
+                raise ValueError("failed execution does not match runtime custody")
+        try:
+            return settle_failed_sync_execution(
+                request.continuation,
+                disposition,
+                failure,
+                self._deps,
+            )
+        finally:
+            self._release_execution_start(request)
+
+    def settle_failed_integrity(
+        self,
+        checkpoint: object,
+        disposition: Disposition,
+        failure: FailureDetail,
+    ) -> OperationResult:
+        """Settle a started integrity session that failed before running again."""
+
+        self._require_open()
+        if type(checkpoint) is not IntegrityWorkflowRequest:
+            raise TypeError("integrity requires an IntegrityWorkflowRequest checkpoint")
+        return settle_failed_integrity(checkpoint, disposition, failure)
 
     def prepare_inventory(self, request: object) -> WorkflowPreparation:
         self._require_open()

@@ -2045,6 +2045,37 @@ def settle_canceled_execution(
     )
 
 
+def settle_failed_execution(
+    continuation: ExecutionContinuation,
+    disposition: Disposition,
+    failure: FailureDetail,
+    deps: SyncDependencies,
+) -> OperationResult:
+    """Finish a started execution that failed before it could run again.
+
+    The completed work in the continuation is kept and the run is recorded as
+    finished, as when a resumed run fails its own preflight; no domain work
+    and no outcome is emitted. The session did not run again, so the result is
+    ``FAILED`` even when the ledger records a completed filesystem outcome
+    before an unfinished verification.
+    """
+
+    if disposition is not Disposition.RAN:
+        raise ValueError("started execution failure must retain RAN disposition")
+    if not isinstance(continuation, (ExecuteContinuation, VerifyContinuation)):
+        raise TypeError("failed settlement requires a typed continuation")
+    if isinstance(continuation, VerifyContinuation):
+        continuation = _exact_verify_continuation(continuation)
+    validate_execution_set(continuation.execution_set)
+    if isinstance(continuation, VerifyContinuation):
+        return replace(
+            _settle_verify_incomplete(continuation, deps, failure),
+            status=SessionState.FAILED,
+            canceled=False,
+        )
+    return _finish_execute_resume_failure(continuation, deps, failure, ())
+
+
 def _settle_canceled_execution_admitted(
     continuation: ExecutionContinuation,
     disposition: Disposition,
@@ -3132,6 +3163,19 @@ def _settle_execute_resume_failure(
         raise
     except Exception as emit_error:
         error = retired_failure_detail(emit_error)
+    return _finish_execute_resume_failure(
+        continuation, deps, error, tuple(emitted_items)
+    )
+
+
+def _finish_execute_resume_failure(
+    continuation: ExecuteContinuation,
+    deps: SyncDependencies,
+    error: FailureDetail,
+    items: tuple[ItemOutcome, ...],
+) -> OperationResult:
+    """Project and record the failed end of a started execute continuation."""
+
     phase = _execute_continuation_phase(
         continuation.execution_set,
         PhaseStatus.FAILED,
@@ -3141,7 +3185,7 @@ def _settle_execute_resume_failure(
         status=SessionState.FAILED,
         recording=continuation.execution_set.recording,
         disposition=Disposition.RAN,
-        items=tuple(emitted_items),
+        items=items,
         phases=(phase,) if continuation.verify_after_execute else (),
         bytes_done=phase.bytes_done,
         bytes_total=(

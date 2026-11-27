@@ -124,6 +124,7 @@ from namisync.workflows.models import (
 from namisync.workflows.sync import (
     run_execution,
     settle_canceled_execution,
+    settle_failed_execution,
 )
 from namisync.workflows.runtime import (
     EXECUTION_KIND,
@@ -1262,6 +1263,52 @@ def test_direct_canceled_settlement_validates_once_without_producer_audit(
     assert result.canceled
     assert audit_policies == []
     assert len(ingress_values) == 1
+
+
+@pytest.mark.parametrize("verify_after_execute", [False, True])
+def test_failed_settlement_keeps_completed_work_and_finishes_the_run(
+    verify_after_execute: bool,
+) -> None:
+    operation = _operation(4019, 4)
+    xset = _execution_set(operation)
+    xset.status[operation.op_id] = Outcome.SUCCEEDED
+    finished: list[tuple[SessionState, RecordingStatus]] = []
+    failure = FailureDetail("PermissionError", "reacquisition failed")
+    dependencies = _deps(
+        executor=lambda *args: pytest.fail("executor unexpectedly started"),
+        verifier=lambda *args: pytest.fail("verifier unexpectedly started"),
+        recordings=[],
+        finished_existing=finished,
+    )
+    continuation = ExecuteContinuation(
+        xset, verify_after_execute=verify_after_execute
+    )
+
+    result = settle_failed_execution(
+        continuation, Disposition.RAN, failure, dependencies
+    )
+
+    assert result.status is SessionState.FAILED
+    assert not result.canceled
+    assert result.disposition is Disposition.RAN
+    assert result.error == failure
+    assert result.items == ()
+    assert result.bytes_done == result.bytes_total == operation.content_bytes
+    expected_phase = PhaseResult(
+        "execute",
+        PhaseStatus.FAILED,
+        items_done=1,
+        items_total=1,
+        bytes_done=operation.content_bytes,
+        bytes_total=operation.content_bytes,
+        error="PermissionError: reacquisition failed",
+    )
+    assert result.phases == ((expected_phase,) if verify_after_execute else ())
+    assert finished == [(SessionState.FAILED, xset.recording)]
+    with pytest.raises(ValueError, match="RAN disposition"):
+        settle_failed_execution(
+            continuation, Disposition.UNRUN, failure, dependencies
+        )
 
 
 def test_nested_resumed_cancellation_reuses_ingress_validation(
