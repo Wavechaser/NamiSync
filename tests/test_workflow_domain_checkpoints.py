@@ -816,6 +816,28 @@ def test_checkpoint_reuses_validated_structure_without_reconstructing_execution_
     validate_execution_set(second.execution_set)
 
 
+@pytest.mark.parametrize("phase", ("execute", "verify"))
+def test_checkpoint_plan_reads_the_reviewed_plan_without_materializing(
+    phase: str, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    request = _request(phase)
+    plan = request.execution_set.plan
+    retained = ExecutionSetCheckpoint(request.execution_set)
+    checkpoint = ExecutionCheckpoint(request)
+
+    def forbid(*args, **kwargs):
+        raise AssertionError("reading the plan materialized the checkpoint")
+
+    monkeypatch.setattr(ExecutionSetCheckpoint, "materialize", forbid)
+    monkeypatch.setattr(ExecutionCheckpoint, "materialize", forbid)
+
+    assert retained.plan is plan
+    assert checkpoint.plan is plan
+    for value in (retained, checkpoint):
+        with pytest.raises(AttributeError):
+            value.plan = plan
+
+
 def test_checkpoint_structure_authority_rejects_foreign_or_malformed_state() -> None:
     request = _request("execute")
     retained = ExecutionSetCheckpoint(request.execution_set)

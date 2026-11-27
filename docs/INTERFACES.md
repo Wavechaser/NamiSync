@@ -77,6 +77,9 @@ It wires workflow-owned constructors and materializers to the detachment
 contract in [DISPATCHER.md](DISPATCHER.md#public-contract). Constructors
 establish the built-in checkpoints' ownership; public tests prove it. The
 service adds no checkpoint certification or authority/adoption wrapper.
+Each of the six registrations passes the workflow-owned disk-key reader
+through unchanged ([WORKFLOWS](WORKFLOWS.md#physical-disk-scheduling-keys));
+the service decides nothing about disks.
 Execution checkpoints share their construction-validated immutable operation
 index through the core execution snapshot while reopening detached mutable state.
 This changes neither service admission nor receipt timing guarantees; the

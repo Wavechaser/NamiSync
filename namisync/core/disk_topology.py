@@ -53,6 +53,11 @@ _BUS_TYPE_OFFSET = 28
 # DEVICE_SEEK_PENALTY_DESCRIPTOR.IncursSeekPenalty follows Version and Size.
 _SEEK_PENALTY_OFFSET = 8
 
+_DOS_DEVICE_BUFFER_CHARS = 1024
+# The object-namespace target of every local volume's drive letter;
+# redirector, Mup and subst (``\??\``) targets differ.
+_LOCAL_VOLUME_DEVICE = "\\Device\\HarddiskVolume"
+
 _VOLUME_NAME = re.compile(
     r"\\\\\?\\Volume\{[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-"
     r"[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}\}\\?"
@@ -86,14 +91,23 @@ def counts_as_spinning(fact: DiskFact) -> bool:
 def volume_name(anchor: str) -> str:
     """Return the ``\\\\?\\Volume{GUID}\\`` name of an admitted root's volume.
 
-    ``anchor`` is an admitted local root or its volume anchor. Raises
-    ``OSError`` when Windows cannot name the volume or off Windows, and
-    ``ValueError`` (``PathValidationError``) when ``anchor`` is not a valid
-    local root.
+    ``anchor`` is an admitted local root or its volume anchor. Before any call
+    that can perform I/O, the root's own drive letter is resolved in the
+    object namespace, which never touches a device or the network; only a
+    local volume device proceeds. UNC, volume GUID and other device paths,
+    mapped network and ``subst`` letters, and unassigned letters raise
+    ``OSError`` without a further native call. Also raises ``OSError`` when
+    Windows cannot name the volume or off Windows, and ``ValueError``
+    (``PathValidationError``) when ``anchor`` is not a valid local root.
     """
 
     if not _IS_WINDOWS:
         raise OSError("native volume names exist only on Windows")
+    dos_name = _dos_device_name(anchor)
+    if dos_name is None:
+        raise OSError("root is not on a drive letter")
+    if not _query_dos_device(dos_name).startswith(_LOCAL_VOLUME_DEVICE):
+        raise OSError("root is not on a local volume device", dos_name)
     mount_point = current_volume_anchor(anchor)
     if not mount_point.endswith("\\"):
         mount_point += "\\"
@@ -126,6 +140,23 @@ def disk_facts(volume_name: str) -> tuple[DiskFact, ...]:
     finally:
         _close_handle(volume)
     return tuple(_read_disk(number) for number in _parse_extent_disks(extents))
+
+
+def _dos_device_name(anchor: str) -> str | None:
+    """Return the root's own ``X:`` drive name, read lexically.
+
+    Root paths are drive-letter paths (``pathing`` rejects the volume GUID
+    namespace), so anything else is not a local volume root here.
+    """
+
+    path = anchor.replace("/", "\\")
+    if path.startswith("\\\\?\\"):
+        path = path[4:]
+    elif path.startswith("\\\\"):
+        return None
+    if len(path) >= 2 and path[1] == ":" and path[0].isascii() and path[0].isalpha():
+        return path[0].upper() + ":"
+    return None
 
 
 def _read_disk(disk_number: int) -> DiskFact:
@@ -236,12 +267,30 @@ class _Bindings:
             wintypes.DWORD,
         ]
         self.get_volume_name.restype = wintypes.BOOL
+        self.query_dos_device = kernel32.QueryDosDeviceW
+        self.query_dos_device.argtypes = [
+            wintypes.LPCWSTR,
+            wintypes.LPWSTR,
+            wintypes.DWORD,
+        ]
+        self.query_dos_device.restype = wintypes.DWORD
 
 
 _WINDOWS = _Bindings() if os.name == "nt" else None
 
 
-# The native seam: tests replace these three and the volume-name lookup.
+# The native seam: tests replace these three, the volume-name lookup and the
+# object-namespace lookup.
+
+
+def _query_dos_device(dos_name: str) -> str:
+    """Return the first object-namespace target of one DOS device name."""
+
+    assert _WINDOWS is not None
+    target = ctypes.create_unicode_buffer(_DOS_DEVICE_BUFFER_CHARS)
+    if not _WINDOWS.query_dos_device(dos_name, target, len(target)):
+        raise OSError(ctypes.get_last_error(), "QueryDosDeviceW failed", dos_name)
+    return target.value
 
 
 def _volume_name_for_mount_point(mount_point: str) -> str:

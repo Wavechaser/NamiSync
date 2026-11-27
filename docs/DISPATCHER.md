@@ -121,6 +121,9 @@ lock nothing, and never enter records, the store, events or audit. A reader
 that raises an `Exception` or answers with anything but a `frozenset` means no
 keys for that pass; it never refuses or fails the session. A registration without a reader is
 scheduled exactly as before. Scheduling below describes when the reader runs.
+Every production registration supplies the workflow-owned physical-disk reader
+([WORKFLOWS](WORKFLOWS.md#physical-disk-scheduling-keys)); dispatcher never
+interprets its keys.
 
 `close()` is distinct from cancellation: it accepts only an already-terminal
 record and first waits for that session's exact worker thread to exit, outside

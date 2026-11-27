@@ -359,6 +359,12 @@ class ExecutionCheckpoint:
         object.__setattr__(self, "_started_at", request.started_at)
         object.__setattr__(self, "_delta", delta)
 
+    @property
+    def plan(self) -> Plan:
+        """The reviewed plan, read without materializing the continuation."""
+
+        return self._execution.plan
+
     def materialize(self) -> ExecutionRequest:
         """Create fresh mutable continuation state for one invocation."""
 

@@ -32,7 +32,9 @@ aggregate byte high-water, and transient publication evidence. It adds only the
 phase-specific remainder: verification choice and exclusion cursor for execute,
 or candidate selection and compound phase/result axes for verify. Construction
 validates the admitted domain request and detaches mutable state; reopening
-materializes fresh mutable overlays. There is no checkpoint schema version,
+materializes fresh mutable overlays. Its read-only `plan` exposes only the
+shared immutable reviewed plan, without materializing, for the disk-key
+reader. There is no checkpoint schema version,
 JSON form, checkpoint-specific authority/adoption wrapper, or
 `adopt_checkpoint()` path. Transient evidence never becomes history, ledger,
 desktop artifact, or JavaScript state. Dispatcher terminal settlement clears
@@ -139,6 +141,26 @@ leaves the maps intact for the serialized retry. The service owns the separate
 session-to-detail relation and invokes a single drop only after dispatcher
 retirement, so workflow code does not infer a detail lifetime from terminal
 state alone.
+
+### Physical-disk scheduling keys
+
+`workflows/disk_scheduling.py` owns the scheduling-key reader that every
+production registration (plan, execution, inventory, baseline, verify and
+rebaseline) supplies to dispatcher. All six read or write their roots' disks.
+From the current checkpoint it takes the roots the next start touches: a plan's
+source and target paths, an execution's reviewed plan roots (read without
+materializing the continuation), and an inventory or integrity binding's
+selected mount. For each root it reads the volume's disks afresh through
+[core disk topology](CORE.md) and answers one plain `("disk", number)` key per
+disk that counts as spinning; non-spinning disks add nothing.
+
+Roots are resolved from these paths at each read, not from a volume name
+captured at admission: no checkpoint has a place for one, and adding it would
+change checkpoint shapes for no safety gain, since a stale key costs only
+speed. Only a root on a local volume gets keys, by core's local-volume rule:
+UNC, mapped network and `subst` roots, unassigned letters, a root whose volume
+or extents cannot be read, and an unknown checkpoint add no keys. Reading never
+refuses. Keys are never stored, recorded or published.
 
 ### Node tree substrate
 

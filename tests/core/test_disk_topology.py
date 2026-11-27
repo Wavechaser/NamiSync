@@ -313,14 +313,137 @@ def test_volume_name_looks_up_the_mount_point_of_the_roots_volume(
         looked_up.append(mount_point)
         return GUID_NAME
 
+    queried: list[str] = []
+
+    def query(name: str) -> str:
+        queried.append(name)
+        return "\\Device\\HarddiskVolume4"
+
     monkeypatch.setattr(disk_topology, "_IS_WINDOWS", True)
+    monkeypatch.setattr(disk_topology, "_query_dos_device", query)
     monkeypatch.setattr(
         disk_topology, "current_volume_anchor", lambda root: "D:\\mount"
     )
     monkeypatch.setattr(disk_topology, "_volume_name_for_mount_point", lookup)
 
-    assert volume_name("D:\\mount\\data") == GUID_NAME
+    # A nested mount under a local letter checks the root's own letter.
+    assert volume_name("d:\\mount\\data") == GUID_NAME
+    assert queried == ["D:"]
     assert looked_up == ["D:\\mount\\"]
+
+
+@pytest.mark.parametrize(
+    ("root", "dos_name"),
+    [
+        ("C:\\data", "C:"),
+        ("\\\\?\\C:\\data", "C:"),
+        ("c:/data", "C:"),
+    ],
+)
+def test_volume_name_proceeds_only_for_a_local_volume_device(
+    monkeypatch: pytest.MonkeyPatch, root: str, dos_name: str
+) -> None:
+    queried: list[str] = []
+    anchored: list[str] = []
+
+    def query(name: str) -> str:
+        queried.append(name)
+        return "\\Device\\HarddiskVolume7"
+
+    def anchor(path: str) -> str:
+        anchored.append(path)
+        return "C:\\"
+
+    monkeypatch.setattr(disk_topology, "_IS_WINDOWS", True)
+    monkeypatch.setattr(disk_topology, "_query_dos_device", query)
+    monkeypatch.setattr(disk_topology, "current_volume_anchor", anchor)
+    monkeypatch.setattr(
+        disk_topology, "_volume_name_for_mount_point", lambda mount: GUID_NAME
+    )
+
+    assert volume_name(root) == GUID_NAME
+    assert queried == [dos_name]
+    assert anchored == [root]
+
+
+def _forbid_io_seams(monkeypatch: pytest.MonkeyPatch) -> None:
+    def forbidden(*args):
+        raise AssertionError("an I/O-bearing call ran for a non-local root")
+
+    for seam in (
+        "current_volume_anchor",
+        "_volume_name_for_mount_point",
+        "_open_zero_access",
+        "_ioctl",
+        "_close_handle",
+    ):
+        monkeypatch.setattr(disk_topology, seam, forbidden)
+
+
+@pytest.mark.parametrize(
+    "target",
+    [
+        "\\Device\\LanmanRedirector\\;Z:0000000000012345\\server\\share",
+        "\\Device\\Mup\\;WebDavRedirector\\server\\share",
+        "\\??\\C:\\x",
+        "\\Device\\CdRom0",
+        OSError(2, "QueryDosDeviceW failed"),
+    ],
+    ids=["lanman", "mup", "subst", "cdrom", "unassigned"],
+)
+def test_volume_name_refuses_a_non_local_letter_without_further_native_calls(
+    monkeypatch: pytest.MonkeyPatch, target: str | OSError
+) -> None:
+    queried: list[str] = []
+
+    def query(name: str) -> str:
+        queried.append(name)
+        if isinstance(target, OSError):
+            raise target
+        return target
+
+    monkeypatch.setattr(disk_topology, "_IS_WINDOWS", True)
+    monkeypatch.setattr(disk_topology, "_query_dos_device", query)
+    _forbid_io_seams(monkeypatch)
+
+    with pytest.raises(OSError):
+        volume_name("Z:\\data")
+    assert queried == ["Z:"]
+
+
+@pytest.mark.parametrize(
+    "root",
+    [
+        "\\\\server\\share\\data",
+        "//server/share/data",
+        "\\\\?\\UNC\\server\\share\\data",
+        "\\\\.\\C:\\data",
+        "\\\\?\\GLOBALROOT\\Device\\HarddiskVolume4\\data",
+        "\\\\?\\Volume{0a1b2c3d-1111-2222-3333-444455556666}\\data",
+        "\\data",
+        "",
+    ],
+)
+def test_volume_name_refuses_unc_and_device_paths_without_native_calls(
+    monkeypatch: pytest.MonkeyPatch, root: str
+) -> None:
+    def forbidden(*args):
+        raise AssertionError("a native call ran for a non-letter root")
+
+    monkeypatch.setattr(disk_topology, "_IS_WINDOWS", True)
+    monkeypatch.setattr(disk_topology, "_query_dos_device", forbidden)
+    _forbid_io_seams(monkeypatch)
+
+    with pytest.raises(OSError):
+        volume_name(root)
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows object namespace")
+def test_the_system_letter_resolves_to_a_local_volume_device() -> None:
+    target = disk_topology._query_dos_device("C:")
+
+    print(f"\nC: -> {target}")
+    assert target.startswith(disk_topology._LOCAL_VOLUME_DEVICE)
 
 
 @pytest.mark.skipif(os.name != "nt", reason="Windows native volume topology")

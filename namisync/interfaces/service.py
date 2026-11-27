@@ -69,6 +69,7 @@ from namisync.workflows.database_maintenance import (
     DatabasePairRestore,
 )
 from namisync.workflows.database_pair import require_distinct_database_paths
+from namisync.workflows.disk_scheduling import read_disk_scheduling_keys
 from namisync.workflows.node_tree import (
     NodeTree,
     NodeTreeKind,
@@ -3202,6 +3203,7 @@ def _workflow_registry(
             prepare_session,
             open_invocation,
             supports_pause=supports_pause,
+            read_scheduling_keys=read_disk_scheduling_keys,
             **optional,
         )
 

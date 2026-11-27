@@ -2035,6 +2035,16 @@ def test_service_composition_passes_derived_audit_timeout(
     assert captured["audit_observer_factory"] is runtime.audit_observer
 
 
+def test_service_registrations_pass_through_the_disk_key_reader() -> None:
+    from namisync.workflows.disk_scheduling import read_disk_scheduling_keys
+
+    registry = service_module._workflow_registry(Mock())
+
+    assert len(registry) == 6
+    for registration in registry.values():
+        assert registration.read_scheduling_keys is read_disk_scheduling_keys
+
+
 def test_service_default_close_uses_ordered_shutdown_timeout() -> None:
     observed: list[float] = []
 

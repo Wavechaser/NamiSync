@@ -752,6 +752,12 @@ class ExecutionSetCheckpoint:
         object.__setattr__(self, "_structure", value._structure)
         object.__setattr__(self, "_authority", snapshot_execution_set_authority(value))
 
+    @property
+    def plan(self) -> Plan:
+        """The reviewed immutable plan, read without materializing."""
+
+        return self._structure.plan
+
     def materialize(self) -> ExecutionSet:
         """Reopen independent mutable state without rebuilding plan structure."""
 

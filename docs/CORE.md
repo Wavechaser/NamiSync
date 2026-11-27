@@ -89,7 +89,14 @@ the remaining file/symbol inventory.
 `core/disk_topology.py` is the stateless read of which physical disks back one
 local volume: the volume's GUID name, its disk extents, and each disk's bus type
 and seek-penalty property. It opens only zero-access handles with
-`FILE_ANY_ACCESS` queries, so no volume data is read or written. A disk counts
+`FILE_ANY_ACCESS` queries, so no volume data is read or written. Before any
+call that can perform I/O, `volume_name` reads the root's own drive letter
+lexically and resolves it with `QueryDosDeviceW`, an object-namespace lookup
+that touches no device or network. Only a `\Device\HarddiskVolume` target
+proceeds; UNC, volume GUID and other device paths, mapped
+network and `subst` letters, and unassigned letters raise `OSError` with no
+further native call, because resolving a disconnected network root can block
+for tens of seconds. A nested mount under a local letter stays local. A disk counts
 as spinning unless its bus type is known and not USB and it reports no seek
 penalty; an unreadable or unknown property counts as spinning. Extents that
 cannot be read, or that name no disk, raise `OSError`, so a caller falls back
