@@ -1610,6 +1610,9 @@ class Dispatcher:
                 return
             pre_run_failed = False
             fixed_result = None
+            # A resumed attempt that fails before running again has still run:
+            # its earlier attempts may already have changed the filesystem.
+            pre_run_disposition = self._disposition(record)
             try:
                 lease = self._lock_provider.acquire(
                     resources,
@@ -1625,7 +1628,7 @@ class Dispatcher:
                 pre_run_failed = True
                 fixed_result = _project_worker_exception(
                     error,
-                    Disposition.UNRUN,
+                    pre_run_disposition,
                 )
             if pre_run_failed:
                 self._run_core(
@@ -1633,7 +1636,7 @@ class Dispatcher:
                     resources,
                     registration,
                     invocation=None,
-                    disposition=Disposition.UNRUN,
+                    disposition=pre_run_disposition,
                     fixed_result=fixed_result,
                 )
                 return
@@ -1667,7 +1670,7 @@ class Dispatcher:
                 pre_run_failed = True
                 fixed_result = _project_worker_exception(
                     error,
-                    Disposition.UNRUN,
+                    pre_run_disposition,
                 )
             if pre_run_failed:
                 self._run_core(
@@ -1675,7 +1678,7 @@ class Dispatcher:
                     resources,
                     registration,
                     invocation=None,
-                    disposition=Disposition.UNRUN,
+                    disposition=pre_run_disposition,
                     fixed_result=fixed_result,
                 )
                 return

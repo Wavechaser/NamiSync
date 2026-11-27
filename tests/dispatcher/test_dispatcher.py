@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import gc
 import threading
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 from threading import Event, Lock, Thread, current_thread, get_ident
 from time import monotonic, sleep
@@ -2947,6 +2947,57 @@ def test_pre_run_failure_retires_raw_graph_before_terminal_store(
             "RawFailure", "fixed public detail"
         )
     assert dispatcher.shutdown().complete
+
+
+@pytest.mark.parametrize("failure_stage", ["acquire", "open"])
+@pytest.mark.parametrize("bulk", [False, True])
+def test_a_resumed_session_failing_before_it_runs_again_still_reports_ran(
+    failure_stage: str,
+    bulk: bool,
+) -> None:
+    """Its earlier attempt may have changed the filesystem, so it is not UNRUN."""
+
+    failing = Event()
+    entered = Event()
+
+    class LockProvider(InProcessResourceLockProvider):
+        def acquire(self, resources, canceled):
+            if failure_stage == "acquire" and failing.is_set():
+                raise PermissionError("reacquisition failed")
+            return super().acquire(resources, canceled)
+
+    work = registration(
+        lambda payload: checkpoint_loop(entered),
+        supports_pause=True,
+        resources=(unique_resource("resumed-pre-run"),),
+    )
+    open_first = work.open
+
+    def open_invocation(checkpoint):
+        if failure_stage == "open" and failing.is_set():
+            raise OSError("reopen failed")
+        return open_first(checkpoint)
+
+    dispatcher = Dispatcher(
+        {"work": replace(work, open=open_invocation)},
+        lock_provider=LockProvider(),
+    )
+    try:
+        session_id = dispatcher.submit("work", b"payload")
+        assert entered.wait(2)
+        assert dispatcher.pause(session_id).accepted
+        wait_for(dispatcher, session_id, SessionState.PAUSED)
+        failing.set()
+        if bulk:
+            assert dispatcher.resume_all().resumed == 1
+        else:
+            assert dispatcher.resume(session_id).accepted
+        record = wait_for(dispatcher, session_id, SessionState.FAILED)
+        assert record.started_at is not None
+        assert record.result is not None
+        assert record.result.disposition is Disposition.RAN
+    finally:
+        assert dispatcher.shutdown(2).complete
 
 
 @pytest.mark.parametrize("failure_stage", ("acquire", "open"))

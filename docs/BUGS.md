@@ -789,6 +789,22 @@ entries to fit a batch; use explicit record offsets/limits.
   (single resume answers `ILLEGAL_STATE`, Resume all counts it nowhere);
   failing-first regressions gate the paused worker's retirement for both.
 
+<a id="bug-0323"></a>
+
+- SEVERE - FIXED (2026-11-28). Resumed pre-run disposition
+  misclassification. A sync run that copied a file, was paused during
+  verification and was then resumed, by single resume or Resume all, ended
+  `FAILED+UNRUN` when its custody reacquisition or continuation `open`
+  failed, so the desktop said execution did not start although the target
+  had changed; the ledger run stayed unfinished. Cause: both pre-run failure
+  paths in the dispatcher worker hard-coded `UNRUN` instead of deriving it from
+  the session's start time, as the worker-start failure path already did.
+  Older than M2-A5, which made it reachable from Resume all; found by
+  independent review with a real copy and an injected reacquisition failure.
+  Fixed by deriving both from the start time (`RAN` once the session has
+  run); a failing-first regression covers custody and `open` through single
+  resume and Resume all.
+
 ### M1 Hardening
 
 <a id="bug-0060"></a>

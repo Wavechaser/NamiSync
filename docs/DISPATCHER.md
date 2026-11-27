@@ -293,7 +293,10 @@ Python references have been erased.
 Required local physical-volume ids are sorted deterministically before locks to
 prevent deadlock. Sessions with disjoint required volumes may run concurrently;
 contenders queue. Planning sessions may release locks when complete; execution
-reacquires and revalidates volumes.
+reacquires and revalidates volumes. A custody or `open` failure before an
+attempt runs ends the session `FAILED`: `UNRUN` when it never started, and
+`RAN` for a resumed session, whose earlier attempts may have changed the
+filesystem.
 
 Scheduler selection installs the current generation, its worker registration,
 and all reservations atomically before removing the pending entry or starting
@@ -353,8 +356,8 @@ values.
 
 If `Thread.start()` raises before a session worker receives an OS thread
 identity, no workflow invocation exists. Dispatcher retires the raw start
-failure before entering audit/settlement, publishes one fixed `FAILED + UNRUN`
-result through the ordinary state/result/Terminal path, releases the exact
+failure before entering audit/settlement, publishes one fixed `FAILED` result
+(`UNRUN`, or `RAN` for a resumed session) through the ordinary state/result/Terminal path, releases the exact
 reservation, removes the never-started attempt synchronously, and continues
 scheduling. A cancel already accepted while `start()` was blocked instead uses
 ordinary cancellation settlement; a resumed session therefore preserves
