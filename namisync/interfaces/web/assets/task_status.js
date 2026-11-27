@@ -30,10 +30,14 @@ function liveSnapshot(task) {
 
 // control_state keeps its last running/pausing/paused/canceling value while a
 // released session waits in pending, so pause state comes from the server's
-// capabilities: resumable is paused, held when it never started.
+// capabilities: resumable is paused, held when it never started. A stoppable
+// session that never started, or a released one, is pending: waiting to start.
 export function snapshotControlState(snapshot) {
   if (snapshot.can_resume) return snapshot.session_progress === "none" ? "held" : "paused";
-  return snapshot.control_state === "paused" && snapshot.can_stop ? "pending" : snapshot.control_state;
+  if (snapshot.can_stop && (snapshot.session_progress === "none" || snapshot.control_state === "paused")) {
+    return "pending";
+  }
+  return snapshot.control_state;
 }
 
 // Presentation only: the dispatcher still decides every control command.
@@ -253,7 +257,10 @@ export function taskStatusDigest(task) {
   const control = taskControls(task);
   // Pause all holds a waiting session before it starts; it is paused, not running.
   const held = control.state === "held" && task?.error == null && task?.releaseRecovery?.message == null;
-  const progress = held ? { value: 0, determinate: false, indeterminate: false, phase: null }
+  // Admitted but not yet started: queued behind other work.
+  const waiting = control.state === "pending" && executionState === "active"
+    && task?.error == null && task?.releaseRecovery?.message == null;
+  const progress = held || waiting ? { value: 0, determinate: false, indeterminate: false, phase: null }
     : checkingFolders || (scanning && snapshot === null) || planning
     ? { value: 0, determinate: false, indeterminate: true, phase: "plan" }
     : (summary !== null || task?.error != null) && !task?.executionStarted
@@ -293,6 +300,7 @@ export function taskStatusDigest(task) {
   else if (checkingFolders) [title, state] = ["Checking folders", "planning"];
   else if (attempt !== null && !attempt.running) [title, state] = ["Outcome unknown", "error"];
   else if (held) [title, state] = ["Paused, not started", "paused"];
+  else if (waiting) [title, state] = ["Waiting to start", "waiting"];
   else if (scanning) [title, state] = ["Scanning", "planning"];
   else if (planning) [title, state] = ["Planning", "planning"];
   else if (summary !== null && !task?.executionStarted && task?.sessionKind !== "inventory") [title, state] = ["Plan ready", "plan"];
@@ -325,6 +333,7 @@ export function taskStatusDigest(task) {
   else if (checkingFolders) detail = "Checking the selected folders before starting.";
   else if (held) detail = currentExecution || currentOrdinary !== null
     ? "Paused before it started. Resume when ready." : "Paused before it started. Use Resume all to start it.";
+  else if (waiting) detail = "Queued behind other work; it starts automatically.";
   else if (scanning) detail = "Inventory scan in progress.";
   else if (planning) detail = "Planning in progress.";
   else if (summary !== null && !task?.executionStarted) detail = planItemCount === 0 && !planHasItems ? "Plan is empty."

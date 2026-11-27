@@ -1564,6 +1564,19 @@ entries to fit a batch; use explicit record offsets/limits.
 
 ### Application task lifecycle
 
+<a id="bug-0326"></a>
+
+- MINOR - FIXED (2026-11-28). Queued task status conflation. A task admitted
+  but waiting to start, whether new or released by Resume all, read Scanning,
+  Planning or Execution in progress with an animated bar, as if it were
+  running; with M2-A8 such a wait can last a whole HDD scan. Found by
+  independent review in the installed rail journey. Cause: the snapshot's
+  pending session was worded from its kind, because `snapshotControlState`
+  named only a released session pending and never a new one. Fixed by naming
+  any stoppable session that is not resumable and has not run, or was
+  released, pending, and wording it Waiting to start with an idle bar; the
+  task-shell probe fails on the earlier wording.
+
 <a id="bug-0123"></a>
 
 - MODERATE - FIXED (2026-11-10). Input-target detachment. A task-rail repaint

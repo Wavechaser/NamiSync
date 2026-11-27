@@ -565,6 +565,15 @@ for (const [patch, expected] of [
   for (const button of [pauseAll, resumeAll, createTask]) button.focus = () => { document.activeElement = button; };
   renderBulk([live({})]);
   assert.deepEqual([pauseAll.disabled, resumeAll.disabled], [false, true], "a queued session can be held");
+  const cardTexts = () => walk(walk(bulkRail.element).find(element => element.dataset?.taskLabel === "Bulk"))
+    .map(element => element.textContent);
+  assert.ok(cardTexts().includes("Waiting to start"), "a queued task reads as waiting, not running");
+  for (const sessionKind of ["inventory", "sync-plan"]) {
+    const queued = { ...live({}), sessionKind, taskKind: sessionKind === "inventory" ? "inventory" : "sync",
+      executionStarted: false };
+    assert.equal(taskStatusDigest(queued).title, "Waiting to start", `a queued ${sessionKind} does not read as active`);
+    assert.equal(taskStatusDigest(queued).progress.indeterminate, false, "a waiting task shows no activity");
+  }
   renderBulk([live({ session_progress: "continuation" })]);
   assert.deepEqual([pauseAll.disabled, resumeAll.disabled], [true, true],
     "a running kind that cannot pause enables nothing");
@@ -579,6 +588,9 @@ for (const [patch, expected] of [
     "a released run waiting to start can be held again");
   assert.ok(!walk(heldCard).some(element => /paused/i.test(element.textContent ?? "")),
     "a resumed task drops its paused label before it runs");
+  assert.ok(cardTexts().includes("Waiting to start"), "a resumed task waiting its turn reads as waiting");
+  renderBulk([live({ session_progress: "continuation" })]);
+  assert.ok(!cardTexts().includes("Waiting to start"), "a running task does not read as waiting");
   const both = [live({ control_state: "paused" }, "Paused"), live({ session_progress: "continuation",
     can_pause: true }, "Running")];
   renderBulk(both);

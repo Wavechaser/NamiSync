@@ -724,6 +724,9 @@ zero counts omitted (Paused 2, held 3; 1 cannot pause and keeps running.), Nothi
 pause/resume, or a next step on failure; it stays until the next bulk request.
 A task held before it ran reads Paused, not started, distinct from a paused run
 with a continuation; once released it drops the paused label while it waits.
+Any task waiting to start, whether new or released, reads Waiting to start
+("Queued behind other work; it starts automatically.") with an idle progress
+bar, never Scanning or Planning, until its running state arrives.
 
 Settings has Setup defaults, Appearance and About cards. Explicit Save defaults
 patches only changed supported options; excludes Add/Remove preserve exact pattern
