@@ -31,6 +31,8 @@ unchanged reviews or gates without a dependency reason.
 - Update the active delivery register ([M2_PLAN](../M2_PLAN.md) for M2) when
   scope, decisions or checkpoint status changes, and at session/stop
   boundaries; it is not a per-commit transcript.
+- Move work deferred in the session or checkpoint into the row that will own it,
+  under [SCOPE](SCOPE.md#deferred-work), instead of leaving it in the source row.
 - At session/stop boundaries, clean or promote the session's `build/` output
   under [evidence retention](#evidence-retention), then replace HANDOFF with
   latest-session changes, verification and immediate operational context. Keep

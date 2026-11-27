@@ -54,6 +54,8 @@ casually change the live production databases (M2-A1).
 - **Completion.** A complete row shrinks to its outcome, its evidence record and
   any accepted residuals. The specification shrinks as rows start, so this plan
   becomes a register as M2 proceeds, without separate compaction passes.
+- **Deferred work.** Recorded in the row that will own it and reviewed when that
+  row is expanded, under [SCOPE](procedures/SCOPE.md#deferred-work).
 - **Ride-alongs.** Items outside the thesis become rows only when the user
   accepts them; until then each keeps the ordering constraint listed for it.
 

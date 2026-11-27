@@ -443,7 +443,7 @@ Product, test and documentation reductions removed repeated machinery while
 preserving operational safety, externally visible contracts and independent
 behavioral evidence.
 
-#### Split agent procedures and reorganize development tools (2026-11-23 – 2026-11-24)
+#### Split agent procedures and reorganize development tools (2026-11-23 – 2026-11-27)
 
 - Condense AGENTS to always-on rules (269 to 137 lines) with a trigger table
   for new `docs/procedures/` SCOPE, CLOSEOUT and DOCUMENTS. Move evidence
@@ -469,6 +469,10 @@ behavioral evidence.
   entries), now end in a singular mechanism noun reused from
   `python -m tools.repo.bugs --mechanisms` where one fits. 59 entries whose
   final word named no mechanism were retitled; IDs and bodies are unchanged.
+- AGENTS asks agents to mark unsourced claims as inferred and unobserved ones
+  as unknown or not run. SCOPE now owns deferred work: the row that will do it
+  holds the record, CLOSEOUT moves each session's deferrals there, and the
+  row's expansion rechecks, consolidates or returns them to the user.
 
 #### Survey and clear post-M1 cleanup candidates (2026-11-11 – 2026-11-17)
 

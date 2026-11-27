@@ -54,6 +54,25 @@ expand authority or relax repository gates.
   authorized work may continue. No answer within a bounded response window means
   stop and recover, never consent. Always-stop rules override investigation/waiting.
 
+## Deferred work
+
+- A deferral names the checkpoint that will own it, the user decision and date,
+  and any consequence accepted until then. That row owns the record; the source
+  row keeps only a pointer, so condensing a completed row loses nothing.
+  [CLOSEOUT](CLOSEOUT.md#task-delivery-and-session-boundaries) moves the
+  session's deferrals there.
+- Expanding a row starts with its inherited items. Recheck each (fixed in
+  passing, obsolete, or its accepted consequence worse), test its fit against the
+  row's outcome, and consolidate items that share a mechanism, across rows when
+  one fix serves them. Bring the row to the user for split, redesign or
+  rearrangement when its items span owners its outcome does not cover, its gate
+  cannot close them, or they outnumber its original scope. Deferring an item
+  again needs the user's decision.
+- Each inherited item ends in the row's gate or among its named non-goals.
+- Work that fits no row is recorded as unowned in the delivery register, not
+  forced into one. When unowned work accumulates or a row outgrows its outcome,
+  propose a new checkpoint or a split.
+
 ## Recurrence pause
 
 On the **second unplanned instance of one causal mechanism**, or **third
