@@ -6029,6 +6029,142 @@ def test_shutdown_settles_held_sessions_and_releases_custody() -> None:
         dispatcher.shutdown(2)
 
 
+def test_pause_all_holds_a_pending_session_while_it_waits_on_another_lock() -> None:
+    """A session pending at the call's snapshot cannot start during the call."""
+
+    release = Event()
+    opening = Event()
+    proceed = Event()
+    contended = Event()
+
+    def run_for(payload):
+        if payload == b"old":
+            opening.set()
+            assert proceed.wait(HANG_GUARD)
+
+        def hold(context):
+            assert release.wait(HANG_GUARD)
+            return OperationResult(SessionState.COMPLETED)
+
+        return hold
+
+    dispatcher = Dispatcher(
+        {
+            "anchor": registration(run_for),
+            "scan": registration(
+                run_for, resources=(unique_resource("snapshot-scan"),)
+            ),
+        },
+        lock_provider=InProcessResourceLockProvider(),
+    )
+    bulk = None
+    try:
+        anchor = dispatcher.submit("anchor", b"anchor")
+        wait_for(dispatcher, anchor, SessionState.RUNNING)
+        old = dispatcher.submit("scan", b"old")
+        assert opening.wait(HANG_GUARD)
+        with dispatcher._condition:
+            inner = dispatcher._state_publication_locks[anchor]
+            dispatcher._state_publication_locks[anchor] = SignalingLock(
+                inner, contended
+            )
+        results: list[BulkControlResult] = []
+        bulk = Thread(target=lambda: results.append(dispatcher.pause_all()))
+        with inner:
+            bulk.start()
+            assert contended.wait(HANG_GUARD)
+            later = dispatcher.submit("scan", b"later")
+            proceed.set()
+            # The old session's opened attempt now wants to start, but Pause
+            # all already holds its lock while it waits on the anchor's.
+            sleep(0.05)
+            assert dispatcher.get(old).state is SessionState.PENDING
+        bulk.join(HANG_GUARD)
+        assert not bulk.is_alive()
+        assert results == [BulkControlResult(held=1, still_running=1)]
+        held = dispatcher.get(old)
+        assert held.state is SessionState.PAUSED
+        assert held.started_at is None
+        # Admitted after the snapshot, so the call left it alone.
+        wait_for(dispatcher, later, SessionState.RUNNING)
+    finally:
+        proceed.set()
+        release.set()
+        if bulk is not None:
+            bulk.join(HANG_GUARD)
+        assert dispatcher.shutdown(HANG_GUARD).complete
+
+
+def test_concurrent_bulk_calls_with_different_lock_orders_both_finish() -> None:
+    """Pending-first order depends on state, so bulk calls must not overlap.
+
+    The first call holds a pending session's lock and waits on an earlier
+    running session's. A single resume then makes a paused session pending, so
+    a second call would lock it first and wait on the first call's pending
+    session, while the first call next needs the resumed session's lock.
+    """
+
+    shared = unique_resource("bulk-order")
+    release = Event()
+    paused_entered = Event()
+
+    def run_for(payload):
+        if payload == b"paused":
+            return checkpoint_loop(paused_entered)
+
+        def hold(context):
+            assert release.wait(HANG_GUARD)
+            return OperationResult(SessionState.COMPLETED)
+
+        return hold
+
+    dispatcher = Dispatcher(
+        {
+            "anchor": registration(run_for),
+            "paused": registration(
+                run_for, supports_pause=True, resources=(shared,)
+            ),
+            "shared": registration(run_for, resources=(shared,)),
+        },
+        lock_provider=InProcessResourceLockProvider(),
+    )
+    calls: list[Thread] = []
+    try:
+        anchor = dispatcher.submit("anchor", b"anchor")
+        wait_for(dispatcher, anchor, SessionState.RUNNING)
+        resumed = dispatcher.submit("paused", b"paused")
+        assert paused_entered.wait(HANG_GUARD)
+        holder = dispatcher.submit("shared", b"holder")
+        assert dispatcher.pause(resumed).accepted
+        wait_for(dispatcher, resumed, SessionState.PAUSED)
+        wait_for(dispatcher, holder, SessionState.RUNNING)
+        queued = dispatcher.submit("shared", b"queued")
+        contended = Event()
+        with dispatcher._condition:
+            inner = dispatcher._state_publication_locks[anchor]
+            dispatcher._state_publication_locks[anchor] = SignalingLock(
+                inner, contended
+            )
+        with inner:
+            calls.append(Thread(target=dispatcher.pause_all, daemon=True))
+            calls[0].start()
+            assert contended.wait(HANG_GUARD)
+            # Still pending behind the holder's shared resource.
+            assert dispatcher.resume(resumed).accepted
+            calls.append(Thread(target=dispatcher.pause_all, daemon=True))
+            calls[1].start()
+            sleep(0.1)
+        for call in calls:
+            call.join(HANG_GUARD)
+        assert not any(call.is_alive() for call in calls)
+        assert dispatcher.get(queued).state is SessionState.PAUSED
+        assert dispatcher.get(resumed).state is SessionState.PAUSED
+    finally:
+        release.set()
+        if not any(call.is_alive() for call in calls):
+            assert dispatcher.shutdown(HANG_GUARD).complete
+
+
 def test_bulk_control_counts_each_session_by_its_state() -> None:
     shared = unique_resource("counts")
     entered = {name: Event() for name in (b"a", b"b", b"e", b"g")}

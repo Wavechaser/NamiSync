@@ -224,8 +224,15 @@ also accepts `INTERRUPTED`; Resume all leaves `INTERRUPTED` alone. Each released
 session joins the back of its resource queues, behind sessions admitted while it
 was paused, and never preempts.
 
-Both bulk controls snapshot the nonterminal sessions and take their publication
-locks in admission order. They change every affected session in one
+Bulk calls run one at a time. Each snapshots the nonterminal sessions; that
+snapshot is the call's moment, so a session admitted while the call waits for
+locks is not acted on. It takes the pending sessions' publication locks first,
+then the others, each group in admission order, so it never waits on a running
+session's lock while a pending one's is still free. A pending session can still
+start just before its own lock is taken, and is then acted on as running; while
+the call waits, single controls and subscriptions of the sessions it holds wait
+behind it. It
+changes every affected session, in admission order, in one
 dispatcher-condition section, then publish each `StateChanged` and release that
 session's lock after its event. Record reads see the change whole: once
 `get()` or `list()` shows one session changed, they show every session the same

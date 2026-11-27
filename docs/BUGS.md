@@ -805,6 +805,19 @@ entries to fit a batch; use explicit record offsets/limits.
   run); a failing-first regression covers custody and `open` through single
   resume and Resume all.
 
+<a id="bug-0324"></a>
+
+- MINOR - FIXED (2026-11-28). Bulk pause snapshot race. While Pause all
+  waited for an earlier running session's publication lock, a later session
+  that was pending at its snapshot could take its own lock and start, so it
+  was counted as still running instead of held; a scan the user meant to hold
+  kept running. Cause: bulk control took publication locks strictly in
+  admission order, so a pending session's lock was still free while the call
+  waited. Fixed by serializing bulk calls and taking pending sessions' locks
+  first; a failing-first regression contends an earlier session's lock while a
+  later pending session opens. A session admitted during the call is still not
+  acted on, by the point-in-time rule.
+
 ### M1 Hardening
 
 <a id="bug-0060"></a>

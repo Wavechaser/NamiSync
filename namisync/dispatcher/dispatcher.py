@@ -294,6 +294,9 @@ class Dispatcher:
         self._controls: dict[SessionId, _Control] = {}
         self._hubs: dict[SessionId, EventHub] = {}
         self._state_publication_locks: dict[SessionId, Lock] = {}
+        # One bulk control at a time: only a bulk call holds several
+        # publication locks, so their acquisition order needs no global rule.
+        self._bulk_control_lock = Lock()
         self._closing: set[SessionId] = set()
         self._cleanup_irreversible: set[SessionId] = set()
         self._item_events: dict[SessionId, list[ResultItem]] = {}
@@ -854,13 +857,26 @@ class Dispatcher:
     ) -> None:
         """Apply ``act`` to every nonterminal session in one atomic section.
 
-        Bulk control is the only holder of more than one publication lock. It
-        takes them in admission order without holding ``_condition``, as every
-        single-session holder does, so it cannot deadlock with another bulk
-        call or with a single-session control, settlement, close or shutdown.
-        Each lock is released once its session's event is published.
+        The call's moment is its snapshot of nonterminal sessions; sessions
+        admitted later are not acted on. Bulk control is the only holder of
+        more than one publication lock, and bulk calls run one at a time. It
+        takes them without holding ``_condition``, as every single-session
+        holder does, so it cannot deadlock with another bulk call or with a
+        single-session control, settlement, close or shutdown. Pending
+        sessions' locks come first, in admission order, so the call never
+        waits on a running session's lock while a pending one's is still free.
+        A pending session can still start before its own lock is taken; it is
+        then acted on as running. Each lock is released once its session's
+        event is published.
         """
 
+        with self._bulk_control_lock:
+            self._bulk_control_serialized(act)
+
+    def _bulk_control_serialized(
+        self,
+        act: Callable[[SessionRecord], tuple[SessionRecord, EventHub] | None],
+    ) -> None:
         with self._condition:
             candidates = sorted(
                 (
@@ -868,7 +884,10 @@ class Dispatcher:
                     for record in self._records.values()
                     if not is_terminal(record.state)
                 ),
-                key=lambda record: record.admission_order,
+                key=lambda record: (
+                    record.state is not SessionState.PENDING,
+                    record.admission_order,
+                ),
             )
             locks = {
                 record.session_id: self._state_publication_locks[
@@ -884,10 +903,16 @@ class Dispatcher:
                 held[session_id] = lock
             changes: list[tuple[SessionId, EventHub, StateChanged]] = []
             with self._condition:
-                for session_id in held:
-                    record = self._records.get(session_id)
-                    if record is None:
-                        continue
+                current = sorted(
+                    (
+                        self._records[session_id]
+                        for session_id in held
+                        if session_id in self._records
+                    ),
+                    key=lambda record: record.admission_order,
+                )
+                for record in current:
+                    session_id = record.session_id
                     transition = act(record)
                     if transition is not None:
                         updated, hub = transition
@@ -895,6 +920,7 @@ class Dispatcher:
                             (session_id, hub, StateChanged(updated.state))
                         )
                 record = None
+                current = None
                 self._condition.notify_all()
             changed = {session_id for session_id, _, _ in changes}
             for session_id in tuple(held):
