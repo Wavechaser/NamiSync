@@ -232,6 +232,14 @@ Checkpoints:
     instead of "Waiting to start" ([BUG-0326](BUGS.md#bug-0326)). Dispatcher
     department, frontend static checks and all twelve background headed tests
     passed afterwards.
+  - **Fixed after second review** (`8458836b`, `d30bdcb0`): a resumed session failing before it ran
+    again settled with an empty result, so History lost the work its earlier
+    attempts finished, the ledger run stayed unfinished and the run token
+    leaked; registrations now supply `settle_failed`, which keeps that work
+    ([BUG-0327](BUGS.md#bug-0327)). Pause all read membership at its
+    snapshot but state after its locks, so a resume and an admission during
+    its wait were treated differently; it now acts once it holds every
+    nonterminal session's lock ([BUG-0328](BUGS.md#bug-0328)).
   - **Accepted residuals:**
     - A wedged audit writer can stall a bulk call, and concurrent calls on its
       sessions, for about N × (audit offer + flush timeout); accepted without
@@ -244,9 +252,15 @@ Checkpoints:
       stale "paused" with stop available to pending ([BRIDGE](BRIDGE.md)).
     - In the brief window before an accepted Stop settles, the page may still
       offer Resume; the dispatcher refuses it.
-    - After a BUG-0323 failure the ledger run of the resumed attempt stays
-      unfinished; the session outcome is now right, the run record is not
-      closed.
+    - A resumed execution failing before it runs again does not publish
+      exclusions its earlier attempts had not yet reported, as under the
+      generic failure; whether a pause can land before they are reported is
+      inferred, not shown.
+    - A run paused in Verify whose resume fails before running ends `FAILED`
+      with Verify incomplete, while the same refusal inside its own preflight
+      ends with its filesystem outcome (usually completed); a pending session
+      cannot end `COMPLETED`. The ledger keeps the filesystem outcome either
+      way.
     - A pending session can still start before Pause all takes its own lock;
       it is then counted and paused as running.
     - A Gap that swallows a released session's start leaves `control_state`
@@ -504,7 +518,11 @@ Deferred work that fits no row yet, under
   loses the continuation; under Resume all that can end every paused run on
   one unplugged drive. Accepted as an outcome. Returning a run refused for
   a transient cause to paused with its reason is desirable, not required;
-  it changes workflow settlement and FEATURES' Resume Outcomes.
+  it changes workflow settlement and FEATURES' Resume Outcomes. A
+  pre-run failure of a resumed session (custody, `open`, worker start) is
+  now settled from its checkpoint through the registration's
+  `settle_failed` ([BUG-0327](BUGS.md#bug-0327)); that settlement path can
+  be reused when a refused or failed resume returns to paused instead.
 
 ### Ride-Alongs And Later
 

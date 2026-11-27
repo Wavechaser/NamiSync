@@ -1,4 +1,27 @@
-# Latest session — A5 and A8 review findings fixed, 2026-11-27
+# Latest session — A5 re-review findings fixed, 2026-11-28
+
+## A5 re-review findings
+
+The re-review of `fdcda44b` reported two A5 findings; both reproduced and
+are fixed. A8 was accepted as is.
+
+- **P1, failed resume dropped completed work** — `8458836b`,
+  [BUG-0327](BUGS.md#bug-0327). A new optional registration callback,
+  `settle_failed(checkpoint, disposition, failure)`, settles a resumed
+  session's custody, `open` or worker-start failure. Execution reuses the
+  workflow's resume-preflight failure settlement, and integrity mirrors its
+  canceled settlement. The reviewer's reproducer now records 26/26 bytes and
+  both phases in History, a finished ledger run (filesystem `completed`) and
+  a released run token. Its independent review found that Pause all could
+  hold a session while its settlement ran; an attempt is now marked settling
+  under its publication lock first, and a test covers both orders. This
+  closes the BUG-0323 unfinished-ledger residual. Refused resume stays
+  deferred ([Unowned](M2_PLAN.md#unowned)); its later fix can reuse this
+  settlement path.
+- **P2, Pause all moment split** — `d30bdcb0`,
+  [BUG-0328](BUGS.md#bug-0328). Pause all now takes the locks of every
+  nonterminal session, including those admitted while it waits, and acts
+  once none is missing; in the reviewer's race both pending sessions are held.
 
 ## Closing-review findings
 
@@ -25,7 +48,7 @@ closed with the fixes recorded in them.
   [BUG-0326](BUGS.md#bug-0326). A pending task now reads "Waiting to start"
   with an idle bar.
 
-**M2-A5 and M2-A8 are closed.** [M2_PLAN](M2_PLAN.md) holds both rows with
+**M2-A5 and M2-A8 remain recorded as closed.** [M2_PLAN](M2_PLAN.md) holds both rows with
 their gates and residuals; A4's row was compacted and its deferred work moved
 to B3. A6 and A7 (GUI) are the next Segment A rows, grouped by the user.
 Nothing was pushed; `milestone2` carries the commits below.
@@ -62,6 +85,9 @@ Nothing was pushed; `milestone2` carries the commits below.
 
 ## Verification
 
+- Re-review fixes: 7596 ordinary tests passed, 4 skipped, 36 deselected, with the seven known interpreter-bound failures and one owner-list check fixed and rerun before commit; each commit's affected departments passed in index isolation; 13 import contracts kept; the guards for
+  both race orders were checked by mutation. Not rerun: the headed rail
+  journey (no page change).
 - Review fixes on `22ec81b9`: 7569 ordinary tests passed, 4 skipped, 36
   deselected, with the seven known interpreter-bound failures; dispatcher department 209 passed in index
   isolation; all twelve background headed tests passed with the new wording.
