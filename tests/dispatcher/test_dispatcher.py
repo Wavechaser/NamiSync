@@ -5198,11 +5198,12 @@ def test_pause_all_withdraws_an_attempt_waiting_for_its_lease(late: bool) -> Non
 
 
 @pytest.mark.parametrize(
-    "release_by", ["resume", "resume_after_failed_open", "cancel"]
+    "release_by", ["resume", "resume_after_failed_open", "cancel", "successor"]
 )
 def test_session_held_inside_open_never_runs_that_invocation(
     release_by: str,
 ) -> None:
+    resource = unique_resource("held-open")
     open_entered = Event()
     release_open = Event()
     opens: list[object] = []
@@ -5233,23 +5234,46 @@ def test_session_held_inside_open_never_runs_that_invocation(
     dispatcher = Dispatcher(
         {
             "work": WorkflowRegistration(
-                prepare=lambda request: PreparedSession(request),
+                prepare=lambda request: PreparedSession(
+                    request, frozenset({resource})
+                ),
                 open=open_session,
                 settle_canceled=settle_canceled,
-            )
-        }
+            ),
+            "successor": registration(
+                lambda payload: completed, resources=(resource,)
+            ),
+        },
+        lock_provider=InProcessResourceLockProvider(),
     )
     try:
         session_id = dispatcher.submit("work", b"payload")
         events = dispatcher.subscribe(session_id)
         assert open_entered.wait(HANG_GUARD)
         assert dispatcher.pause_all() == BulkControlResult(held=1)
-        # Release the hold while the withdrawn attempt is still inside open.
-        if release_by == "cancel":
-            assert dispatcher.cancel(session_id).accepted
-        else:
+        if release_by == "successor":
+            # Open returns while the session stays held. Its attempt must
+            # free the resource without running, so a later admission on that
+            # resource starts and completes first.
+            successor = dispatcher.submit("successor", b"successor")
+            successor_events = dispatcher.subscribe(successor)
+            release_open.set()
+            assert states_to_terminal(successor_events) == [
+                SessionState.PENDING,
+                SessionState.RUNNING,
+                SessionState.COMPLETED,
+            ]
+            assert dispatcher.get(session_id).state is SessionState.PAUSED
+            assert runs == []
             assert dispatcher.resume(session_id).accepted
-        release_open.set()
+        else:
+            # Release the hold while the withdrawn attempt is still inside
+            # open.
+            if release_by == "cancel":
+                assert dispatcher.cancel(session_id).accepted
+            else:
+                assert dispatcher.resume(session_id).accepted
+            release_open.set()
 
         states = states_to_terminal(events)
         record = dispatcher.get(session_id)
@@ -6028,6 +6052,111 @@ def test_bulk_control_counts_each_session_by_its_state() -> None:
     finally:
         for event in release.values():
             event.set()
+        dispatcher.shutdown(2)
+
+
+@pytest.mark.parametrize("release_by", ["resume", "resume_all"])
+def test_resume_cannot_release_a_pause_whose_cancel_was_accepted(
+    monkeypatch,
+    release_by: str,
+) -> None:
+    resource = unique_resource("pausing-cancel")
+    entered = Event()
+    snapshot_entered = Event()
+    release_snapshot = Event()
+    window = Event()
+    close_window = Event()
+    opens: list[object] = []
+    settled: list[tuple[object, Disposition]] = []
+
+    class BlockingSnapshot(Invocation):
+        def snapshot(self) -> bytes:
+            snapshot_entered.set()
+            assert release_snapshot.wait(HANG_GUARD)
+            return b"continued"
+
+    def open_session(checkpoint):
+        opens.append(checkpoint)
+        if checkpoint == b"payload":
+            return BlockingSnapshot(checkpoint_loop(entered))
+        return Invocation(completed)
+
+    def settle_canceled(checkpoint, disposition):
+        settled.append((checkpoint, disposition))
+        return OperationResult(
+            SessionState.CANCELED, disposition=disposition, canceled=True
+        )
+
+    dispatcher = Dispatcher(
+        {
+            "work": WorkflowRegistration(
+                prepare=lambda request: PreparedSession(
+                    request, frozenset({resource})
+                ),
+                open=open_session,
+                supports_pause=True,
+                settle_canceled=settle_canceled,
+            )
+        },
+        lock_provider=InProcessResourceLockProvider(),
+    )
+    worker_done = dispatcher._worker_done
+
+    def gated_worker_done(key) -> None:
+        # Hold the paused worker's retirement, which is what turns
+        # PAUSED plus an accepted cancel into CANCELING.
+        if not window.is_set():
+            window.set()
+            assert close_window.wait(HANG_GUARD)
+        worker_done(key)
+
+    monkeypatch.setattr(dispatcher, "_worker_done", gated_worker_done)
+    try:
+        session_id = dispatcher.submit("work", b"payload")
+        events = dispatcher.subscribe(session_id)
+        assert entered.wait(HANG_GUARD)
+        assert dispatcher.pause(session_id).accepted
+        assert snapshot_entered.wait(HANG_GUARD)
+        cancel = dispatcher.cancel(session_id)
+        assert cancel.accepted
+        assert cancel.after is SessionState.PAUSING
+        release_snapshot.set()
+        assert window.wait(HANG_GUARD)
+        assert states_through(events, SessionState.PAUSED)[-1] is (
+            SessionState.PAUSED
+        )
+
+        # PAUSED is published and the accepted cancel is still pending. A
+        # resume here must not reset that cancel and run the session again.
+        if release_by == "resume":
+            outcome = dispatcher.resume(session_id)
+        else:
+            outcome = dispatcher.resume_all()
+        close_window.set()
+
+        assert states_to_terminal(events) == [
+            SessionState.CANCELING,
+            SessionState.CANCELED,
+        ]
+        assert opens == [b"payload"]
+        assert settled == [(b"continued", Disposition.RAN)]
+        record = dispatcher.get(session_id)
+        assert record.result is not None
+        assert record.result.disposition is Disposition.RAN
+        assert record.result.canceled
+        if release_by == "resume":
+            assert outcome.code is ControlCode.ILLEGAL_STATE
+            assert outcome.before is SessionState.PAUSED
+            assert outcome.after is SessionState.PAUSED
+            assert "cancel" in outcome.detail
+        else:
+            assert outcome == BulkControlResult()
+        shutdown = dispatcher.shutdown()
+        assert shutdown.complete
+        assert shutdown.custody_released
+    finally:
+        release_snapshot.set()
+        close_window.set()
         dispatcher.shutdown(2)
 
 

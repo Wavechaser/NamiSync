@@ -203,10 +203,14 @@ settlement. A held resumed run keeps its continuation and still ends `RAN`.
 as paused, never-started holds as held, and also counts already-pausing and
 still-running (cannot pause) sessions; canceling, paused and terminal sessions
 count nowhere. Resume all releases, in admission order, every session that a
-user resume may release, which today is every `PAUSED` session. Single resume
-shares that predicate and also accepts `INTERRUPTED`; Resume all leaves
-`INTERRUPTED` alone. Each released session joins the back of its resource queues,
-behind sessions admitted while it was paused, and never preempts.
+user resume may release: a `PAUSED` session whose cancel has not been accepted.
+A cancel accepted during `PAUSING` moves the session to `CANCELING` only when
+its paused worker retires, after `PAUSED` is published. In that window single
+resume refuses with `ILLEGAL_STATE` and Resume all counts the session nowhere,
+so neither resets the accepted cancel. Single resume shares that predicate and
+also accepts `INTERRUPTED`; Resume all leaves `INTERRUPTED` alone. Each released
+session joins the back of its resource queues, behind sessions admitted while it
+was paused, and never preempts.
 
 Both bulk controls snapshot the nonterminal sessions and take their publication
 locks in admission order. They change every affected session in one

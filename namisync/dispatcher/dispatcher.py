@@ -767,11 +767,18 @@ class Dispatcher:
                     return self._missing_control(session_id)
                 if control_decision(
                     ControlAction.RESUME, record.state, record.supports_pause
-                ) is not ControlCode.ACCEPTED or (
-                    record.state is SessionState.PAUSED
-                    and not self._user_may_release(record)
-                ):
+                ) is not ControlCode.ACCEPTED:
                     return self._illegal_control(record, "resume")
+                if record.state is SessionState.PAUSED and not (
+                    self._user_may_release(record, self._controls[session_id])
+                ):
+                    return ControlResult(
+                        ControlCode.ILLEGAL_STATE,
+                        session_id,
+                        record.state,
+                        record.state,
+                        "cancel already accepted; the session settles as canceled",
+                    )
                 updated, hub = self._release_locked(session_id)
                 self._condition.notify_all()
             hub.emit(StateChanged(updated.state))
@@ -826,7 +833,8 @@ class Dispatcher:
 
         def act(record: SessionRecord) -> tuple[SessionRecord, EventHub] | None:
             nonlocal resumed
-            if not self._user_may_release(record):
+            control = self._controls[record.session_id]
+            if not self._user_may_release(record, control):
                 return None
             resumed += 1
             return self._release_locked(record.session_id)
@@ -917,15 +925,21 @@ class Dispatcher:
         return transition
 
     @staticmethod
-    def _user_may_release(record: SessionRecord) -> bool:
+    def _user_may_release(record: SessionRecord, control: _Control) -> bool:
         """Whether a user's resume may release this session's pause or hold.
 
-        Today every ``PAUSED`` session was paused or held by the user. A hold
-        that only a predecessor's settlement ends narrows this one predicate,
-        which single resume and Resume all share.
+        Every ``PAUSED`` session was paused or held by the user, but a cancel
+        accepted while it was ``PAUSING`` moves it to ``CANCELING`` only when
+        its paused worker retires. Releasing it first would reset that cancel
+        and run the session again, so it is not released. A hold that only a
+        predecessor's settlement ends narrows this one predicate, which single
+        resume and Resume all share.
         """
 
-        return record.state is SessionState.PAUSED
+        return (
+            record.state is SessionState.PAUSED
+            and not control.cancel_requested()
+        )
 
     def cancel(self, session_id: SessionId) -> ControlResult:
         publication_lock = self._publication_lock_for(session_id)
