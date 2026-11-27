@@ -116,7 +116,10 @@ terminals `FAILED`; it is never masked as clean cancellation.
 One optional registration reader,
 `read_scheduling_keys(checkpoint) -> frozenset`, returns opaque hashable
 scheduling keys for the session's next start, such as the physical disks its
-roots live on. Keys order starts within this process only; they are not custody,
+roots live on. Keys order starts within one dispatcher only: two dispatchers,
+even in one process, do not see each other's keys. Each product process (the
+desktop host, or one CLI command) composes a single service and so a single
+dispatcher. Keys are not custody,
 lock nothing, and never enter records, the store, events or audit. A reader
 that raises an `Exception` or answers with anything but a `frozenset` means no
 keys for that pass; it never refuses or fails the session. A registration without a reader is

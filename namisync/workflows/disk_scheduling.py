@@ -4,7 +4,8 @@ The dispatcher calls :func:`read_disk_scheduling_keys` with a session's current
 checkpoint before each start attempt. It names the local roots that start will
 touch, reads which physical disks back each root's volume afresh, and answers
 one plain ``("disk", number)`` key per disk that counts as spinning, so sessions
-sharing a spinning disk start one at a time within this process.
+sharing a spinning disk start one at a time within one dispatcher.
+Each product process composes one service and so one dispatcher.
 
 Roots are resolved from the checkpoint's paths at read time rather than from a
 volume name captured at admission: no checkpoint has a place for one, and a
