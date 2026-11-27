@@ -26,6 +26,20 @@ restarts, crashes, restores, retries and schema changes, and is shown honestly.
 Safe-to-change-the-databases work: guards and foundations that land before the
 first schema change. M2_PLAN owns checkpoint scope and gates.
 
+#### Pause all and Resume all (2026-11-27)
+
+- Delivered M2-A5. The task rail header has Pause all and Resume all, with a
+  notice counting what each did. Pause all asks every running task that can
+  pause to pause and holds every waiting one; tasks that cannot pause keep
+  running. Resume all releases every paused task in the order it was admitted,
+  behind tasks started meanwhile. Each is a single point-in-time action, not a
+  mode.
+- A held task is paused before it ever started and reads "Paused, not
+  started"; stopping it ends it canceled without having run. Task pages now
+  take Pause, Resume and Stop from what the server says the task can do.
+- Fixed BUG-0322: a Stop accepted while a run was pausing could be lost if the
+  run was resumed before it finished pausing, and the run carried on.
+
 #### Database maintenance commands (2026-11-25 – 2026-11-27)
 
 - Delivered M2-A4. `namisync check`, `namisync backup` and

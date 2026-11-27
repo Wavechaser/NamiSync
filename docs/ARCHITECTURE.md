@@ -936,8 +936,8 @@ closing that gap would require separately authorized dispatcher/application
 reconciliation.
 
 The adapter-facing `TaskLifecyclePort` exposes only task-bound plan start with a
-delivery factory, exact task/session reobservation, terminal-session release,
-and task close. It exposes no raw unsubscribe, dispatcher/session close, plan
+delivery factory, task-session cancel, pause and resume, Pause all and Resume
+all, exact task/session reobservation, terminal-session release, and task close. It exposes no raw unsubscribe, dispatcher/session close, plan
 drop, compensation, stream, or rollback primitive. The import contract named
 `Web task drain cannot reach domain lifecycle owners` forbids every direct or
 indirect path from `interfaces/web/drain.py` to the dispatcher, service,

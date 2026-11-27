@@ -189,72 +189,62 @@ Checkpoints:
     - At the first post-M2 schema step, the stamp condition ("the ledger
       migrated in this call") must be narrowed to the 0.1.0 step.
   - **Deferred:** five items to M2-B3 and one to M2-B2, recorded in those rows.
-- **M2-A5 Session progress and hold reason** (accepted 2026-11-27). Sessions
-  carry progress and the server derives can pause, can resume and can stop
-  from it. Includes the `PENDING`-to-held edge. Consumer: Pause all and Resume
-  all, pulled forward from Task rail batch actions so the contract ships with
-  a real user. Holds act on today's in-process queue; nothing is persisted,
-  and queue ownership is B2's.
-  - **User decisions (2026-11-27).**
-    - A held session is `PAUSED` with no start time, reached by one new edge,
-      `PENDING` to `PAUSED`, which only Pause all uses. No `HELD` state: a new
-      `SessionState` member is an event and database format change. History
-      shows a held session as paused and never started.
-    - Progress has two values, none and a saved continuation, derived from
-      the start time; unknown waits for its producer (B5, C2). Hold reason
-      gets no type until B5 adds its second value, the predecessor; until
-      then held by the user is exactly `PAUSED`, and resume releases it
-      through one predicate B5 narrows. Safe to close waits for its
-      consumers (B5, B6).
-    - Pause all is a point-in-time operation, not a mode: sessions admitted
-      after it run normally and stay ahead on Resume all.
-    - The desktop consumer is one bounded bridge command, Pause all and
-      Resume all buttons in the rail header with a count notice, pages that
-      read the server's capabilities, and held tasks labelled not started.
-      The rail menu, Stop all, batch Close and the filter stay in B6.
-    - A resume refused at preflight keeps ending `FAILED+RAN`, also under
-      Resume all; returning the run to paused is desirable, not required,
-      and is deferred ([Unowned](#unowned)).
-  - **Outcomes, one reviewed commit each, in order:** the core edge and
-    progress; the dispatcher's rule that a withdrawn pending worker retires
-    without running, and `pause_all`; `resume_all` (these first three share
-    one commit, because the edge alone would let a pending session settle
-    `PAUSED`); the server side (service,
-    task port, drain, command and task snapshot v4 with the page's
-    validator); the rail buttons and page labels; the row's closing
-    documents.
-  - **Preserved:** no event or database format change
-    (`tests/core/test_format_vectors.py` untouched); the control matrix is
-    unchanged, and pausing one pending session stays illegal; resume never
-    preempts; custody is released only by the generation that took it; the
-    dispatcher stays domain-blind; 13 import contracts.
-  - **Gate:** a queued session held behind a blocker never runs and is never
-    opened; a session held while waiting for its lease, or after `open`
-    before `RUNNING`, retires without running and frees the resource; Pause
-    all is atomic (when A's pausing event arrives, B queued on A's resource
-    is already held, and B does not start when A releases it); a resumed run
-    waiting in pending returns to paused with its continuation and later
-    resumes as ran; Resume all's order (S4, admitted during the hold, then
-    S1 to S3); cancel from held ends `CANCELED+UNRUN`; the result counts; the
-    interface capabilities agree with the control matrix for every state;
-    the ordinary suite and `lint-imports`; one headed rail journey.
-    Dispatcher tests wait on events, not deadlines.
-  - **Non-goals:** a `HELD` state, a hold-reason type, the predecessor wait,
-    unknown progress, safe to close, holding one session, Stop all, batch
-    Close, the rail menu and filter, persistence, queue ownership, refused
-    resume, and CLI pause or resume.
-  - **Assumptions for review:** no consumer misreads a never-started
-    `PAUSED` session as having a continuation; holding every publication
-    lock at once cannot deadlock; every
-    registered kind's `open` can be repeated after a discarded invocation;
-    every desktop session belongs to a rail task.
-  - **Accepted bound** (orchestrator decision, 2026-11-27): review found that
-    a wedged audit writer can stall a bulk call, and concurrent calls on its
-    sessions, for about N × (audit offer + flush timeout) for N changed
-    sessions. It is accepted rather than restructured, because no plausible
-    trigger has been shown ([DEFENSE §2.5](DEFENSE.md#25-proportional-defense)).
-    The bridge command runs bulk control off responsive threads, and
-    [DISPATCHER](DISPATCHER.md) states the bound.
+- **M2-A5 Session progress and hold reason** (complete, closed 2026-11-27;
+  `46c461a5` to `5ceaaa08`). Pause all and Resume all ship in the task rail
+  header with a count notice, through one bounded bridge command that runs off
+  responsive threads. Pause all asks every running session that can pause to
+  pause and holds every pending one; Resume all releases every paused session,
+  in admission order, behind sessions admitted meanwhile. A held session is
+  `PAUSED` with no start time, reached by the one new edge `PENDING` to
+  `PAUSED`, and its launched attempt is withdrawn and retires without running.
+  Progress (none or a saved continuation) is derived from the start time.
+  Task snapshot v4 carries it with server-derived can pause, can resume and
+  can stop, which pages now read; held tasks read "Paused, not started".
+  Behavior and limits are in [CORE](CORE.md),
+  [DISPATCHER](DISPATCHER.md), [BRIDGE](BRIDGE.md) and
+  [DESKTOP_UI](DESKTOP_UI.md).
+  - **User decisions (2026-11-27):** held is `PAUSED` with no start time, with
+    no `HELD` state and no format change; the hold reason gets no type until B5
+    adds the predecessor, and B5 narrows the one release predicate that single
+    resume and Resume all share; Pause all is point-in-time, not a mode; the
+    consumer is two rail buttons; a resume refused at preflight keeps ending
+    `FAILED+RAN` ([Unowned](#unowned)).
+  - **Gate:** met. Every gate item maps to a named test in
+    `tests/dispatcher/test_dispatcher.py`, `tests/core/test_session_events.py`
+    and `tests/interfaces/web/`, including the exact order S4 then S1 to S3
+    and the capability agreement for every state; the headed rail journey
+    (`tests/interfaces/web/test_task_rail_bulk_headed.py`) and all twelve
+    background headed tests passed. Final: 7503 ordinary tests passed with the seven known interpreter-bound failures. No event or database format
+    changed, the control matrix is unchanged, and 13 import contracts were
+    kept. Each outcome, each correction round and the whole checkpoint were
+    independently reviewed; dispatcher guards were checked by mutation. No
+    evidence record was promoted.
+  - **Fixed in the row:** an accepted Stop lost when a resume raced the paused
+    worker, older than this row but widened by Resume all
+    ([BUG-0322](BUGS.md#bug-0322)).
+  - **Accepted residuals:**
+    - A wedged audit writer can stall a bulk call, and concurrent calls on its
+      sessions, for about N × (audit offer + flush timeout); accepted without
+      a shown trigger ([DEFENSE §2.5](DEFENSE.md#25-proportional-defense),
+      orchestrator decision 2026-11-27).
+    - After a lost-event Gap, recovery refreshes progress and capabilities
+      from the session record but not `control_state`, so a page may word a
+      pausing or canceling task as running, and Pause all may stay disabled
+      for a waiting resumed run until its next state event. The page maps a
+      stale "paused" with stop available to pending ([BRIDGE](BRIDGE.md)).
+    - In the brief window before an accepted Stop settles, the page may still
+      offer Resume; the dispatcher refuses it.
+    - The notice counts pause requests as "Paused" while those tasks still
+      read Pausing.
+    - Latent dispatcher defenses with no product trigger, not in BUGS: an
+      `open` raising `Canceled` while pending without a cancel request, and a
+      `settle_canceled` raising `PauseRequested`, would each escape as an
+      illegal transition. No registered `open` or settlement can raise them.
+    - The `TaskLifecyclePort` lists in [INTERFACES](INTERFACES.md) and
+      [ARCHITECTURE](ARCHITECTURE.md) gained this row's controls but still
+      omit older members such as the setup, inventory and read calls.
+  - **Deferred:** Resume all skips `INTERRUPTED` while its snapshot offers
+    resume, to M2-C2, recorded there.
 - **M2-A6 Shared review surface** (proposed). Plan and Inventory render through
   one review component on the windowed table substrate, settling the switcher
   label drift. Includes the parity test against documented allowed differences,
@@ -426,6 +416,11 @@ Checkpoints:
   once at pause and marked resuming before filesystem work; launch reads the
   most specific evidence first; interrupted runs offer Retry. Depends on C1 and
   B5. Closes on: process-kill tests at each mark, with no resumed run behind the files.
+  - **Inherited from M2-A5** (deferred 2026-11-27, orchestrator decision):
+    Resume all releases only `PAUSED` sessions, while single resume and the
+    task snapshot's can resume also accept `INTERRUPTED`. When `INTERRUPTED`
+    gets its first production use here, the rail's Resume all enablement and
+    labels must agree with what Resume all releases.
 - **M2-C4 Durable queue** (proposed). Held, pending and queued sessions survive
   closing, crashes and restarts from what the store records at admission and at
   each transition: the queue-owner lock and persisted holds under B2's contract;

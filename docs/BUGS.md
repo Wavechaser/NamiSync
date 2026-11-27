@@ -774,6 +774,21 @@ entries to fit a batch; use explicit record offsets/limits.
 
 ## DISPATCHER AND HISTORY
 
+### Session control
+
+<a id="bug-0322"></a>
+
+- MODERATE - FIXED (2026-11-27). Resume cancel-reset race. A Stop accepted
+  while a pausable run was `PAUSING` only set the cancel request; the session
+  became `CANCELING` when its paused worker retired, after `PAUSED` was
+  published. A single resume, or Resume all, in that window reset the request
+  and returned the session to `PENDING`, so it ran on from its continuation
+  although the Stop had been accepted. Cause: the user-release predicate
+  checked only `PAUSED` and ignored an accepted cancel. Fixed in M2-A5 by
+  making that shared predicate refuse a session whose cancel is requested
+  (single resume answers `ILLEGAL_STATE`, Resume all counts it nowhere);
+  failing-first regressions gate the paused worker's retirement for both.
+
 ### M1 Hardening
 
 <a id="bug-0060"></a>
