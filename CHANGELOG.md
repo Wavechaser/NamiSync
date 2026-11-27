@@ -37,6 +37,9 @@ first schema change. M2_PLAN owns checkpoint scope and gates.
   drives, the task is never refused; it is scheduled as before. Ordering
   holds within one NamiSync process; a desktop task and a CLI run on one disk
   can still overlap.
+- Fixed BUG-0325: an inventory or integrity task whose drive had moved to a
+  new letter ran unordered; it is now ordered by the disk at its current
+  letter.
 
 #### Pause all and Resume all (2026-11-27)
 
@@ -51,6 +54,11 @@ first schema change. M2_PLAN owns checkpoint scope and gates.
   take Pause, Resume and Stop from what the server says the task can do.
 - Fixed BUG-0322: a Stop accepted while a run was pausing could be lost if the
   run was resumed before it finished pausing, and the run carried on.
+- Fixed after closing review: a resumed run that failed before running again
+  said execution did not start, though files had already been copied
+  (BUG-0323); Pause all could let a waiting task start while it waited
+  (BUG-0324); and a task waiting to
+  start read as scanning or running, now "Waiting to start" (BUG-0326).
 
 #### Database maintenance commands (2026-11-25 – 2026-11-27)
 

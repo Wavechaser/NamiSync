@@ -1,4 +1,29 @@
-# Latest session — M2-A5 and M2-A8 closed, 2026-11-27
+# Latest session — A5 and A8 review findings fixed, 2026-11-27
+
+## Closing-review findings
+
+The independent review of `b7985075` reported five findings. Each was
+validated against its reproducer and fixed or answered; both rows stay
+closed with the fixes recorded in them.
+
+- **P1, resumed run reported UNRUN** — `b429cd8c`,
+  [BUG-0323](BUGS.md#bug-0323). The worker's custody and `open` failure paths
+  hard-coded `UNRUN`; they now derive it from the start time. A real-copy
+  reproducer then ended `FAILED+RAN`. The resumed attempt's ledger
+  run still stays unfinished (residual in the A5 row).
+- **P2, Pause all snapshot race** — `67e8ac0e`,
+  [BUG-0324](BUGS.md#bug-0324). Bulk calls are now serialized and take
+  pending sessions' locks first; a pending session can still start before
+  its own lock is taken and is then treated as running.
+- **P2, remounted binding keyed by old letter** — `d7ae58cc`,
+  [BUG-0325](BUGS.md#bug-0325). The reader finds the binding's volume at its
+  current mount (recorded mounts first, then every letter).
+- **P2, reservations per dispatcher** — no product trigger: every product
+  entry point composes one service and so one dispatcher per process. Not a
+  bug; `4045a949` states the scope in DISPATCHER and WORKFLOWS.
+- **P3, queued scans read as scanning** — `22ec81b9`,
+  [BUG-0326](BUGS.md#bug-0326). A pending task now reads "Waiting to start"
+  with an idle bar.
 
 **M2-A5 and M2-A8 are closed.** [M2_PLAN](M2_PLAN.md) holds both rows with
 their gates and residuals; A4's row was compacted and its deferred work moved
@@ -37,7 +62,10 @@ Nothing was pushed; `milestone2` carries the commits below.
 
 ## Verification
 
-- Final head `7da7af2e` plus these closeout docs: 7558 ordinary tests passed, 4 skipped, 36 deselected, with the seven known interpreter-bound failures; `lint-imports` 13 kept.
+- Review fixes on `22ec81b9`: 7569 ordinary tests passed, 4 skipped, 36
+  deselected, with the seven known interpreter-bound failures; dispatcher department 209 passed in index
+  isolation; all twelve background headed tests passed with the new wording.
+- Final A5/A8 head `7da7af2e` plus those closeout docs: 7558 ordinary tests passed, 4 skipped, 36 deselected, with the seven known interpreter-bound failures; `lint-imports` 13 kept.
 - Every outcome, each correction round and both whole checkpoints had a fresh
   adversarial review. A5 dispatcher guards and nine A8 scheduler mutants were
   killed by the existing tests. The A8 closure review found nothing to fix
@@ -78,4 +106,5 @@ Nothing was pushed; `milestone2` carries the commits below.
   - Frozen `sh_g_8_*` artifacts must not move.
   - Keep `F:\NamiSyncExecutorBenchSource`, `H:\test_dir`, `dist/v0.1.0/` and
     `build/inventory-cold/`.
-- This session's `build/` output was deleted after EV-0046 was promoted.
+- This session's `build/` output, including the review reproducers, was
+  deleted once each finding was recorded in BUGS.

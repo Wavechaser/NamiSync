@@ -791,7 +791,7 @@ entries to fit a batch; use explicit record offsets/limits.
 
 <a id="bug-0323"></a>
 
-- SEVERE - FIXED (2026-11-28). Resumed pre-run disposition
+- SEVERE - FIXED (2026-11-27). Resumed pre-run disposition
   misclassification. A sync run that copied a file, was paused during
   verification and was then resumed, by single resume or Resume all, ended
   `FAILED+UNRUN` when its custody reacquisition or continuation `open`
@@ -807,7 +807,7 @@ entries to fit a batch; use explicit record offsets/limits.
 
 <a id="bug-0324"></a>
 
-- MINOR - FIXED (2026-11-28). Bulk pause snapshot race. While Pause all
+- MINOR - FIXED (2026-11-27). Bulk pause snapshot race. While Pause all
   waited for an earlier running session's publication lock, a later session
   that was pending at its snapshot could take its own lock and start, so it
   was counted as still running instead of held; a scan the user meant to hold
@@ -1566,7 +1566,7 @@ entries to fit a batch; use explicit record offsets/limits.
 
 <a id="bug-0326"></a>
 
-- MINOR - FIXED (2026-11-28). Queued task status conflation. A task admitted
+- MINOR - FIXED (2026-11-27). Queued task status conflation. A task admitted
   but waiting to start, whether new or released by Resume all, read Scanning,
   Planning or Execution in progress with an animated bar, as if it were
   running; with M2-A8 such a wait can last a whole HDD scan. Found by
@@ -3208,7 +3208,7 @@ entries to fit a batch; use explicit record offsets/limits.
 
 <a id="bug-0325"></a>
 
-- MODERATE - FIXED (2026-11-28). Remounted binding disk-key substitution.
+- MODERATE - FIXED (2026-11-27). Remounted binding disk-key substitution.
   An inventory or integrity session whose volume had moved to another letter
   (an HDD volume now at `M:`, its binding recorded at `F:`) was keyed by
   whatever volume held the recorded letter, here an NVMe volume, so it got no

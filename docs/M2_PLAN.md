@@ -222,6 +222,16 @@ Checkpoints:
   - **Fixed in the row:** an accepted Stop lost when a resume raced the paused
     worker, older than this row but widened by Resume all
     ([BUG-0322](BUGS.md#bug-0322)).
+  - **Fixed after closing review** (`b429cd8c`, `67e8ac0e`, `22ec81b9`): a
+    resumed run failing custody or `open` before running again reported
+    `UNRUN` after earlier attempts had copied files
+    ([BUG-0323](BUGS.md#bug-0323)); Pause all let a session pending at its
+    snapshot start while it waited on another lock, now fixed by serialized
+    bulk calls that take pending sessions' locks first
+    ([BUG-0324](BUGS.md#bug-0324)); a queued or released task read as running
+    instead of "Waiting to start" ([BUG-0326](BUGS.md#bug-0326)). Dispatcher
+    department, frontend static checks and all twelve background headed tests
+    passed afterwards.
   - **Accepted residuals:**
     - A wedged audit writer can stall a bulk call, and concurrent calls on its
       sessions, for about N × (audit offer + flush timeout); accepted without
@@ -234,6 +244,16 @@ Checkpoints:
       stale "paused" with stop available to pending ([BRIDGE](BRIDGE.md)).
     - In the brief window before an accepted Stop settles, the page may still
       offer Resume; the dispatcher refuses it.
+    - After a BUG-0323 failure the ledger run of the resumed attempt stays
+      unfinished; the session outcome is now right, the run record is not
+      closed.
+    - A pending session can still start before Pause all takes its own lock;
+      it is then counted and paused as running.
+    - A Gap that swallows a released session's start leaves `control_state`
+      "paused", so the page reads "Waiting to start" while it runs, until the
+      next state event.
+    - Plan and inventory review guidance still says "in progress" while a
+      session is pending.
     - The notice counts pause requests as "Paused" while those tasks still
       read Pausing.
     - Latent dispatcher defenses with no product trigger, not in BUGS: an
@@ -281,7 +301,17 @@ Checkpoints:
     real inventory pair through the service in 3 of 3 runs each way.
     On the final head 7558 ordinary tests passed with the seven known interpreter-bound failures, and 13 import contracts were kept. Each outcome and the whole
     checkpoint were independently reviewed.
-  - **Accepted residuals:** a spun-down disk was not tested; mapped and
+  - **Fixed after closing review** (`d7ae58cc`, `4045a949`): inventory and
+    integrity bindings were keyed by their recorded mount, so a remounted
+    disk got no keys; the reader now finds the binding's volume at its
+    current mount, by its recorded mounts first and then every drive letter
+    ([BUG-0325](BUGS.md#bug-0325)). Keys order sessions within one
+    dispatcher; each product process composes one service and so one
+    dispatcher, so the "one process" decision holds for the product, and
+    [DISPATCHER](DISPATCHER.md) now says so.
+  - **Accepted residuals:** whether the letter scan for an unmounted
+    binding wakes a spun-down disk is unknown (about 3–4 ms per scheduler
+    pass when every letter is scanned); a spun-down disk was not tested; mapped and
     `subst` letters were tested through a fake; junction or symlink roots
     resolve lexically, so a link into a spinning disk gets the link
     volume's keys (speed only); cancel settlements take no keys (speed
