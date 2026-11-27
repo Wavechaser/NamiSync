@@ -1,6 +1,6 @@
 {
   "format": 1,
-  "next_id": 46,
+  "next_id": 47,
   "records": [
     {
       "id": "EV-0001",
@@ -1324,6 +1324,24 @@
           "path": "stress_drain.py",
           "bytes": 2118,
           "sha256": "d386cbdb74f2ad71e98a43cc1eb1d2c00e32b6d9c28a8af38f2e49af72633fd3"
+        }
+      ]
+    },
+    {
+      "id": "EV-0046",
+      "title": "M2-A8 physical-disk scheduling: real inventory pairs on the reference disks",
+      "date": "2026-11-27",
+      "origin": "build/a8-evidence at 0c92160a",
+      "files": [
+        {
+          "path": "README.md",
+          "bytes": 5807,
+          "sha256": "ec7fb92890b099b1950074446a0fd7b947eebf36fd71c050ea8eb2ca70fb2109"
+        },
+        {
+          "path": "a8_pair.py",
+          "bytes": 7012,
+          "sha256": "244fc3e0071292023459781873530898d2386ee9d537d995534d012efc86876d"
         }
       ]
     }
