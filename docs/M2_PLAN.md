@@ -253,47 +253,41 @@ Checkpoints:
 - **M2-A7 One table component** (proposed). Recent pairs and the batch table move
   onto the same component, so one table family remains. Depends on A6. Closes on:
   no native-table family left, with row-action behavior tested once in the component.
-- **M2-A8 Physical-disk scheduling** (accepted 2026-11-27; after A5, since both
-  change the scheduler). Sessions on one spinning disk run one at a time in
-  the process. Includes the per-start key reader, the unreadable-key fallback
-  and the seek-penalty read; drive-type notices and estimates ride along.
-  Depends on A2's volume query spike.
-  - **User decisions (2026-11-27).** Disk keys serialize sessions within one
-    process only: a desktop session and a CLI run on two partitions of one
-    disk still overlap, and volume custody stays the only cross-process
-    lock. The quiet advisory for an unreadable key moves to the drive-type
-    notices ride-along, which needs the same notice surface. The fixture is
-    disk 0, a SATA HDD carrying `J:` and a 4 GB `M:` made for this row.
-  - **Design.** A registration may supply a reader returning opaque
-    scheduling keys, kept apart from custody resources and never stored.
-    The scheduler calls it outside its lock at each start attempt and
-    launches only on a reading from the current pass; keys join the waiting
-    sets, so per-resource order holds. A reader that fails or answers badly
-    means no keys, never a refusal. The native reads (volume extents, bus
-    type, seek penalty) live in core; a disk counts as spinning unless it is
-    a non-USB disk that reports no seek penalty.
-  - **Outcomes, one reviewed commit each, in order:** core disk topology;
-    the dispatcher contract and scheduler (inert until a reader is
-    supplied); workflow and service wiring with the reference-machine test;
-    the evidence record.
-  - **Gate:** unit tests with injected readers (equal keys serialize in
-    admission order, disjoint keys overlap, a later session on another
-    partition cannot overtake, resume reads again, failure falls back, keys
-    are released on pause, cancel and failure, keys never reach records or
-    events, a hold during a blocked read launches nothing); on the
-    reference machine through real reads, `J:` and `M:` never run together
-    while two NVMe roots do, and an injected unreadable read falls back; one
-    real inventory pair on `J:\NamiSyncSpike\stop-latency` and a seeded
-    folder of at most 64 MB on `M:`, kept as evidence; the ordinary suite
-    and `lint-imports`.
-  - **Non-goals:** cross-process disk serialization, the advisory, notices,
-    estimates and parallel listing, filling `incurs_seek_penalty`, D-segment
-    registrations, nested virtual disks and Storage Spaces, network roots,
-    a reader deadline, and any speed claim.
-  - **Assumptions for review:** the opens and queries never block for long
-    (if one is shown, each read gets a daemon thread and a short deadline);
-    partitions of one disk report one disk number; a volume GUID captured at
-    admission stays valid across letter changes; stale keys cost only speed.
+- **M2-A8 Physical-disk scheduling** (complete, closed 2026-11-27;
+  `4e80056d` to `7da7af2e`). Sessions whose roots sit on one spinning disk
+  run one at a time in the process; NVMe and other non-spinning roots are
+  not ordered. Every registration supplies a reader that resolves the
+  checkpoint's roots to physical disks at each start attempt; the keys are
+  opaque, kept apart from custody resources, and never stored. A failed or
+  malformed reading means no keys, never a refusal. The native reads live in
+  core; a disk counts as spinning unless it is a non-USB disk reporting no
+  seek penalty. Behavior and limits are in [CORE](CORE.md),
+  [DISPATCHER](DISPATCHER.md) and [WORKFLOWS](WORKFLOWS.md).
+  - **User decisions (2026-11-27):** keys serialize within one process only,
+    and volume custody stays the only cross-process lock; the quiet advisory
+    for an unreadable key moves to the drive-type notices and estimates item, still unordered;
+    the fixture is disk 0, a SATA HDD carrying `J:` and a 4 GB `M:`.
+  - **Design changed in delivery:** roots are resolved from their paths at
+    every read instead of from a volume GUID captured at admission, so no
+    checkpoint field was added and a letter change is followed. Only local
+    volumes are read: `QueryDosDeviceW` must name a `\Device\HarddiskVolume`
+    before any open, so mapped, `subst`, UNC and unassigned roots get no keys
+    without I/O (a mapped letter otherwise blocked the scheduler 41–80 s).
+  - **Gate:** met. Every injected-reader clause maps to a named test in
+    `tests/dispatcher/test_scheduling_keys.py`, nine scheduler mutants were
+    killed, and `tests/test_disk_scheduling.py` serializes `J:` and `M:`,
+    overlaps two NVMe roots and falls back on an injected unreadable read
+    through real topology. [EV-0046](../evidence/EV-0046/README.md) ran the
+    real inventory pair through the service in 3 of 3 runs each way.
+    On the final head 7558 ordinary tests passed with the seven known interpreter-bound failures, and 13 import contracts were kept. Each outcome and the whole
+    checkpoint were independently reviewed.
+  - **Accepted residuals:** a spun-down disk was not tested; mapped and
+    `subst` letters were tested through a fake; junction or symlink roots
+    resolve lexically, so a link into a spinning disk gets the link
+    volume's keys (speed only); cancel settlements take no keys (speed
+    only); a reader raising a non-`Exception` stops the scheduler; no test
+    bounds the reader's call count (about K² reads to drain K waiting
+    sessions, each 20–300 µs).
 - **M2-A9 Capacity decision** (proposed; rides along except where durable work
   forces it). Profile large tasks, then choose the task and start-response
   bounds (at most 256) and add the README and in-app notices. The profile
@@ -578,7 +572,7 @@ safety are settled here, and the rest are deferred to the owning segment.
     - **No spin-up.** A SATA HDD was put in standby with `openSeaChest` and left untouched for 45 s. Every query then answered in under 0.1 ms while an unbuffered read took 8.3 s to spin it up, so none of the queries wakes a sleeping SATA disk. A USB HDD behind a bridge never entered standby, so USB disks remain untested.
     - **Deadline.** Local queries take microseconds (worst single call 0.11 ms; 1.5 ms for a drive with no media), so 3 s per drive is ample. An unreachable network path blocks GetDriveTypeW, GetVolumeInformationW and GetDiskFreeSpaceExW for 13 s to over 120 s, and the call cannot be cancelled. Queries therefore run on daemon threads (a pool worker would hold process exit), with at most one outstanding query per drive and a late answer allowed to replace "Not responding".
     - **Disk type.** The seek-penalty property correctly separated the reference machine's HDDs (SATA, and one on USB) from its NVMe and USB SSDs. USB device strings name the bridge, not the media.
-    - **Input to M2-A8.** Every volume on the reference machine has one extent, and no HDD carries two lettered partitions. A8's gate needs such a fixture to be created.
+    - **Input to M2-A8.** Every volume on the reference machine has one extent, and no HDD carries two lettered partitions. A8's gate needs such a fixture to be created; the 4 GB `M:` beside `J:` on disk 0 was made for it.
 - **New browse page.** User decisions (2026-11-19). One page with two cards:
   - **Browse card.** Answers “what exists in A and B, and how do they differ?” without planning a sync: a title, two path boxes and a row with the button and options, so it stays shorter than Sync's Setup. Difference means existence and metadata only: a file on one side only, a possibly modified version of the same file, or the same. Comparison data always comes from fresh scans, subject to the row limits. The verdict comes from the planner's own comparison, called as a pure function (user decision, 2026-11-20), so Browse never says “same” where Send to Sync would plan an update.
   - **Storage card.** A path box with Scan on one row, then the Volume overview. A path scans that folder; a volume row scans the whole volume (Disk usage view).

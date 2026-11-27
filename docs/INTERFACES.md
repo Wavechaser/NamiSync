@@ -262,8 +262,8 @@ unchanged filesystem. The direct-service replacement behavior above is not a
 desktop recovery command.
 Folder gestures expand only toggleable descendants; a
 safety-disabled row remains disabled without making selectable siblings inert.
-Only the execution registration supplies
-`settle_canceled=runtime.settle_canceled_execution`; the service does not decode
+The execution, baseline, verify and rebaseline registrations supply their
+runtime's `settle_canceled_*` settlement; the service does not decode
 continuations or decide cancellation policy. Retained `HistoryRunSummaryView`
 exposes primitive lifecycle/watermark fields, filesystem/integrity/recording/
 audit axes, disposition, cancellation, headline, counts, and bounded phases,

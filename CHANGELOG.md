@@ -26,6 +26,18 @@ restarts, crashes, restores, retries and schema changes, and is shown honestly.
 Safe-to-change-the-databases work: guards and foundations that land before the
 first schema change. M2_PLAN owns checkpoint scope and gates.
 
+#### Physical-disk scheduling (2026-11-27)
+
+- Delivered M2-A8. Tasks whose folders sit on the same spinning disk now run
+  one at a time instead of fighting over the drive head, even on different
+  partitions; the next starts as soon as the previous ends. Tasks on SSD and
+  NVMe drives still run together. The disk is read again at every start, so a
+  changed drive letter is followed.
+- When the disk cannot be identified, as for network, mapped and `subst`
+  drives, the task is never refused; it is scheduled as before. Ordering
+  holds within one NamiSync process; a desktop task and a CLI run on one disk
+  can still overlap.
+
 #### Pause all and Resume all (2026-11-27)
 
 - Delivered M2-A5. The task rail header has Pause all and Resume all, with a
