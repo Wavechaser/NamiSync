@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Hashable
 from dataclasses import dataclass
 from enum import StrEnum
 from typing import Callable, Mapping, Protocol
@@ -63,14 +64,27 @@ class WorkflowRegistration:
     """Detached-checkpoint adapter contract and capability metadata.
 
     ``prepare`` and invocation ``snapshot`` transfer detached checkpoints;
-    ``open`` and ``settle_canceled`` treat them as read-only, and ``open``
-    materializes fresh invocation-owned state.
+    ``open``, ``settle_canceled`` and ``read_scheduling_keys`` treat them as
+    read-only, and ``open`` materializes fresh invocation-owned state.
+
+    ``read_scheduling_keys``, when present, is called with the current
+    checkpoint on the scheduler thread, outside every dispatcher lock, on
+    every scheduler pass for every queued pending session of its kind; a pass
+    follows each dispatcher state change of any session. It must therefore be
+    cheap and must not block. It returns a ``frozenset`` of opaque hashable
+    scheduling keys whose equality and hashing are plain values. Sessions
+    sharing a key start one at a time in admission order, as for a shared
+    resource, but keys are not custody: nothing is locked for them, and they
+    are never stored, recorded or published. A reader that raises an
+    ``Exception`` or answers with anything but a ``frozenset`` means no keys
+    for that pass, never a refusal.
     """
 
     prepare: Callable[[object], PreparedSession]
     open: Callable[[object], WorkflowInvocation]
     supports_pause: bool = False
     settle_canceled: Callable[[object, Disposition], OperationResult] | None = None
+    read_scheduling_keys: Callable[[object], frozenset[Hashable]] | None = None
 
 
 Registry = Mapping[str, WorkflowRegistration]

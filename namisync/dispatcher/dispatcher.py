@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections import deque
+from collections.abc import Hashable
 from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
 from threading import Condition, Event, Lock, Thread, current_thread
@@ -71,6 +72,9 @@ from namisync.dispatcher.store import InMemorySessionStore
 
 _AdmissionRollback = Callable[[], None]
 _AdmissionAttach = Callable[[SessionId, EventStream], _AdmissionRollback]
+_KeyReader = Callable[[object], frozenset[Hashable]]
+# A reading is fresh only while its session's record is the same object.
+_KeyReadings = dict[SessionId, tuple[SessionRecord, frozenset[Hashable]]]
 _WORKER_RETIRE_POLL_SECONDS = 0.01
 
 
@@ -296,6 +300,8 @@ class Dispatcher:
         self._pending: deque[SessionId] = deque()
         self._worker_generation = 0
         self._reserved: dict[ResourceId, _WorkerKey] = {}
+        # Scheduling keys are admission order only, never custody or records.
+        self._reserved_keys: dict[Hashable, _WorkerKey] = {}
         self._leases: dict[_WorkerKey, ResourceLease] = {}
         self._workers: dict[_WorkerKey, _WorkerAttempt] = {}
         self._current_workers: dict[SessionId, _WorkerKey] = {}
@@ -1361,6 +1367,7 @@ class Dispatcher:
         record: SessionRecord,
         *,
         reserve: bool,
+        scheduling_keys: frozenset[Hashable] = frozenset(),
     ) -> _WorkerAttempt:
         session_id = record.session_id
         if session_id in self._current_workers:
@@ -1381,60 +1388,41 @@ class Dispatcher:
                 if resource in self._reserved:
                     raise RuntimeError("dispatcher resource was reserved twice")
                 self._reserved[resource] = key
+            for scheduling_key in scheduling_keys:
+                if scheduling_key in self._reserved_keys:
+                    raise RuntimeError("dispatcher scheduling key was reserved twice")
+                self._reserved_keys[scheduling_key] = key
         return attempt
 
     def _schedule(self) -> None:
+        readings: _KeyReadings | None = None
         while True:
             launches: list[_WorkerAttempt] = []
+            requests: tuple[tuple[SessionRecord, _KeyReader], ...] = ()
             with self._condition:
                 while not launches:
                     self._reap_retired_workers_locked()
-                    selected: list[SessionId] = []
-                    waiting_resources: set[ResourceId] = set()
-                    for session_id in tuple(self._pending):
-                        record = self._records.get(session_id)
-                        if record is None or record.state not in {
-                            SessionState.PENDING,
-                            SessionState.CANCELING,
-                        }:
-                            selected.append(session_id)
-                            continue
-                        if session_id in self._current_workers:
-                            if record.state is SessionState.PENDING:
-                                waiting_resources.update(record.resources)
-                            continue
-                        if record.state is SessionState.CANCELING:
-                            launches.append(
-                                self._register_attempt_locked(record, reserve=False)
-                            )
-                            selected.append(session_id)
-                            continue
-                        if any(
-                            resource in self._reserved
-                            or resource in waiting_resources
-                            for resource in record.resources
-                        ):
-                            waiting_resources.update(record.resources)
-                            continue
-                        launches.append(
-                            self._register_attempt_locked(record, reserve=True)
-                        )
-                        selected.append(session_id)
-                    record = None
-                    if selected:
-                        selected_set = set(selected)
-                        self._pending = deque(
-                            item for item in self._pending if item not in selected_set
-                        )
+                    if readings is None:
+                        requests = self._key_requests_locked()
+                        if requests:
+                            # Read outside the condition, then select anew.
+                            break
+                        readings = {}
+                    launches, selected, unread = self._select_locked(readings)
+                    readings = None
                     if launches:
                         break
                     if not self._accepting and not self._pending and not self._workers:
                         return
-                    if not selected:
+                    if not selected and not unread:
                         self._condition.wait(
                             _WORKER_RETIRE_POLL_SECONDS
                             if self._retiring_workers else None
                         )
+            if requests:
+                readings = self._read_scheduling_keys(requests)
+                requests = ()
+                continue
             for attempt in launches:
                 unstarted = False
                 try:
@@ -1446,6 +1434,127 @@ class Dispatcher:
                 if unstarted:
                     self._complete_unstarted_attempt(attempt)
             del attempt
+
+    def _key_requests_locked(
+        self,
+    ) -> tuple[tuple[SessionRecord, _KeyReader], ...]:
+        """Return each queued pending session whose registration reads keys."""
+
+        requests = []
+        for session_id in self._pending:
+            record = self._records.get(session_id)
+            if record is None or record.state is not SessionState.PENDING:
+                continue
+            reader = self._registry[record.kind].read_scheduling_keys
+            if reader is not None:
+                requests.append((record, reader))
+        return tuple(requests)
+
+    @staticmethod
+    def _read_scheduling_keys(
+        requests: tuple[tuple[SessionRecord, _KeyReader], ...],
+    ) -> _KeyReadings:
+        """Call each reader with no dispatcher lock held.
+
+        A reader that raises or returns anything but a ``frozenset`` gives no
+        keys for this attempt; it never refuses or fails the session.
+        """
+
+        readings: _KeyReadings = {}
+        for record, reader in requests:
+            try:
+                keys = reader(record.checkpoint)
+            except Exception as error:
+                retire_exception_graph(error)
+                keys = frozenset()
+            if type(keys) is not frozenset:
+                keys = frozenset()
+            readings[record.session_id] = (record, keys)
+        return readings
+
+    def _fresh_keys_locked(
+        self,
+        record: SessionRecord,
+        readings: _KeyReadings,
+    ) -> frozenset[Hashable] | None:
+        """Keys read this pass for this exact record, or ``None`` if unknown."""
+
+        if self._registry[record.kind].read_scheduling_keys is None:
+            return frozenset()
+        reading = readings.get(record.session_id)
+        if reading is None or reading[0] is not record:
+            return None
+        return reading[1]
+
+    def _select_locked(
+        self,
+        readings: _KeyReadings,
+    ) -> tuple[list[_WorkerAttempt], bool, bool]:
+        """Register this pass's launches in admission order.
+
+        Returns the launches, whether stale entries left the queue, and
+        whether a pending session lacked a fresh key reading. Such a session
+        waits for the next pass. It was queued after the reading began, or it
+        was held and released meanwhile; a hold removes it from the queue and
+        a release appends it. Either way it is queued behind every session
+        read in this pass, so none of those can overtake it.
+        """
+
+        launches: list[_WorkerAttempt] = []
+        selected: list[SessionId] = []
+        waiting_resources: set[ResourceId] = set()
+        waiting_keys: set[Hashable] = set()
+        unread = False
+        for session_id in tuple(self._pending):
+            record = self._records.get(session_id)
+            if record is None or record.state not in {
+                SessionState.PENDING,
+                SessionState.CANCELING,
+            }:
+                selected.append(session_id)
+                continue
+            if record.state is SessionState.CANCELING:
+                if session_id not in self._current_workers:
+                    launches.append(
+                        self._register_attempt_locked(record, reserve=False)
+                    )
+                    selected.append(session_id)
+                continue
+            keys = self._fresh_keys_locked(record, readings)
+            if keys is None:
+                unread = True
+            if session_id in self._current_workers or keys is None:
+                waiting_resources.update(record.resources)
+                waiting_keys.update(keys or ())
+                continue
+            if (
+                any(
+                    resource in self._reserved or resource in waiting_resources
+                    for resource in record.resources
+                )
+                or any(
+                    key in self._reserved_keys or key in waiting_keys
+                    for key in keys
+                )
+            ):
+                waiting_resources.update(record.resources)
+                waiting_keys.update(keys)
+                continue
+            launches.append(
+                self._register_attempt_locked(
+                    record,
+                    reserve=True,
+                    scheduling_keys=keys,
+                )
+            )
+            selected.append(session_id)
+        record = None
+        if selected:
+            selected_set = set(selected)
+            self._pending = deque(
+                item for item in self._pending if item not in selected_set
+            )
+        return launches, bool(selected), unread
 
     def _complete_unstarted_attempt(
         self,
@@ -1810,6 +1919,12 @@ class Dispatcher:
                 for resource in resources:
                     if self._reserved.get(resource) == key:
                         del self._reserved[resource]
+                for scheduling_key in [
+                    scheduling_key
+                    for scheduling_key, owner in self._reserved_keys.items()
+                    if owner == key
+                ]:
+                    del self._reserved_keys[scheduling_key]
                 self._condition.notify_all()
 
     def _worker_done(self, key: _WorkerKey) -> None:

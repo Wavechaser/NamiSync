@@ -44,8 +44,8 @@ detached from request- and workflow-owned mutable state plus a set of generic
 `ResourceId` values. `snapshot()` has the same detachment obligation after a
 cooperative pause. `open(checkpoint)` belongs to the adapter, treats the retained
 checkpoint as read-only, and materializes a fresh invocation with `run(ctx)` and
-`snapshot()` methods. `settle_canceled`, when present, likewise treats the
-checkpoint as read-only. The dispatcher calls those methods but never reflects
+`snapshot()` methods. `settle_canceled` and `read_scheduling_keys`, when
+present, likewise treat the checkpoint as read-only. The dispatcher calls those methods but never reflects
 over or otherwise interprets or certifies the checkpoint. Reopening the
 invocation on every resume is the generic seam through which the owning workflow
 runs its fresh guard.
@@ -112,6 +112,15 @@ returned result projects to lifecycle `CANCELED`, then follows the ordinary
 audit/Terminal/custody path. Registrations without the callback retain the
 generic canceled result. A callback failure is an explicit adapter failure and
 terminals `FAILED`; it is never masked as clean cancellation.
+
+One optional registration reader,
+`read_scheduling_keys(checkpoint) -> frozenset`, returns opaque hashable
+scheduling keys for the session's next start, such as the physical disks its
+roots live on. Keys order starts within this process only; they are not custody,
+lock nothing, and never enter records, the store, events or audit. A reader
+that raises an `Exception` or answers with anything but a `frozenset` means no
+keys for that pass; it never refuses or fails the session. A registration without a reader is
+scheduled exactly as before. Scheduling below describes when the reader runs.
 
 `close()` is distinct from cancellation: it accepts only an already-terminal
 record and first waits for that session's exact worker thread to exit, outside
@@ -309,6 +318,35 @@ behind current entries even before the scheduler next runs. Its withdrawn
 attempt keeps its reservation and any lease until it retires, which is about one
 lease poll interval, or until `open` returns. Its resources can therefore stay
 reserved briefly after `PAUSED` is published.
+
+Scheduling keys follow the same admission rules as resources. A scheduling pass
+whose queue holds a pending session with a key reader first notes those
+sessions under the condition, releases it, and calls each reader on the
+scheduler thread with the session's current checkpoint. It then retakes the
+condition and selects as before, treating a session's keys like its resources:
+a key reserved by a launched attempt, or held by an earlier waiting session,
+makes the session wait and adds its keys to the waiting set. A session resumed
+while its paused generation retires keeps its place on its keys the same way. A
+launch uses only a reading from that pass whose session record is still the
+same object; a session held, released, canceled or admitted while the readers
+ran is not launched from it and is read again on an immediate next pass. Such a
+session is queued behind every session read in the pass, so none of them can
+overtake it. Resume therefore always reads again; keys are never cached.
+
+Each launched attempt reserves its keys beside its resources, under its own
+generation, and releases them in the same step on every exit: pause, terminal
+settlement, a withdrawn or stale attempt's retirement, and a start failure.
+CANCELING launches reserve neither. Because the reader runs outside the
+condition and every publication lock, controls, Pause all and Resume all never
+wait for a reading. A reader that blocks stalls the scheduler, and no reader
+deadline exists. Every pass reads every pending keyed session again. A pass
+follows every dispatcher state change of any session, about three per session
+lifecycle but none for progress or item events, plus the short polls while a
+worker retires. Draining K sessions that share one key therefore costs on the
+order of K² reads, so readers must be cheap. No test bounds the read count: the
+tests rely on a re-read every pass, so a future caching change must revise
+them. Key equality and hashing run under the condition and must be plain
+values.
 
 If `Thread.start()` raises before a session worker receives an OS thread
 identity, no workflow invocation exists. Dispatcher retires the raw start
@@ -636,8 +674,8 @@ until its owning worker acknowledges control and retires.
 - `core/session.py`: lifecycle table, checkpoint signals, generic result,
   session record/store protocol, and sole terminal-producing runner.
 - `core/events.py`: versioned M0 bodies/envelopes and explicit schema rejection.
-- `dispatcher/contracts.py`: opaque registration, audit, control, bulk-control,
-  and shutdown contracts.
+- `dispatcher/contracts.py`: opaque registration (including the optional
+  scheduling-key reader), audit, control, bulk-control, and shutdown contracts.
 - `dispatcher/store.py`: honest process-local store.
 - `dispatcher/custody.py`: sorted Windows named-mutex custody and portable test
   fallback.

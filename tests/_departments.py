@@ -80,6 +80,7 @@ DEPARTMENTS: dict[str, tuple[str, ...]] = {
         "tests/dispatcher/test_custody.py",
         "tests/dispatcher/test_dispatcher.py",
         "tests/dispatcher/test_event_bus.py",
+        "tests/dispatcher/test_scheduling_keys.py",
     ),
     "interfaces": (
         "tests/interfaces/test_ui_state.py",
