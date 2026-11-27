@@ -86,6 +86,17 @@ only. `core/pathing.py` stays purely lexical and does not re-export native ancho
 or volume probes from `core/root_authority.py`; the architecture locator owns
 the remaining file/symbol inventory.
 
+`core/disk_topology.py` is the stateless read of which physical disks back one
+local volume: the volume's GUID name, its disk extents, and each disk's bus type
+and seek-penalty property. It opens only zero-access handles with
+`FILE_ANY_ACCESS` queries, so no volume data is read or written. A disk counts
+as spinning unless its bus type is known and not USB and it reports no seek
+penalty; an unreadable or unknown property counts as spinning. Extents that
+cannot be read, or that name no disk, raise `OSError`, so a caller falls back
+to scheduling without disk keys. Disk numbers and
+volume names are scheduling evidence for the current attempt only and are never
+stored.
+
 The scan/model, planning, preflight, and integrity contracts are frozen and slotted where required by their source definitions. Their declared fields, identity, validation, and serialization semantics are canonical in the corresponding modules under `namisync/core/`; this document records their meaning and adoption boundaries without duplicating field inventories.
 
 Planner-result admission validates the exact compound `Plan` contract and
