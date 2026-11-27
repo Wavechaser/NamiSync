@@ -14,6 +14,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from threading import Barrier, Condition
 from time import monotonic
+from types import SimpleNamespace
 
 import pytest
 
@@ -65,15 +66,33 @@ class FakeTopology:
         disks: dict[str, tuple[DiskFact, ...] | BaseException],
         *,
         volume_errors: dict[str, BaseException] | None = None,
+        identities: dict[str, VolumeId] | None = None,
+        drives: tuple[str, ...] = (),
     ) -> None:
         self.disks = disks
         self.volume_errors = volume_errors or {}
+        # Letters absent here carry every test binding's identity.
+        self.identities = identities or {}
+        self.drives = drives
         self.volume_calls: list[str] = []
         self.fact_calls: list[str] = []
+        self.observe_calls: list[str] = []
 
     def install(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(disk_scheduling, "volume_name", self.volume_name)
         monkeypatch.setattr(disk_scheduling, "disk_facts", self.disk_facts)
+        monkeypatch.setattr(
+            disk_scheduling, "observe_native_volume", self.observe_native_volume
+        )
+        monkeypatch.setattr(
+            disk_scheduling, "_logical_drive_roots", lambda: self.drives
+        )
+
+    def observe_native_volume(self, root: str) -> SimpleNamespace:
+        self.observe_calls.append(root)
+        return SimpleNamespace(
+            volume_id=self.identities.get(root[0].upper(), BINDING_VOLUME)
+        )
 
     def volume_name(self, root: str) -> str:
         self.volume_calls.append(root)
@@ -96,9 +115,12 @@ class FakeTopology:
         return outcome
 
 
+BINDING_VOLUME = VolumeId("1234ABCD", "NTFS")
+
+
 def _binding(mount: str) -> LocationBinding:
     return LocationBinding(
-        VolumeId("1234ABCD", "NTFS"),
+        BINDING_VOLUME,
         "",
         mount,
         (mount,),
@@ -152,6 +174,43 @@ def test_each_kind_keys_only_the_spinning_disks_under_its_roots(
     for key in hdd_first:
         assert type(key) is tuple
         assert [type(part) for part in key] == [str, int]
+
+
+@pytest.mark.parametrize("kind", ["inventory", "verify", "paused rebaseline"])
+def test_a_binding_whose_volume_moved_is_keyed_at_its_current_mount(
+    monkeypatch: pytest.MonkeyPatch, kind: str
+) -> None:
+    other = VolumeId("FEEDF00D", "NTFS")
+    topology = FakeTopology(
+        {"F": (NVME,), "M": (HDD,)},
+        # F: now holds another volume, X: is a network letter, and the
+        # binding's volume is mounted at M:.
+        volume_errors={"X": OSError(2, "not a local volume")},
+        identities={"F": other, "C": other},
+        drives=("C:\\", "F:\\", "X:\\", "M:\\"),
+    )
+    topology.install(monkeypatch)
+
+    keys = read_disk_scheduling_keys(_checkpoints("F:\\", "C:\\")[kind])
+
+    assert keys == frozenset({("disk", 0)})
+    # The recorded mount is tried first and the network letter never observed.
+    assert [root.upper() for root in topology.observe_calls] == ["F:\\", "C:\\", "M:\\"]
+    assert topology.fact_calls == [_volume("m")]
+
+
+@pytest.mark.parametrize("kind", ["inventory", "verify"])
+def test_a_binding_whose_volume_is_not_mounted_gets_no_keys(
+    monkeypatch: pytest.MonkeyPatch, kind: str
+) -> None:
+    other = VolumeId("FEEDF00D", "NTFS")
+    topology = FakeTopology(
+        {"J": (HDD,)}, identities={"J": other}, drives=("J:\\",)
+    )
+    topology.install(monkeypatch)
+
+    assert read_disk_scheduling_keys(_checkpoints("J:\\", "C:\\")[kind]) == frozenset()
+    assert topology.fact_calls == []
 
 
 def test_paths_are_resolved_at_read_time_and_volumes_read_once(

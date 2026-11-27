@@ -3191,6 +3191,21 @@ entries to fit a batch; use explicit record offsets/limits.
 
 ## WORKFLOW AND CLI
 
+### Disk scheduling
+
+<a id="bug-0325"></a>
+
+- MODERATE - FIXED (2026-11-28). Remounted binding disk-key substitution.
+  An inventory or integrity session whose volume had moved to another letter
+  (an HDD volume now at `M:`, its binding recorded at `F:`) was keyed by
+  whatever volume held the recorded letter, here an NVMe volume, so it got no
+  disk key and could overlap another session on the same HDD; the workflow
+  itself scanned the right volume. Found by independent review with real
+  resolution and disk reads. Cause: the M2-A8 reader took the binding's
+  stored `selected_mount` as its current mount. Fixed by finding the binding's
+  volume by its `VolumeId` among the recorded mounts and current local drive
+  letters, reading only those core admits as local volumes.
+
 ### Launcher ingress
 
 <a id="bug-0269"></a>

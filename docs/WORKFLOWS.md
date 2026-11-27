@@ -150,7 +150,15 @@ rebaseline) supplies to dispatcher. All six read or write their roots' disks.
 From the current checkpoint it takes the roots the next start touches: a plan's
 source and target paths, an execution's reviewed plan roots (read without
 materializing the continuation), and an inventory or integrity binding's
-selected mount. For each root it reads the volume's disks afresh through
+current mount. A binding's volume may have moved since review, so the reader
+finds it by the binding's `VolumeId`: it tries the selected mount, then the
+other recorded mounts and the current drive letters, and observes only those
+core reads as local volumes; a volume mounted nowhere adds no keys. When the
+recorded mount still matches, the search costs one volume observation; when it
+does not, it observes every local letter, a few milliseconds on each scheduler
+pass while the session waits. Two volumes sharing one identity resolve to the
+first match, which costs only speed.
+For each root it reads the volume's disks afresh through
 [core disk topology](CORE.md) and answers one plain `("disk", number)` key per
 disk that counts as spinning; non-spinning disks add nothing.
 
