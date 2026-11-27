@@ -147,203 +147,48 @@ Checkpoints:
     (in the A4 row), the read rule for runs with no or another ledger
     instance, backup rotation, and a way forward for a damaged database.
 - **M2-A4 Maintenance commands** (complete, closed 2026-11-27; `650110fd` to
-  `78246b75`, review fixes and the stamp revision to `e1f40f63`, review
-  rounds to `1c940e60`). Check, backup and restore run as
-  maintenance sessions under A3's claim, with restore issuing a new ledger
-  instance id and its lineage. Every plan, held in memory or stored, records the
-  ledger instance it was planned against, and preflight refuses a mismatch, so a
-  plan reviewed in the GUI before a CLI restore is refused at start rather than
-  executed (user decision, 2026-11-24). Consumer: CLI maintenance commands
-  (check, backup, restore); the Data page follows in B3. Depends on A3. Closes
-  on: maintenance refuses while a GUI or CLI run holds a claim, new runs are
-  refused while maintenance holds it, and a plan reviewed before a restore is
-  refused at start. Input from A3 (2026-11-25): the dispatcher admitted a
-  session whose history observer was refused the claim with audit degraded.
-  Outcome 1 turned that into a refusal at admission
-  ([DATABASE](DATABASE.md#maintenance-claim)).
-  - **User decisions (2026-11-25).** Lineage storage amends the unreleased
-    ledger schema 5 in place, with no new migration step; a schema-5 pair made
-    by a source-tree run since A3 is refused with reset guidance. The CLI runs
-    maintenance directly under both exclusive claims, as migration does; the
-    dispatcher-session form waits for the Data page (B3). `restore` replaces
-    the ledger or History, one per command, from a backup at the current
-    schema version; v4 and v8 migration backups are refused. Backup rotation,
-    a way forward for a damaged database, the missing-database policy and the
-    run read rule are all in this row. After the design lane (inspected at
-    `315d1d90`), the same day: a start refused under maintenance reaches the
-    desktop as a new definitive fixed bridge error, never an uncertain start.
-    Restore backs up the database it replaces and copies the image in place
-    when that database still backs up cleanly (this runs beside an idle
-    desktop); otherwise it renames the damaged files aside, kept and never
-    deleted, and moves the image in, which needs the database closed in every
-    NamiSync process. This is the reading of "no backup, no change". A live
-    ledger whose lineage names its own instance, a backup copied into place by
-    hand, is refused at admission with direction to `restore`. The read rule
-    is an ancestor chain: a run is current if it matches the ledger's
-    instance, or any ledger in the restored backup's ancestry before that
-    ledger's cut. The predecessor is the ledger the backup was cut from, not
-    the one replaced.
-  - **Design (open to the user's revision).** A backup records its own cut
-    time in the copy, read under both exclusive claims, because content proves
-    the instance but not the time. A restore image is prepared beside the
-    database with the new instance id written and the backup's lineage kept.
-    Rotation keeps three backups per database and leaves migration backups
-    alone, since they are the only way back to 0.1.0. A ledger copy with no
-    backup stamp is refused as a restore source. A lone v0.1.0 History
-    migrates with no ledger stamp, so its runs never join the new ledger.
-  - **Outcomes, one reviewed commit each, in order:**
-    1. A session whose History claim is refused because maintenance holds it
-       is refused at admission, with nothing stored; every other audit-factory
-       failure still degrades audit.
-    2. A plan records the ledger instance it was planned against, and
-       execution start refuses a mismatch before any filesystem change.
-    3. The ledger stores restore lineage (each ancestor's instance and
-       cut-off), and History readers mark a run with no instance, or one
-       outside the ancestor chain, as belonging to an earlier ledger.
-    4. Check, backup, restore and count-based backup rotation in `db`, met in
-       one workflow under both exclusive claims. Restore also replaces a
-       database that fails admission.
-    5. One-present pairs: a lone ledger gains a History; a lone History gains
-       a new ledger with a recorded lineage boundary.
-    6. CLI `check`, `backup` and `restore`, and damage refusals that point to
-       them.
-  - **Preserved:** read-only classification writes nothing; no backup, no
-    change; a refusal leaves both databases as found; rotation never deletes
-    the newest good backup or a file it does not recognize; the dispatcher
-    stays domain-blind.
-  - **Non-goals:** the Data page, archive-and-reset, History pruning, purge,
-    scheduled maintenance, export and import, a second-volume backup
-    destination, and refusal of restore by naming in-process waiting work
-    (B3, where restore first runs inside the desktop).
-  - **Stamp rule (user decisions, 2026-11-25 and 2026-11-26).** Pair
-    migration stamped a v0.1.0 History's runs with whichever current ledger
-    sat beside it; two unplanned cases reached the reviews and a recurrence
-    pause was taken. Its first rule, a `migrated-released` marker in the
-    ledger's lineage, was withdrawn the next day as residue that outlives the
-    import ([DEFENSE §2.5.4](DEFENSE.md#254-migrating-a-released-database)).
-    Current rule: a v0.1.0 History is stamped only when the same upgrade
-    operation, under the same held claims, migrated its ledger in that call;
-    otherwise it migrates unstamped and its runs show as an earlier ledger.
-    Ledger schema 5 was amended back in place, and a source-tree ledger made
-    with the marker kind is refused with the reset direction. Accepted
-    residual: an interruption between the ledger's migration and History's
-    leaves a genuine pair's 0.1.0 runs shown as an earlier ledger.
-  - **After the review at `48ab4718` (user decisions, 2026-11-26).** Six
-    defects were fixed (`41e020b7`, `c29ebe18`): the list is in
-    [CHANGELOG](../CHANGELOG.md). Two policies changed with them. A database
-    with foreign key violations is not backed up, and restore renames it
-    aside instead of overwriting it in place, so every maintenance backup
-    restores. A ledger restore is refused only beside a History of another
-    role or a newer one, and, as advice, over a healthy older pair
-    (`pair-older`); beside a damaged, unreadable or 0.1.0 History it
-    proceeds, so either damaged role can be repaired first. The CLI and the
-    desktop upgrade or complete a pair through one operation,
-    `upgrade_database_pair`.
-  - **Deferred to B3 (user decision, 2026-11-25):** a plan refused because
-    its ledger was replaced shows the desktop's generic commitment refusal.
-    A bridge refusal that names the cause should exist, and waits for B3,
-    where restore first has a desktop consumer.
-  - **Accepted (user decision, 2026-11-25):** a plan made while no ledger
-    exists records no instance and runs against the ledger execution creates
-    or finds.
-  - **Gate:** the three closing conditions above with real child processes;
-    restore killed during image preparation and during the copy leaves the old
-    or the new database; the ordinary suite apart from the seven known
-    interpreter-bound failures; `lint-imports`.
-  - **Gate result (2026-11-26, `78246b75`):** met. The closing conditions run
-    through the real command with child processes
-    (`tests/test_cli_maintenance.py`), and the kill trials are in
-    `tests/test_database_maintenance.py`. 7310 ordinary tests passed, 4
-    skipped, 35 deselected, with the seven known failures; 13 import contracts
-    kept. Each outcome had an independent adversarial review. On `e1f40f63`,
-    after the review fixes and the stamp revision, each independently
-    reviewed: 7326 passed, 4 skipped, 35 deselected, with the same seven
-    failures; 13 contracts kept.
-  - **Second review round (user decisions, 2026-11-26).** Eight findings
-    were fixed in `4993a244` to `72176b46`; the list is in
-    [CHANGELOG](../CHANGELOG.md). The decisions behind them:
-    - An admitted run holds shared claims on both databases, ledger first,
-      until its observer closes; the stamp is read once under the ledger's
-      claim. This replaces the re-read in outcome 1's follow-up.
-    - An integrity continuation keeps the ledger instance read under the
-      recorder claim that saved its progress, and a resume that finds another
-      instance is refused before the scan. No claim is added across the
-      pause.
-    - Creating a missing database needs the caller's permission, enforced
-      under both claims. A `--location-id` command never grants it.
-    - A reset direction names only the database that needs it and says to
-      keep one that validates.
-    - The v0.1.0 History stamp and its exact verification belong to the v8
-      step, so removing that step removes them.
-    - A `history` refusal repeats only the options given; with
-      `--history-database` alone it tells the user to name that History's
-      ledger for other commands.
-    - A desktop startup refusal keeps its message, with paths and the
-      recovery direction, in the GUI log.
-  - **Gate result (2026-11-26, `72176b46`):** 7366 ordinary tests passed, 4
-    skipped, 35 deselected, with the same seven failures; 13 contracts kept.
-    Each of the six commits was independently reviewed, and the two claim
-    defects were reproduced with real child processes before and after.
-  - **Third review round (2026-11-26).** Five findings and the four items
-    the second round left open were fixed in `d07cb246` to `0ce55b6f`; the
-    list is in [CHANGELOG](../CHANGELOG.md). The decisions behind them:
-    - A session record keeps the items an integrity run reported before a
-      refused resume (user decision: they are the run's account). A view
-      that shows one as the row's current state is the defect.
-    - The inventory review labels a row from the ledger whenever the run
-      ended failed, canceled or refused, not only after a replaced ledger:
-      the page has no ledger identity, so the run's outcome is the rule. The
-      integrity context gained `outcome` for it
-      ([BRIDGE](BRIDGE.md) owns the shape).
-    - A first-use sync run is bound to the ledger its first recorder opened,
-      kept in the runtime for as long as the run can resume.
-    - The path check covers the other database's SQLite sidecar paths as
-      well as its claim path, because a History at the ledger's `-wal` path
-      damaged the pair in a child-process run.
-    - A role's `check` states what was found; only the pair decision
-      directs a discard.
-  - **User decisions (2026-11-27):**
-    - Creating a first pair holds both exclusive claims throughout, and
-      admission checks for a held claim before it reports a pair as
-      unusable. Three commands started at once on a fresh pair had left the
-      losers with `inconsistent-pair` or `database-unavailable` and exit `4`;
-      they now exit `3` with the claim's retry message. The same check
-      covers a restore caught mid-copy.
-    - The inventory review has two sources for a row, the run's live items
-      and the ledger. Two consequences are accepted until B3: a canceled or
-      failed verify whose mismatch could not be recorded shows it only in
-      Details, and rows keep a run's labels after a CLI restore until the
-      run is resumed or canceled, or until Refresh.
-  - **Gate result (2026-11-26, `0ce55b6f`):** 7392 ordinary tests passed, 4
-    skipped, 35 deselected, with the same seven failures; 13 contracts kept.
-    Each of the five commits was independently reviewed. The claim change
-    of 2026-11-27: 7397 passed with the same seven failures, 13 contracts
-    kept, independently reviewed.
-  - **Closure (user decision, 2026-11-27).** The closure review at
-    `9bfc6792` found a session admitted with degraded audit when a History
-    restore began after preparation. `1c940e60` takes both shared claims
-    before the observer opens either database, so it is refused at
-    admission: 7399 passed with the same seven failures, 13 contracts kept,
-    independently reviewed. Two findings stay open in
-    [BUGS](BUGS.md#database-artifact-ownership-and-rollback) and do not hold
-    the row: the cold validation beside a live writer (BUG-0320, accepted as
-    bounded and harmless) and nested custom database paths (BUG-0321).
-  - At the first post-M2 schema step, the stamp condition ("the ledger
-    migrated in this call") must be narrowed to the 0.1.0 step.
-  - **Left open, with owners:** the integrity page shows no run-level
-    status when item recording or audit degraded, though the result carries
-    both, and no session reports audit degradation before it ends (B3, one
-    fix family: the page needs the status lines sync has, then a live audit
-    signal on the session); the desktop refusal that names a replaced
-    ledger, restore inside the desktop and its refusal naming waiting work
-    (B3); inventory acknowledge and restore by row id are not covered by the
-    plan's instance check (B3); stored plans and paused continuations record
-    the instance when they first exist (B2). Not exercised by a real fault:
-    an unconfirmed or failed restore through the CLI, an in-place restore
-    stopped mid-copy by a lock, and a backup-removal failure. A cold probe
-    still reports `database-unavailable` during any WAL write transaction,
-    which predates this row (BUG-0320). Limits are in
-    [DATABASE](DATABASE.md#data-protection).
+  `1c940e60`). Check, backup and restore run as CLI maintenance commands under
+  both of A3's exclusive claims; restore issues a new ledger instance id with
+  its lineage, and History marks a run with no instance, or one outside the
+  ancestor chain, as belonging to an earlier ledger. Every plan held in
+  memory, and every integrity continuation, records the ledger instance it was
+  planned or saved against, and start or resume refuses a mismatch before any
+  filesystem change. Work started while maintenance holds a claim is refused
+  at admission; an admitted run holds both shared claims, ledger first, until
+  its observer closes. Rotation keeps three backups per database, a lone
+  database gains its partner, and creating a first pair holds both exclusive
+  claims. Behavior, decisions and limits are in
+  [DATABASE](DATABASE.md#data-protection),
+  [its maintenance claim](DATABASE.md#maintenance-claim) and
+  [COMMANDLINE](COMMANDLINE.md); each review round's fixes are in
+  [CHANGELOG](../CHANGELOG.md).
+  - **Gate:** met. The closing conditions (maintenance refuses under a GUI or
+    CLI run's claim, new runs are refused under maintenance, a plan reviewed
+    before a restore is refused at start) run through the real command with
+    child processes (`tests/test_cli_maintenance.py`); restore killed during
+    image preparation and during the copy left the old or the new database
+    (`tests/test_database_maintenance.py`). Final: 7399 ordinary tests passed
+    with the seven known interpreter-bound failures, 13 import contracts kept;
+    each outcome, each review-fix commit and the closure fix were
+    independently reviewed. No evidence record was promoted.
+  - **Accepted residuals:**
+    - A plan made while no ledger exists records no instance and runs against
+      the ledger execution creates or finds (user decision, 2026-11-25).
+    - An interruption between the ledger's migration and History's leaves a
+      genuine pair's 0.1.0 runs shown as an earlier ledger (user decision,
+      2026-11-26).
+    - Not exercised by a real fault: an unconfirmed or failed CLI restore, an
+      in-place restore stopped mid-copy by a lock, and a backup-removal
+      failure.
+    - Open in [BUGS](BUGS.md#database-artifact-ownership-and-rollback), not
+      holding the row: BUG-0320, the cold validation beside a live writer
+      (accepted as bounded and harmless, user decision 2026-11-27; the
+      misleading closing-line direction to History is fixed with the race,
+      per BUGS), and
+      BUG-0321, nested custom database paths.
+    - At the first post-M2 schema step, the stamp condition ("the ledger
+      migrated in this call") must be narrowed to the 0.1.0 step.
+  - **Deferred:** five items to M2-B3 and one to M2-B2, recorded in those rows.
 - **M2-A5 Session progress and hold reason** (proposed). Sessions carry progress
   and hold reason, and the server derives every capability from them. Includes
   the `PENDING`-to-held edge. Consumer: Pause all and Resume all, pulled forward
@@ -399,6 +244,11 @@ Checkpoints:
   FEATURES' Queue Launch Policy and WORKFLOWS' queue-replay rule. Depends on A5.
   Closes on: the contract accepted by the user and recorded in its owners, with
   any in-process change tested.
+  - **Inherited from M2-A4** (user decisions, 2026-11-20 and 2026-11-24; no
+    consequence accepted, since neither exists yet): stored plans and stored
+    paused continuations record the ledger instance when they first exist, as
+    plans held in memory do (Database maintenance gate, Waiting work, in the
+    [feature specification](#feature-specification)).
 - **M2-B3 Data page** (proposed). Location management (counts, purge of
   acknowledged-missing rows, forget) and the A4 maintenance sessions in the GUI,
   adding history pruning and a guided archive-and-reset. Reconciles FEATURES'
@@ -407,6 +257,27 @@ Checkpoints:
   it (a courtesy on top of A4's instance check, which already covers work it
   cannot see), and
   History showing forgotten locations as forgotten.
+  - **Inherited from M2-A4.** The first item is a user decision of
+    2026-11-25 and the last two of 2026-11-27, each with its consequence
+    accepted until B3; the other two were left open at A4's closure with B3
+    named as owner.
+    - A plan refused because its ledger was replaced shows the desktop's
+      generic commitment refusal; a bridge refusal that names the cause waits
+      for restore's first desktop consumer.
+    - Restore inside the desktop, including its refusal that names waiting
+      work (Database maintenance gate, Waiting work, in the
+      [feature specification](#feature-specification)).
+    - Inventory acknowledge and restore by row id are not plans, so the
+      plan's instance check does not cover them.
+    - The integrity page shows no run-level status when item recording or
+      audit degraded, though the terminal result carries `recording` and
+      `audit`, and no session reports audit degradation before it ends (the
+      event hub's `audit_degraded` is unread). One fix family: first the
+      status lines sync's review already has, then a live audit signal.
+    - The inventory review has two sources for a row, the run's live items
+      and the ledger. A canceled or failed verify whose mismatch could not be
+      recorded shows it only in Details, and rows keep a run's labels after a
+      CLI restore until the run is resumed or canceled, or until Refresh.
 - **M2-B4 Task annotations** (proposed). Notes on History runs, first in run
   detail. Decides whether the table moves to History through A3's migration.
   Depends on B1.
