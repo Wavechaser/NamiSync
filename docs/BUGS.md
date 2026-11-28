@@ -838,8 +838,11 @@ entries to fit a batch; use explicit record offsets/limits.
   1025-byte failure message skipped settlement, because eligibility keyed on
   the bounded diagnostic. Both now follow the ordinary projection and the
   `FAILED` result; an omitted diagnostic is passed as `None` and counted once.
-  Cancel and integrity settlements already carried their witnesses. Core's
-  collapse of an unexplained `DEGRADED` claim to `ok` is an A5 residual.
+  Cancel and integrity settlements already carried their witnesses. Two A5
+  residuals remain. Core collapses an unexplained `DEGRADED` claim to `ok`.
+  After a guard-refused finish, the final projection overwrites the recovered
+  issues; that needs a finisher that alters the execution set, which no
+  production path has.
 
 <a id="bug-0328"></a>
 

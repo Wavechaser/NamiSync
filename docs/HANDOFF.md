@@ -1,113 +1,64 @@
-# Latest session — A5 re-review findings fixed, 2026-11-28
+# Latest session — fix placement, BUG-0327 residuals, A8 consolidation, 2026-11-28
 
-## A5 re-review findings
+## Changes
 
-The re-review of `fdcda44b` reported two A5 findings; both reproduced and
-are fixed. A8 was accepted as is.
-
-- **P1, failed resume dropped completed work** — `8458836b`,
-  [BUG-0327](BUGS.md#bug-0327). A new optional registration callback,
-  `settle_failed(checkpoint, disposition, failure)`, settles a resumed
-  session's custody, `open` or worker-start failure. Execution reuses the
-  workflow's resume-preflight failure settlement, and integrity mirrors its
-  canceled settlement. The reviewer's reproducer now records 26/26 bytes and
-  both phases in History, a finished ledger run (filesystem `completed`) and
-  a released run token. Its independent review found that Pause all could
-  hold a session while its settlement ran; an attempt is now marked settling
-  under its publication lock first, and a test covers both orders. This
-  closes the BUG-0323 unfinished-ledger residual. Refused resume stays
-  deferred ([Unowned](M2_PLAN.md#unowned)); its later fix can reuse this
-  settlement path.
-- **P2, Pause all moment split** — `d30bdcb0`,
-  [BUG-0328](BUGS.md#bug-0328). Pause all now takes the locks of every
-  nonterminal session, including those admitted while it waits, and acts
-  once none is missing; in the reviewer's race both pending sessions are held.
-
-## Closing-review findings
-
-The independent review of `b7985075` reported five findings. Each was
-validated against its reproducer and fixed or answered; both rows stay
-closed with the fixes recorded in them.
-
-- **P1, resumed run reported UNRUN** — `b429cd8c`,
-  [BUG-0323](BUGS.md#bug-0323). The worker's custody and `open` failure paths
-  hard-coded `UNRUN`; they now derive it from the start time. A real-copy
-  reproducer then ended `FAILED+RAN`. The resumed attempt's ledger
-  run still stays unfinished (residual in the A5 row).
-- **P2, Pause all snapshot race** — `67e8ac0e`,
-  [BUG-0324](BUGS.md#bug-0324). Bulk calls are now serialized and take
-  pending sessions' locks first; a pending session can still start before
-  its own lock is taken and is then treated as running.
-- **P2, remounted binding keyed by old letter** — `d7ae58cc`,
-  [BUG-0325](BUGS.md#bug-0325). The reader finds the binding's volume at its
-  current mount (recorded mounts first, then every letter).
-- **P2, reservations per dispatcher** — no product trigger: every product
-  entry point composes one service and so one dispatcher per process. Not a
-  bug; `4045a949` states the scope in DISPATCHER and WORKFLOWS.
-- **P3, queued scans read as scanning** — `22ec81b9`,
-  [BUG-0326](BUGS.md#bug-0326). A pending task now reads "Waiting to start"
-  with an idle bar.
-
-**M2-A5 and M2-A8 remain recorded as closed.** [M2_PLAN](M2_PLAN.md) holds both rows with
-their gates and residuals; A4's row was compacted and its deferred work moved
-to B3. A6 and A7 (GUI) are the next Segment A rows, grouped by the user.
-Nothing was pushed; `milestone2` carries the commits below.
-
-## M2-A5: Pause all and Resume all
-
-- `46c461a5`: holding (`PENDING` to `PAUSED` with no start time), session
-  progress, and dispatcher `pause_all` and `resume_all`.
-- `bb2f048e`: the `control_all_tasks` bridge command, task snapshot v4 with
-  `session_progress`, `can_pause`, `can_resume` and `can_stop`, and Gap
-  recovery that adopts the session record.
-- `61b675fa`: the rail buttons and capability-driven task pages.
-- `5ceaaa08`: BUG-0322, an accepted Stop lost when a resume raced the paused
-  worker; a release now requires no cancel request.
-- `bc985d95`: row closure, CHANGELOG and BUGS.
-- User decisions: held is paused and never started; two rail buttons; a
-  resume refused at preflight keeps ending `FAILED+RAN`.
-
-## M2-A8: physical-disk scheduling
-
-- `4e80056d`: core `disk_topology` (volume extents, bus type, seek penalty).
-- `47cfaa83`: dispatcher scheduling keys, read outside the lock on each pass
-  and used only from the current pass for the same record.
-- `0c92160a`: `workflows/disk_scheduling.py` and the reader on all six
-  registrations. Roots are resolved from their paths at each read, not from a
-  volume GUID captured at admission (a design change recorded in the row).
-  Only `\Device\HarddiskVolume` letters are read, after a mapped network letter
-  was shown to block the scheduler for 41–80 s.
-- `7da7af2e`: [EV-0046](../evidence/EV-0046/README.md), the real inventory
-  pair on `J:` and `M:` (serialized 3 of 3) and an NVMe control pair
-  (overlapped 3 of 3).
-- User decisions: in-process serialization only; the unreadable-key advisory
-  moves to the drive-type notices item.
+- **Fix placement policy** — `9a6e0c9d`. [DEFENSE §2.6](DEFENSE.md#26-fix-placement)
+  says where a warranted fix goes: name the broken invariant, fix it at its
+  owner and never past it, count sibling paths and facets, and take the
+  owner fix when it costs about the same as a local one, or more now but less
+  over time. A considerably larger owner fix is a scope decision. Reopen triggers are now
+  §2.7. AGENTS routes to it, and BUGS entries name invariant, owner and level.
+- **BUG-0327 third review** — `222b89b7`, [BUG-0327](BUGS.md#bug-0327).
+  Both reported facets reproduced through the real service: a ledger
+  refusing the settlement's finish read recording `ok`, and a 1025-byte
+  reacquisition message skipped settlement (0 bytes, unfinished ledger,
+  retained token). Under §2.6 this was a recurrence. The user adjudicated
+  the pause: fix both at the settlement seam and record core's collapse of
+  an unexplained `DEGRADED` to `ok` as an A5 residual. `settle_failed_execution`
+  now takes the ordinary terminal projection on both branches. Dispatcher
+  eligibility now follows the `FAILED` result; an omitted diagnostic is
+  passed as `None` and counted once.
+- **A8 consolidation** — `35bf01d2`. Drive-letter listing moved to core
+  (`logical_drive_roots`) and is shared with inventory's resolver; the two
+  lookups keep their own stopping rules. The scheduling reader lists letters
+  only when the recorded mounts miss and names the matching volume once.
+- **M2-A10 Task lifecycle on the wire** — formalized in [M2_PLAN](M2_PLAN.md)
+  as accepted, not started: snapshot v5 exposes the lifecycle (including
+  `pending`) in place of `control_state`, keeps the capability fields and
+  `session_progress`, and removes the page's capability inference. It closes
+  two A5 wording residuals; the "in progress" review wording and the notice's
+  "Paused" count stay A5 residuals as separate causes.
 
 ## Verification
 
-- Re-review fixes: 7596 ordinary tests passed, 4 skipped, 36 deselected, with the seven known interpreter-bound failures and one owner-list check fixed and rerun before commit; each commit's affected departments passed in index isolation; 13 import contracts kept; the guards for
-  both race orders were checked by mutation. Not rerun: the headed rail
-  journey (no page change).
-- Review fixes on `22ec81b9`: 7569 ordinary tests passed, 4 skipped, 36
-  deselected, with the seven known interpreter-bound failures; dispatcher department 209 passed in index
-  isolation; all twelve background headed tests passed with the new wording.
-- Final A5/A8 head `7da7af2e` plus those closeout docs: 7558 ordinary tests passed, 4 skipped, 36 deselected, with the seven known interpreter-bound failures; `lint-imports` 13 kept.
-- Every outcome, each correction round and both whole checkpoints had a fresh
-  adversarial review. A5 dispatcher guards and nine A8 scheduler mutants were
-  killed by the existing tests. The A8 closure review found nothing to fix
-  beyond closeout records; it confirmed the INTERFACES sentence on cancel
-  settlements was stale (fixed in the closing commit).
-- The headed rail journey and all twelve background headed tests passed for
-  A5. Not run: a headed desktop check of A8 (it has no UI), a spun-down disk,
-  and real mapped or `subst` letters (tested through a fake).
+- BUG-0327: the real-service reproducer is parametrized over plain, bulk,
+  refused finish and long diagnostic; dispatcher and workflow cases cover the
+  omitted diagnostic, the settlement fallback and both execute branches.
+  Mutants that restore the diagnostic-keyed eligibility, drop the omission
+  count or drop the recording projection each failed tests. Dispatcher,
+  exception-graph and affected workflow departments passed.
+- A8: disk topology, scheduling (including the real `J:`/`M:` reference
+  test) and inventory workflow tests passed, 235 in all; 13 import contracts
+  kept.
+- Full ordinary suite at `222b89b7`: 7606 passed, 4 skipped, 7 failed. The
+  failures are the known interpreter-bound ones: six transport-custody tests
+  and the native-gate test.
+- The user re-checked both A5 and A8 and accepted them. The user's probe then
+  found a latent overwrite after a guard-refused finish. It is traced and
+  recorded as an A5 residual, not fixed. By inspection it is unreachable in
+  production.
+- Not run: headed desktop tests (no page change); a stock Windows custody
+  error longer than the bound (the reproducer injects one).
 
 ## Immediate context
 
-- Deferred by the user to B3 (moved from the A4 row): the inventory review's
-  two row sources, and the integrity page's missing run-level recording and
-  audit status. See B3 in [M2_PLAN](M2_PLAN.md).
+- **M2-A10** is the next A5 follow-up; A6 and A7 (GUI) remain the next
+  Segment A rows as grouped by the user.
 - Deferred to M2-C2: Resume all skips `INTERRUPTED` while its snapshot offers
-  resume.
+  resume. Refused resume stays [Unowned](M2_PLAN.md#unowned); it can reuse
+  the `settle_failed` path.
+- Deferred by the user to B3: the inventory review's two row sources, and the
+  integrity page's missing run-level recording and audit status.
 - Open in BUGS: BUG-0320 (concurrent-inventory exit `7`) and BUG-0321 (nested
   custom database paths).
 - Fixtures kept: `J:\NamiSyncSpike\stop-latency` (read only) and
@@ -132,5 +83,5 @@ Nothing was pushed; `milestone2` carries the commits below.
   - Frozen `sh_g_8_*` artifacts must not move.
   - Keep `F:\NamiSyncExecutorBenchSource`, `H:\test_dir`, `dist/v0.1.0/` and
     `build/inventory-cold/`.
-- This session's `build/` output, including the review reproducers, was
-  deleted once each finding was recorded in BUGS.
+- This session wrote nothing to `build/`. Nothing was pushed; `milestone2`
+  carries the commits above.

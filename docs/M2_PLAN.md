@@ -240,16 +240,37 @@ Checkpoints:
     snapshot but state after its locks, so a resume and an admission during
     its wait were treated differently; it now acts once it holds every
     nonterminal session's lock ([BUG-0328](BUGS.md#bug-0328)).
+  - **Fixed after third review** (`222b89b7`, after a recurrence pause the
+    user adjudicated, 2026-11-28): that settlement dropped the execution set's
+    recording witnesses, so a ledger refusing its finish read recording `ok`,
+    and a failure whose diagnostic exceeded the result bound skipped it
+    entirely ([BUG-0327](BUGS.md#bug-0327)).
   - **Accepted residuals:**
+    - Core derives a result's recording status from its witnesses alone, so a
+      result claiming `DEGRADED` with no witness reads `ok`. No current path
+      produces one; closing it in core is a separate scope decision (user
+      decision, 2026-11-28).
+    - When a recording finisher alters the execution set, the guard reports
+      `execution recording issues changed before execution` and the integrity
+      projection restores the issues captured before the finish. The caller's
+      final projection then rereads the altered set and overwrites them. This
+      happens in `settle_failed_execution` (`222b89b7`) and in the ordinary
+      path's entry-cancel and open-failure returns (since `7c933808`). It was
+      reproduced only with a test finisher that cleared a `FINAL_FLUSH_FAILED`
+      issue through a retained reference. By inspection it is unreachable:
+      production finishers receive only the frozen `RecordingSpec` or a
+      `RunRecording`, and during settlement nothing else writes the set,
+      because the executor writes issues only while it runs. It is a latent
+      contract defect and is not fixed ([DEFENSE §2.5](DEFENSE.md#25-proportional-defense),
+      user decision 2026-11-28). A fix would apply the projection only on
+      returns the guard did not refuse.
     - A wedged audit writer can stall a bulk call, and concurrent calls on its
       sessions, for about N × (audit offer + flush timeout); accepted without
       a shown trigger ([DEFENSE §2.5](DEFENSE.md#25-proportional-defense),
       orchestrator decision 2026-11-27).
-    - After a lost-event Gap, recovery refreshes progress and capabilities
-      from the session record but not `control_state`, so a page may word a
-      pausing or canceling task as running, and Pause all may stay disabled
-      for a waiting resumed run until its next state event. The page maps a
-      stale "paused" with stop available to pending ([BRIDGE](BRIDGE.md)).
+    - Two control-state wording residuals, a stale `control_state` after a
+      Gap and a swallowed start read as "Waiting to start", are owned by
+      M2-A10 below.
     - In the brief window before an accepted Stop settles, the page may still
       offer Resume; the dispatcher refuses it.
     - A resumed execution failing before it runs again does not publish
@@ -263,13 +284,10 @@ Checkpoints:
       way.
     - A pending session can still start before Pause all takes its own lock;
       it is then counted and paused as running.
-    - A Gap that swallows a released session's start leaves `control_state`
-      "paused", so the page reads "Waiting to start" while it runs, until the
-      next state event.
     - Plan and inventory review guidance still says "in progress" while a
-      session is pending.
-    - The notice counts pause requests as "Paused" while those tasks still
-      read Pausing.
+      session is pending, a rendering omission on those pages.
+    - The notice counts accepted pause requests as "Paused" while those tasks
+      still read Pausing.
     - Latent dispatcher defenses with no product trigger, not in BUGS: an
       `open` raising `Canceled` while pending without a cancel request, and a
       `settle_canceled` raising `PauseRequested`, would each escape as an
@@ -279,6 +297,45 @@ Checkpoints:
       omit older members such as the setup, inventory and read calls.
   - **Deferred:** Resume all skips `INTERRUPTED` while its snapshot offers
     resume, to M2-C2, recorded there.
+- **M2-A10 Task lifecycle on the wire** (accepted 2026-11-28, not started;
+  depends on A5). The task snapshot carries one account of a session's state.
+  Today it keeps two: `lifecycle_state`, which Gap recovery refreshes from the
+  session record, and `control_state`, reduced only from four state events,
+  never `pending` and never recovered; pages re-derive the real state from
+  the capability fields (`snapshotControlState`, BUG-0326's fix). Under
+  [DEFENSE §2.6](DEFENSE.md#26-fix-placement) the owner is the server
+  snapshot, so the fix goes there and the page compensation is removed.
+  - **User decisions (2026-11-28):** task snapshot v5 exposes the current
+    lifecycle directly, `pending` included, in place of `control_state`
+    (every other lifecycle value, such as `interrupted`, follows); the server capability fields (`can_pause`,
+    `can_resume`, `can_stop`) stay the only source of actions; and
+    `session_progress` stays the distinction between held before start and
+    paused after work.
+  - **Owners and consumers:** `interfaces/web/task_snapshot.py` (reduction,
+    recovery and `snapshot()`); the v5 validator in `assets/bridge.js`;
+    `assets/task_status.js` and `assets/app.js` (wording, the stored
+    execution control state and Pause all availability); their tests and
+    probes, `tests/interfaces/web/test_task_snapshot.py`, the
+    `tests/assets/*_probe.mjs` drivers and the component gallery; and
+    [BRIDGE](BRIDGE.md) and [DESKTOP_UI](DESKTOP_UI.md). No CLI, dispatcher,
+    event or database consumer reads `control_state`.
+  - **Preserved:** dispatcher decides every control; capability values,
+    `session_progress` and the control matrix are unchanged; v4 snapshots are
+    refused, not translated, per the bridge ingress contract; no event or
+    database format changes.
+  - **Gate:** after a Gap, recovery alone brings the wire lifecycle to the
+    record's state, including a released session's start swallowed by the
+    Gap (two A5 residuals, now closed); every lifecycle state words from the
+    wire value with no capability inference; Pause all availability follows
+    lifecycle and capabilities; frontend static checks, the affected web
+    departments, the headed rail journey and all twelve background headed
+    tests pass; adversarial review.
+  - **Commit boundary:** one atomic commit for snapshot, validator, page and
+    tests, then documentation and closeout.
+  - **Non-goals:** the "in progress" wording on the review pages, a separate
+    rendering omission; the notice counting accepted pause requests as
+    "Paused"; Resume all and `INTERRUPTED` (M2-C2). Both wording residuals
+    stay in the A5 row.
 - **M2-A6 Shared review surface** (proposed). Plan and Inventory render through
   one review component on the windowed table substrate, settling the switcher
   label drift. Includes the parity test against documented allowed differences,
@@ -323,6 +380,11 @@ Checkpoints:
     dispatcher; each product process composes one service and so one
     dispatcher, so the "one process" decision holds for the product, and
     [DISPATCHER](DISPATCHER.md) now says so.
+  - **Consolidated after second review** (`35bf01d2`, user direction
+    2026-11-28): drive-letter listing moved to core and is shared with
+    inventory's resolver, whose lookup stays separate because it needs every
+    matching mount; the reader lists letters only when the recorded mounts
+    miss and names the matching volume once.
   - **Accepted residuals:** whether the letter scan for an unmounted
     binding wakes a spun-down disk is unknown (about 3–4 ms per scheduler
     pass when every letter is scanned); a spun-down disk was not tested; mapped and
