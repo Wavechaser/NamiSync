@@ -175,6 +175,12 @@ UNC, mapped network and `subst` roots, unassigned letters, a root whose volume
 or extents cannot be read, and an unknown checkpoint add no keys. Reading never
 refuses. Keys are never stored, recorded or published.
 
+Limits, each costing speed only: junction and symlink roots resolve lexically,
+so a link into a spinning disk gets the link volume's keys. Whether the letter
+scan for an unmounted binding wakes a spun-down disk is unknown (about 3–4 ms
+per scheduler pass when every letter is scanned), since no spun-down disk was
+tested. Mapped and `subst` letters were tested only through a fake.
+
 ### Node tree substrate
 
 `build_node_tree` is a pure workflow helper over path-keyed members. It emits
@@ -648,6 +654,19 @@ item prefix across ordinary failure, paused cancellation, existing-run finishing
 and context exit. Settlement order, callback count, checkpoint state, and recorder
 outcomes are unchanged.
 
+A latent contract defect remains (user decision, 2026-11-28, under
+[DEFENSE §2.5](DEFENSE.md#25-proportional-defense)). When a recording finisher
+alters the execution set, the guard reports `execution recording issues changed
+before execution` and the integrity projection restores the issues captured
+before the finish, but the caller's final projection then rereads the altered
+set and overwrites them. This applies to `settle_failed_execution` and to the
+ordinary path's entry-cancel and open-failure returns. It was reproduced only
+with a test finisher that cleared a `FINAL_FLUSH_FAILED` issue through a
+retained reference. Production finishers receive only the frozen
+`RecordingSpec` or a `RunRecording`, and nothing else writes the set during
+settlement, so no production path reaches it. A fix would apply the final
+projection only on returns the guard did not refuse.
+
 Fresh preflight still runs on every resume. If an already-started execute
 continuation is refused or faults there, workflow finishes the existing run
 through the required finisher as `FAILED+RAN`, with settled execute counters
@@ -657,6 +676,13 @@ that open failure is attributed without replacing the existing failure result.
 Canceled open failure likewise passes the newly degraded axis to existing-run
 finishing before taking its returned aggregate. A verify-resume preflight refusal preserves the
 settled execute filesystem status and adds a zero-work incomplete verify phase.
+A run paused in Verify whose resume fails before it runs again (custody, `open`
+or worker start, settled through the registration's `settle_failed`) instead
+ends `FAILED` with Verify incomplete; a pending session cannot end `COMPLETED`.
+The ledger keeps the filesystem outcome either way. Such a pre-run failure, like
+the generic failure, does not publish exclusions earlier attempts had not yet
+reported; whether a pause can land before they are reported is inferred, not
+shown.
 Selection derivation, commitment diagnostics, commitment refusal, preflight
 exceptions, and preflight refusal all route through one pre-run settlement
 dispatcher. That owner selects fresh, resumed-execute, or verify-continuation

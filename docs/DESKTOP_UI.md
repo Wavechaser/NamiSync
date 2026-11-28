@@ -415,7 +415,8 @@ is preserved. Plan Again is absent during execution or unsettled admission, with
 original-outcome recovery still available.
 
 Automatic post-copy Verify opens once when observed, then respects manual return
-to Plan. Before original release it uses bounded execution review/operation identity
+to Plan. Known wording gap: Plan and Inventory review guidance still says "in
+progress" while the task's session is pending. Before original release it uses bounded execution review/operation identity
 and that run's controls, without creating/mutating an Inventory publication. Release
 opens ordinary target Inventory; original Plan/results remain. Between files Go
 retains the last observed subject; Gap/phase/terminal/session replacement retires it.
@@ -722,6 +723,8 @@ disabled, and a delayed reply turns the invoked button into Check outcome. A
 `role="status"` notice under the header shows the request, then its counts with
 zero counts omitted (Paused 2, held 3; 1 cannot pause and keeps running.), Nothing to
 pause/resume, or a next step on failure; it stays until the next bulk request.
+The notice counts accepted pause requests as Paused while those tasks still read
+Pausing (a known wording gap).
 A task held before it ran reads Paused, not started, distinct from a paused run
 with a continuation; once released it drops the paused label while it waits.
 Any task waiting to start, whether new or released, reads Waiting to start
@@ -757,7 +760,8 @@ Pause, Resume and Cancel availability follows the current session snapshot's
 `control_state`, which still reads paused while a resumed run waits to start
 and is not refreshed by Gap recovery ([BRIDGE](BRIDGE.md#authoritative-task-snapshots)). A
 held session offers Resume and reads paused before it started; a held scan, which
-has no page Resume, points to Resume all.
+has no page Resume, points to Resume all. In the brief window before an accepted
+Stop settles, the page may still offer Resume; the dispatcher refuses it.
 
 Cancel is neutral Regular Stop. First click arms accented Filled Stop for a
 monotonic five-second deadline; second submits. Arming does nothing to execution,

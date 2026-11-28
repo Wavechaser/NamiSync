@@ -650,8 +650,13 @@ session. Inventory Refresh and ordinary integrity starts additionally retain the
 the adapter until task Close, preventing the same command from becoming a new
 activity after admission conditions change. Other start refusals are not cached.
 
-`TaskLifecyclePort` exposes lifecycle-only shell create/close, task-bound start,
-cancellation, pause and resume, Pause all and Resume all across task sessions,
+`TaskLifecyclePort` exposes lifecycle-only shell create/close; Setup option
+reads, preparation and default commits; task-bound starts (plan, Setup plan and
+inventory, inventory refresh and integrity, Plan again and execution) and
+execution recovery; task-bound reads of plan setup, projections, selection
+membership, inventory detail, execution summary, items and evidence, integrity
+items and copied paths; inventory visibility changes; cancellation, pause and
+resume, Pause all and Resume all across task sessions,
 exact task/session reobservation, terminal-session release,
 and task close. A shell owns only its task id; it creates no request, plan,
 session, observer, or domain result. The application mints the task id and

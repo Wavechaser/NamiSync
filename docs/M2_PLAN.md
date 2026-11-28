@@ -190,113 +190,52 @@ Checkpoints:
       migrated in this call") must be narrowed to the 0.1.0 step.
   - **Deferred:** five items to M2-B3 and one to M2-B2, recorded in those rows.
 - **M2-A5 Session progress and hold reason** (complete, closed 2026-11-27;
-  `46c461a5` to `5ceaaa08`). Pause all and Resume all ship in the task rail
-  header with a count notice, through one bounded bridge command that runs off
-  responsive threads. Pause all asks every running session that can pause to
-  pause and holds every pending one; Resume all releases every paused session,
-  in admission order, behind sessions admitted meanwhile. A held session is
-  `PAUSED` with no start time, reached by the one new edge `PENDING` to
-  `PAUSED`, and its launched attempt is withdrawn and retires without running.
-  Progress (none or a saved continuation) is derived from the start time.
-  Task snapshot v4 carries it with server-derived can pause, can resume and
-  can stop, which pages now read; held tasks read "Paused, not started".
-  Behavior and limits are in [CORE](CORE.md),
-  [DISPATCHER](DISPATCHER.md), [BRIDGE](BRIDGE.md) and
-  [DESKTOP_UI](DESKTOP_UI.md).
+  `46c461a5` to `5ceaaa08`, review fixes to `222b89b7`). Pause all and Resume
+  all ship in the task rail header with a count notice, through one bounded
+  bridge command that runs off responsive threads. Pause all asks every running
+  session that can pause to pause and holds every pending one; Resume all
+  releases every paused session, in admission order, behind sessions admitted
+  meanwhile. A held session is `PAUSED` with no start time, reached by the one
+  new edge `PENDING` to `PAUSED`, and its launched attempt is withdrawn and
+  retires without running. Progress (none or a saved continuation) is derived
+  from the start time. Task snapshot v4 carries it with server-derived can
+  pause, can resume and can stop, which pages read; held tasks read "Paused,
+  not started". A resumed session that fails before running again is settled
+  from its checkpoint by the registration's `settle_failed`, keeping its
+  earlier work and recording evidence. Behavior and limits are in
+  [CORE](CORE.md), [DISPATCHER](DISPATCHER.md), [WORKFLOWS](WORKFLOWS.md),
+  [BRIDGE](BRIDGE.md) and [DESKTOP_UI](DESKTOP_UI.md).
   - **User decisions (2026-11-27):** held is `PAUSED` with no start time, with
     no `HELD` state and no format change; the hold reason gets no type until B5
     adds the predecessor, and B5 narrows the one release predicate that single
     resume and Resume all share; Pause all is point-in-time, not a mode; the
-    consumer is two rail buttons; a resume refused at preflight keeps ending
-    `FAILED+RAN` ([Unowned](#unowned)).
+    consumer is two rail buttons.
   - **Gate:** met. Every gate item maps to a named test in
     `tests/dispatcher/test_dispatcher.py`, `tests/core/test_session_events.py`
     and `tests/interfaces/web/`, including the exact order S4 then S1 to S3
     and the capability agreement for every state; the headed rail journey
     (`tests/interfaces/web/test_task_rail_bulk_headed.py`) and all twelve
-    background headed tests passed. Final: 7503 ordinary tests passed with the seven known interpreter-bound failures. No event or database format
-    changed, the control matrix is unchanged, and 13 import contracts were
-    kept. Each outcome, each correction round and the whole checkpoint were
-    independently reviewed; dispatcher guards were checked by mutation. No
-    evidence record was promoted.
-  - **Fixed in the row:** an accepted Stop lost when a resume raced the paused
-    worker, older than this row but widened by Resume all
-    ([BUG-0322](BUGS.md#bug-0322)).
-  - **Fixed after closing review** (`b429cd8c`, `67e8ac0e`, `22ec81b9`): a
-    resumed run failing custody or `open` before running again reported
-    `UNRUN` after earlier attempts had copied files
-    ([BUG-0323](BUGS.md#bug-0323)); Pause all let a session pending at its
-    snapshot start while it waited on another lock, now fixed by serialized
-    bulk calls that take pending sessions' locks first
-    ([BUG-0324](BUGS.md#bug-0324)); a queued or released task read as running
-    instead of "Waiting to start" ([BUG-0326](BUGS.md#bug-0326)). Dispatcher
-    department, frontend static checks and all twelve background headed tests
-    passed afterwards.
-  - **Fixed after second review** (`8458836b`, `d30bdcb0`): a resumed session failing before it ran
-    again settled with an empty result, so History lost the work its earlier
-    attempts finished, the ledger run stayed unfinished and the run token
-    leaked; registrations now supply `settle_failed`, which keeps that work
-    ([BUG-0327](BUGS.md#bug-0327)). Pause all read membership at its
-    snapshot but state after its locks, so a resume and an admission during
-    its wait were treated differently; it now acts once it holds every
-    nonterminal session's lock ([BUG-0328](BUGS.md#bug-0328)).
-  - **Fixed after third review** (`222b89b7`, after a recurrence pause the
-    user adjudicated, 2026-11-28): that settlement dropped the execution set's
-    recording witnesses, so a ledger refusing its finish read recording `ok`,
-    and a failure whose diagnostic exceeded the result bound skipped it
-    entirely ([BUG-0327](BUGS.md#bug-0327)).
-  - **Accepted residuals:**
-    - Core derives a result's recording status from its witnesses alone, so a
-      result claiming `DEGRADED` with no witness reads `ok`. No current path
-      produces one; closing it in core is a separate scope decision (user
-      decision, 2026-11-28).
-    - When a recording finisher alters the execution set, the guard reports
-      `execution recording issues changed before execution` and the integrity
-      projection restores the issues captured before the finish. The caller's
-      final projection then rereads the altered set and overwrites them. This
-      happens in `settle_failed_execution` (`222b89b7`) and in the ordinary
-      path's entry-cancel and open-failure returns (since `7c933808`). It was
-      reproduced only with a test finisher that cleared a `FINAL_FLUSH_FAILED`
-      issue through a retained reference. By inspection it is unreachable:
-      production finishers receive only the frozen `RecordingSpec` or a
-      `RunRecording`, and during settlement nothing else writes the set,
-      because the executor writes issues only while it runs. It is a latent
-      contract defect and is not fixed ([DEFENSE §2.5](DEFENSE.md#25-proportional-defense),
-      user decision 2026-11-28). A fix would apply the projection only on
-      returns the guard did not refuse.
-    - A wedged audit writer can stall a bulk call, and concurrent calls on its
-      sessions, for about N × (audit offer + flush timeout); accepted without
-      a shown trigger ([DEFENSE §2.5](DEFENSE.md#25-proportional-defense),
-      orchestrator decision 2026-11-27).
-    - Two control-state wording residuals, a stale `control_state` after a
-      Gap and a swallowed start read as "Waiting to start", are owned by
-      M2-A10 below.
-    - In the brief window before an accepted Stop settles, the page may still
-      offer Resume; the dispatcher refuses it.
-    - A resumed execution failing before it runs again does not publish
-      exclusions its earlier attempts had not yet reported, as under the
-      generic failure; whether a pause can land before they are reported is
-      inferred, not shown.
-    - A run paused in Verify whose resume fails before running ends `FAILED`
-      with Verify incomplete, while the same refusal inside its own preflight
-      ends with its filesystem outcome (usually completed); a pending session
-      cannot end `COMPLETED`. The ledger keeps the filesystem outcome either
-      way.
-    - A pending session can still start before Pause all takes its own lock;
-      it is then counted and paused as running.
-    - Plan and inventory review guidance still says "in progress" while a
-      session is pending, a rendering omission on those pages.
-    - The notice counts accepted pause requests as "Paused" while those tasks
-      still read Pausing.
-    - Latent dispatcher defenses with no product trigger, not in BUGS: an
-      `open` raising `Canceled` while pending without a cancel request, and a
-      `settle_canceled` raising `PauseRequested`, would each escape as an
-      illegal transition. No registered `open` or settlement can raise them.
-    - The `TaskLifecyclePort` lists in [INTERFACES](INTERFACES.md) and
-      [ARCHITECTURE](ARCHITECTURE.md) gained this row's controls but still
-      omit older members such as the setup, inventory and read calls.
-  - **Deferred:** Resume all skips `INTERRUPTED` while its snapshot offers
-    resume, to M2-C2, recorded there.
+    background headed tests passed. 7503 ordinary tests passed with the seven
+    known interpreter-bound failures; no event or database format changed, the
+    control matrix is unchanged, and 13 import contracts were kept. Each
+    outcome, each correction round and the whole checkpoint were independently
+    reviewed; dispatcher guards were checked by mutation. No evidence record
+    was promoted.
+  - **Fixed in delivery:** [BUG-0322](BUGS.md#bug-0322) in the row; after the
+    closing reviews [BUG-0323](BUGS.md#bug-0323),
+    [BUG-0324](BUGS.md#bug-0324), [BUG-0326](BUGS.md#bug-0326),
+    [BUG-0327](BUGS.md#bug-0327) (its second fix after a recurrence pause the
+    user adjudicated, 2026-11-28) and [BUG-0328](BUGS.md#bug-0328).
+  - **Moved out:** accepted limits and latent defects now live with their
+    owners: CORE (recording status derived from witnesses alone), WORKFLOWS
+    (a finisher altering the execution set, a Verify-paused run failing before
+    it runs again, unreported exclusions), DISPATCHER (the wedged-audit bound,
+    a pending session starting before Pause all takes its lock, two latent
+    defenses with no trigger) and DESKTOP_UI (Resume offered before an accepted
+    Stop settles, the notice's Paused count, the review pages' "in progress"
+    wording while pending). The stale `control_state` after a Gap and the
+    swallowed start belong to M2-A10; Resume all and `INTERRUPTED` to M2-C2; a
+    refused resume returning to paused is [Unowned](#unowned).
 - **M2-A10 Task lifecycle on the wire** (accepted 2026-11-28, not started;
   depends on A5). The task snapshot carries one account of a session's state.
   Today it keeps two: `lifecycle_state`, which Gap recovery refreshes from the
@@ -334,8 +273,8 @@ Checkpoints:
     tests, then documentation and closeout.
   - **Non-goals:** the "in progress" wording on the review pages, a separate
     rendering omission; the notice counting accepted pause requests as
-    "Paused"; Resume all and `INTERRUPTED` (M2-C2). Both wording residuals
-    stay in the A5 row.
+    "Paused"; Resume all and `INTERRUPTED` (M2-C2). Both wording gaps
+    are recorded in [DESKTOP_UI](DESKTOP_UI.md).
 - **M2-A6 Shared review surface** (proposed). Plan and Inventory render through
   one review component on the windowed table substrate, settling the switcher
   label drift. Includes the parity test against documented allowed differences,
@@ -345,55 +284,41 @@ Checkpoints:
   onto the same component, so one table family remains. Depends on A6. Closes on:
   no native-table family left, with row-action behavior tested once in the component.
 - **M2-A8 Physical-disk scheduling** (complete, closed 2026-11-27;
-  `4e80056d` to `7da7af2e`). Sessions whose roots sit on one spinning disk
-  run one at a time in the process; NVMe and other non-spinning roots are
-  not ordered. Every registration supplies a reader that resolves the
-  checkpoint's roots to physical disks at each start attempt; the keys are
-  opaque, kept apart from custody resources, and never stored. A failed or
-  malformed reading means no keys, never a refusal. The native reads live in
-  core; a disk counts as spinning unless it is a non-USB disk reporting no
-  seek penalty. Behavior and limits are in [CORE](CORE.md),
+  `4e80056d` to `7da7af2e`, review fixes to `35bf01d2`). Sessions whose roots
+  sit on one spinning disk run one at a time in the process; NVMe and other
+  non-spinning roots are not ordered. Every registration supplies a reader that
+  resolves the checkpoint's roots to physical disks at each start attempt, from
+  their paths rather than a volume captured at admission, so a letter change is
+  followed; the keys are opaque, kept apart from custody resources, and never
+  stored. A failed or malformed reading means no keys, never a refusal. Only
+  local volumes are read, so mapped, `subst`, UNC and unassigned roots get no
+  keys without I/O. An inventory or integrity binding is found at its current
+  mount, by its recorded mounts first and then every drive letter. The native
+  reads live in core, which also lists drive letters for inventory's resolver;
+  a disk counts as spinning unless it is a non-USB disk reporting no seek
+  penalty. Behavior and limits are in [CORE](CORE.md),
   [DISPATCHER](DISPATCHER.md) and [WORKFLOWS](WORKFLOWS.md).
-  - **User decisions (2026-11-27):** keys serialize within one process only,
-    and volume custody stays the only cross-process lock; the quiet advisory
-    for an unreadable key moves to the drive-type notices and estimates item, still unordered;
-    the fixture is disk 0, a SATA HDD carrying `J:` and a 4 GB `M:`.
-  - **Design changed in delivery:** roots are resolved from their paths at
-    every read instead of from a volume GUID captured at admission, so no
-    checkpoint field was added and a letter change is followed. Only local
-    volumes are read: `QueryDosDeviceW` must name a `\Device\HarddiskVolume`
-    before any open, so mapped, `subst`, UNC and unassigned roots get no keys
-    without I/O (a mapped letter otherwise blocked the scheduler 41–80 s).
+  - **User decisions (2026-11-27):** keys serialize within one process only
+    (one dispatcher per product process), and volume custody stays the only
+    cross-process lock; the fixture is disk 0, a SATA HDD carrying `J:` and a
+    4 GB `M:`.
   - **Gate:** met. Every injected-reader clause maps to a named test in
     `tests/dispatcher/test_scheduling_keys.py`, nine scheduler mutants were
     killed, and `tests/test_disk_scheduling.py` serializes `J:` and `M:`,
     overlaps two NVMe roots and falls back on an injected unreadable read
     through real topology. [EV-0046](../evidence/EV-0046/README.md) ran the
-    real inventory pair through the service in 3 of 3 runs each way.
-    On the final head 7558 ordinary tests passed with the seven known interpreter-bound failures, and 13 import contracts were kept. Each outcome and the whole
-    checkpoint were independently reviewed.
-  - **Fixed after closing review** (`d7ae58cc`, `4045a949`): inventory and
-    integrity bindings were keyed by their recorded mount, so a remounted
-    disk got no keys; the reader now finds the binding's volume at its
-    current mount, by its recorded mounts first and then every drive letter
-    ([BUG-0325](BUGS.md#bug-0325)). Keys order sessions within one
-    dispatcher; each product process composes one service and so one
-    dispatcher, so the "one process" decision holds for the product, and
-    [DISPATCHER](DISPATCHER.md) now says so.
-  - **Consolidated after second review** (`35bf01d2`, user direction
-    2026-11-28): drive-letter listing moved to core and is shared with
-    inventory's resolver, whose lookup stays separate because it needs every
-    matching mount; the reader lists letters only when the recorded mounts
-    miss and names the matching volume once.
-  - **Accepted residuals:** whether the letter scan for an unmounted
-    binding wakes a spun-down disk is unknown (about 3–4 ms per scheduler
-    pass when every letter is scanned); a spun-down disk was not tested; mapped and
-    `subst` letters were tested through a fake; junction or symlink roots
-    resolve lexically, so a link into a spinning disk gets the link
-    volume's keys (speed only); cancel settlements take no keys (speed
-    only); a reader raising a non-`Exception` stops the scheduler; no test
-    bounds the reader's call count (about K² reads to drain K waiting
-    sessions, each 20–300 µs).
+    real inventory pair through the service in 3 of 3 runs each way. 7558
+    ordinary tests passed with the seven known interpreter-bound failures, and
+    13 import contracts were kept. Each outcome and the whole checkpoint were
+    independently reviewed.
+  - **Fixed in delivery:** [BUG-0325](BUGS.md#bug-0325), a remounted binding
+    getting no keys; the drive-letter consolidation (`35bf01d2`, user
+    direction 2026-11-28).
+  - **Moved out:** limits now live in WORKFLOWS (link roots, the letter scan
+    and a spun-down disk, mapped and `subst` tested by fake) and DISPATCHER
+    (cancel settlements take no keys, a non-`Exception` reader stops the
+    scheduler, about K² reads with no bound tested). The quiet advisory for an
+    unreadable key rides with the drive-type notices and estimates item.
 - **M2-A9 Capacity decision** (proposed; rides along except where durable work
   forces it). Profile large tasks, then choose the task and start-response
   bounds (at most 256) and add the README and in-app notices. The profile

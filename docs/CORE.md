@@ -860,7 +860,12 @@ history persistence are independent `recording` and `audit`
 `RecordingStatus.OK|DEGRADED` axes; no axis rewrites another. Typed
 `Disposition.RAN|UNRUN` distinguishes a canceled discarded queue entry and a
 refusal from sessions that actually began domain work without parsing strings
-or inferring from an empty result-item list. `OperationResult.bytes_done` is
+or inferring from an empty result-item list. The session runner derives the
+terminal `recording` axis from the result's witnesses alone (its recording
+issues and degraded items), so a result that claims `DEGRADED` with no witness
+settles as `OK`. No current path produces one; closing this in core is a
+separate scope decision (user decision, 2026-11-28;
+[BUG-0327](BUGS.md#bug-0327)). `OperationResult.bytes_done` is
 the terminal attempted-work high-water for the workflow's primary byte domain,
 not a durable-content counter; its matching total is that domain's final work
 budget. `PhaseResult` applies the same meaning within one entered phase. A

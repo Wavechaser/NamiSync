@@ -133,6 +133,11 @@ Pause all leaves a settling session alone, so its settlement never lands on a
 session that stays held. A resume refused inside the workflow's own preflight
 is settled by the workflow and does not use it.
 
+Two latent defenses have no product trigger: an `open` raising `Canceled` while
+pending without a cancel request, and a `settle_canceled` raising
+`PauseRequested`, would each escape as an illegal transition. No registered
+`open` or settlement raises them.
+
 One optional registration reader,
 `read_scheduling_keys(checkpoint) -> frozenset`, returns opaque hashable
 scheduling keys for the session's next start, such as the physical disks its
@@ -142,7 +147,9 @@ desktop host, or one CLI command) composes a single service and so a single
 dispatcher. Keys are not custody,
 lock nothing, and never enter records, the store, events or audit. A reader
 that raises an `Exception` or answers with anything but a `frozenset` means no
-keys for that pass; it never refuses or fails the session. A registration without a reader is
+keys for that pass; it never refuses or fails the session. A reader raising a
+`BaseException` that is not an `Exception` propagates and stops the scheduler.
+A registration without a reader is
 scheduled exactly as before. Scheduling below describes when the reader runs.
 Every production registration supplies the workflow-owned physical-disk reader
 ([WORKFLOWS](WORKFLOWS.md#physical-disk-scheduling-keys)); dispatcher never
