@@ -169,8 +169,8 @@ that support target. Python 3.13 or later is required. The package declares
 no Python upper bound; exact runtime profiles in project evidence identify
 measured configurations rather than launch admission. Runtime dependencies are
 `xxhash` 4.1 or later within 4.x and the `pywebview` 6.2.1 host stack.
-Development dependencies are `pytest` and `import-linter`. The ordinary test
-suite also requires a Node.js executable for its unmarked packaged live-event,
+Development dependencies are `pytest`, `pytest-xdist` and `import-linter`.
+The ordinary test suite also requires a Node.js executable for its unmarked packaged live-event,
 bridge deadline/interactive, and drain probes; probes marked `supplemental_node`
 may skip. Provide
 Node through `NAMISYNC_TEST_NODE` or `PATH` as described in

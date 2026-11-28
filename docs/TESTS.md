@@ -82,6 +82,31 @@ Run it for phase integration, global fixtures or pytest configuration, the
 department manifest, broad shared contracts, uncertain blast radius, and before
 considering a non-headed phase complete.
 
+The suite is serial by default, and a serial run remains the acceptance
+evidence, as in CI. For local iteration, `pytest-xdist` from the `dev` extra
+runs the same items in parallel, in about a fifth of the serial time on a
+16-core machine. Per-worker startup limits the gain beyond about 16 workers.
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest -q -n auto --dist worksteal
+```
+
+The collision review behind this opt-in found these shared resources:
+
+- Runtime custody takes a machine-wide `Global\NamiSync.Resource.*` mutex per
+  volume. Real syncs in different workers on one temporary volume therefore
+  queue behind each other.
+- `tests/dispatcher/test_custody.py` uses fixed mutex names. They can collide
+  only between two suite runs at the same time, never within one run.
+- The drain deadline cases are load-sensitive.
+- Workers send reports as strict UTF-8. `tests/conftest.py` therefore escapes
+  lone surrogates in captured output on workers, but a failure message that
+  contains one can still end a worker.
+
+A failure that appears only in parallel is a test-isolation defect, fixed in
+the test. The serial run decides the product's behavior. Making parallel runs
+the default needs a new benchmark and collision review.
+
 The session-scoped wheel fixture enumerates Git tracked and nonignored `namisync`
 paths plus `pyproject.toml`, `README.md`, and `LICENSE`, copies their physical
 bytes into a clean staging tree, and builds from that tree. It rejects source
@@ -585,6 +610,3 @@ Show skip reasons for a selected run:
 ```powershell
 .\.venv\Scripts\python.exe -m pytest -q -rs --dept tools
 ```
-
-The suite remains serial by default. Do not introduce a default xdist worker
-count without a separate benchmark and native-resource collision review.

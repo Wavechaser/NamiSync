@@ -492,6 +492,15 @@ behavioral evidence.
   projection 10 times. The module drops from 57 s to 23 s.
   `make_plan_review_state` accepts an already-built projection. The
   `build_fixture_manifest` helper, which only these tests used, is removed.
+- Parallel runs are now an opt-in for local iteration:
+  `pytest -n auto --dist worksteal`, with `pytest-xdist` in the `dev` extra.
+  Serial runs stay the default and the acceptance evidence. On a 16-core
+  machine with a warm bytecode cache, the ordinary suite took 400 s serially
+  and 79 s at 16 or 24 workers; about 23 s of that is worker startup.
+- No collision appeared in eleven full parallel runs. TESTS records the
+  shared resources that remain. A test that logs a lone surrogate used to end
+  its worker, because xdist sends reports as strict UTF-8; workers now escape
+  such characters in captured output.
 
 #### Split agent procedures and reorganize development tools (2026-11-23 – 2026-11-28)
 

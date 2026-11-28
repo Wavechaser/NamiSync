@@ -66,6 +66,23 @@ def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
             session.exitstatus = pytest.ExitCode.TESTS_FAILED
 
 
+@pytest.hookimpl(wrapper=True)
+def pytest_runtest_makereport(item: pytest.Item, call: pytest.CallInfo[None]):
+    """Escape lone surrogates in captured output before an xdist worker sends it.
+
+    Tests deliberately log unrepresentable text; execnet encodes reports as
+    strict UTF-8 and would otherwise kill the worker. Serial runs are untouched.
+    """
+
+    report = yield
+    if hasattr(item.config, "workerinput"):
+        report.sections = [
+            (title, text.encode("utf-8", "backslashreplace").decode("utf-8"))
+            for title, text in report.sections
+        ]
+    return report
+
+
 def pytest_collection_modifyitems(
     config: pytest.Config,
     items: list[pytest.Item],

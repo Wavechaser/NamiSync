@@ -27,6 +27,7 @@ namisync-gui = "namisync.interfaces.launcher:gui_main"
 dev = [
     "import-linter>=2.0",
     "pytest>=8.0",
+    "pytest-xdist>=3.8",
 ]
 
 [tool.setuptools.packages.find]
