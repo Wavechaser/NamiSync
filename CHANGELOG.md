@@ -501,6 +501,9 @@ behavioral evidence.
   shared resources that remain. A test that logs a lone surrogate used to end
   its worker, because xdist sends reports as strict UTF-8; workers now escape
   such characters in captured output.
+- The README setup installs the locked pip and setuptools first, as CI does.
+  The wheel tests build without isolation, so a fresh venv without setuptools
+  failed 24 of them.
 
 #### Split agent procedures and reorganize development tools (2026-11-23 – 2026-11-28)
 

@@ -176,9 +176,12 @@ may skip. Provide
 Node through `NAMISYNC_TEST_NODE` or `PATH` as described in
 [Tests](docs/TESTS.md).
 
-Create a virtual environment, then install the editable development package:
+Create a virtual environment, then install the locked pip and setuptools
+(the wheel tests build without isolation) and the editable development
+package:
 
 ```powershell
+.\.venv\Scripts\python.exe -m pip install --require-hashes -r tools/packaging/bootstrap.txt
 .\.venv\Scripts\python.exe -m pip install -e ".[dev]"
 ```
 
