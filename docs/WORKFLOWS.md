@@ -151,13 +151,18 @@ From the current checkpoint it takes the roots the next start touches: a plan's
 source and target paths, an execution's reviewed plan roots (read without
 materializing the continuation), and an inventory or integrity binding's
 current mount. A binding's volume may have moved since review, so the reader
-finds it by the binding's `VolumeId`: it tries the selected mount, then the
-other recorded mounts and the current drive letters, and observes only those
-core reads as local volumes; a volume mounted nowhere adds no keys. When the
-recorded mount still matches, the search costs one volume observation; when it
-does not, it observes every local letter, a few milliseconds on each scheduler
-pass while the session waits. Two volumes sharing one identity resolve to the
-first match, which costs only speed.
+finds it by the binding's `VolumeId`: it tries the selected mount and the
+other recorded mounts, lists the current drive letters only when none of them
+holds the volume, and observes only candidates core names as local volumes; a
+volume mounted nowhere adds no keys. When the recorded mount still matches,
+the search costs one volume observation and no letter listing; when it does
+not, it observes every local letter, a few milliseconds on each scheduler pass
+while the session waits. The matching candidate's volume name is the one its
+disks are read from. Two volumes sharing one identity resolve to the first
+match, which costs only speed. The letter listing comes from core disk
+topology, which inventory's resolver shares; inventory keeps its own lookup
+because it needs every matching mount, to find duplicate identities and
+revalidate an explicit choice.
 For each root it reads the volume's disks afresh through
 [core disk topology](CORE.md) and answers one plain `("disk", number)` key per
 disk that counts as spinning; non-spinning disks add nothing.

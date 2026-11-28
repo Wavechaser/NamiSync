@@ -77,6 +77,7 @@ class FakeTopology:
         self.volume_calls: list[str] = []
         self.fact_calls: list[str] = []
         self.observe_calls: list[str] = []
+        self.enumerations = 0
 
     def install(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(disk_scheduling, "volume_name", self.volume_name)
@@ -85,8 +86,12 @@ class FakeTopology:
             disk_scheduling, "observe_native_volume", self.observe_native_volume
         )
         monkeypatch.setattr(
-            disk_scheduling, "_logical_drive_roots", lambda: self.drives
+            disk_scheduling, "logical_drive_roots", self.logical_drive_roots
         )
+
+    def logical_drive_roots(self) -> tuple[str, ...]:
+        self.enumerations += 1
+        return self.drives
 
     def observe_native_volume(self, root: str) -> SimpleNamespace:
         self.observe_calls.append(root)
@@ -196,7 +201,27 @@ def test_a_binding_whose_volume_moved_is_keyed_at_its_current_mount(
     assert keys == frozenset({("disk", 0)})
     # The recorded mount is tried first and the network letter never observed.
     assert [root.upper() for root in topology.observe_calls] == ["F:\\", "C:\\", "M:\\"]
+    # Each letter is named once, the match included.
+    assert [root.upper() for root in topology.volume_calls] == [
+        "F:\\", "C:\\", "X:\\", "M:\\"
+    ]
+    assert topology.enumerations == 1
     assert topology.fact_calls == [_volume("m")]
+
+
+@pytest.mark.parametrize("kind", ["inventory", "verify", "paused rebaseline"])
+def test_a_binding_at_its_recorded_mount_lists_no_drive_letters(
+    monkeypatch: pytest.MonkeyPatch, kind: str
+) -> None:
+    topology = FakeTopology({"J": (HDD,)}, drives=("C:\\", "J:\\"))
+    topology.install(monkeypatch)
+
+    keys = read_disk_scheduling_keys(_checkpoints("J:\\", "C:\\")[kind])
+
+    assert keys == frozenset({("disk", 0)})
+    assert topology.enumerations == 0
+    assert topology.volume_calls == ["J:\\"]
+    assert topology.fact_calls == [_volume("j")]
 
 
 @pytest.mark.parametrize("kind", ["inventory", "verify"])

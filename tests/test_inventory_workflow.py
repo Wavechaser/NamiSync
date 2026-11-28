@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import ctypes
 import gc
 import os
 import stat as stat_module
@@ -1182,7 +1181,7 @@ def test_native_resolver_rejects_excess_hints_before_drive_enumeration(
 
     monkeypatch.setattr(
         inventory_workflow,
-        "_logical_drive_roots",
+        "logical_drive_roots",
         forbidden_drives,
     )
     resolver = NativeMountedVolumeResolver(SimpleNamespace())
@@ -1195,38 +1194,6 @@ def test_native_resolver_rejects_excess_hints_before_drive_enumeration(
                 for index in range(MAX_MOUNT_CANDIDATES + 1)
             ),
         )
-
-
-def test_logical_drive_source_buffer_accepts_exact_maximum_and_rejects_next(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    roots = tuple(f"{chr(ord('A') + index)}:\\" for index in range(26))
-    multistring = "\x00".join(roots) + "\x00\x00"
-    assert len(multistring) == 105
-
-    class Kernel32:
-        result = 104
-        calls = 0
-
-        def GetLogicalDriveStringsW(self, size, buffer):
-            self.calls += 1
-            assert size == len(multistring)
-            if self.result >= size:
-                return self.result
-            for index, character in enumerate(multistring):
-                buffer[index] = character
-            return self.result
-
-    kernel32 = Kernel32()
-    monkeypatch.setattr(ctypes, "WinDLL", lambda *_args, **_kwargs: kernel32)
-
-    assert inventory_workflow._logical_drive_roots() == roots
-    assert kernel32.calls == 1
-
-    kernel32.result = 105
-    with pytest.raises(OSError, match="fixed source bound"):
-        inventory_workflow._logical_drive_roots()
-    assert kernel32.calls == 2
 
 
 def test_native_resolver_revalidates_forged_snapshot_before_mount_projection() -> None:

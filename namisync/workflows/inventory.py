@@ -13,6 +13,7 @@ from typing import Callable, Iterator, Mapping, Protocol
 from namisync.workflows.recall import RecallSummary, scan_recall_summary
 
 from namisync.core.clock import Clock
+from namisync.core.disk_topology import MAX_LOGICAL_DRIVE_ROOTS, logical_drive_roots
 from namisync.core.exception_graph import (
     retire_exception_graph,
     retired_failure_detail,
@@ -128,21 +129,17 @@ from namisync.modules.scanner import (
     validate_volume_snapshot,
 )
 
-_MAX_LOGICAL_DRIVE_ROOTS = 26
 _MAX_PERSISTED_MOUNT_HINTS = 1
 # A production binding is formed from the logical-drive enumeration plus at
 # most one persisted folder-mounted-volume hint. A later resolution may replay
 # every admitted binding candidate as a hint and enumerate the drives again.
 # These limits describe this resolver's source graph, not all Windows mounts.
 MAX_MOUNT_CANDIDATES = (
-    _MAX_LOGICAL_DRIVE_ROOTS + _MAX_PERSISTED_MOUNT_HINTS
+    MAX_LOGICAL_DRIVE_ROOTS + _MAX_PERSISTED_MOUNT_HINTS
 )
 MAX_VOLUME_RESOLUTION_CANDIDATES = (
-    MAX_MOUNT_CANDIDATES + _MAX_LOGICAL_DRIVE_ROOTS
+    MAX_MOUNT_CANDIDATES + MAX_LOGICAL_DRIVE_ROOTS
 )
-# The zero-buffer GetLogicalDriveStringsW result includes the final MULTI_SZ
-# terminator: 26 drive roots at four characters each, plus one trailing NUL.
-_MAX_LOGICAL_DRIVE_STRING_CHARS = _MAX_LOGICAL_DRIVE_ROOTS * 4 + 1
 
 _INTEGRITY_ITEM_ID_UTF8_LIMIT = 2 * len(str(MAX_SIGNED_64)) + 1
 
@@ -1019,7 +1016,7 @@ class NativeMountedVolumeResolver:
             raise ValueError("mounted-volume hints exceed the candidate limit")
         for hint in hints:
             require_utf16_path(hint, "mounted-volume hint")
-        candidates = {*hints, *_logical_drive_roots()}
+        candidates = {*hints, *logical_drive_roots()}
         mounted: dict[str, MountedVolume] = {}
         for path in candidates:
             if not path:
@@ -3069,26 +3066,6 @@ def _join_volume_root(mount: str, relative: str) -> str:
 
 def _path_key(path: str) -> str:
     return os.path.normcase(os.path.abspath(path)).rstrip("\\/")
-
-
-def _logical_drive_roots() -> tuple[str, ...]:
-    if os.name != "nt":
-        return ()
-    import ctypes
-
-    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
-    buffer = ctypes.create_unicode_buffer(_MAX_LOGICAL_DRIVE_STRING_CHARS)
-    length = kernel32.GetLogicalDriveStringsW(len(buffer), buffer)
-    if length <= 0:
-        raise OSError(ctypes.get_last_error(), "GetLogicalDriveStringsW failed")
-    if length >= len(buffer):
-        raise OSError("logical-drive enumeration exceeded its fixed source bound")
-    roots = tuple(value for value in buffer[:length].split("\x00") if value)
-    if len(roots) > _MAX_LOGICAL_DRIVE_ROOTS:
-        raise OSError("logical-drive enumeration exceeded its fixed source bound")
-    for root in roots:
-        require_utf16_path(root, "logical drive root")
-    return roots
 
 
 def _require_utc(value: datetime, field_name: str) -> None:

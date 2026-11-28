@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ctypes
 import os
 import struct
 
@@ -11,6 +12,7 @@ from namisync.core.disk_topology import (
     DiskFact,
     counts_as_spinning,
     disk_facts,
+    logical_drive_roots,
     volume_name,
 )
 
@@ -454,3 +456,36 @@ def test_the_system_volume_reports_at_least_one_disk() -> None:
     facts = disk_facts(name)
     assert len(facts) >= 1
     assert all(type(fact.disk_number) is int for fact in facts)
+
+
+def test_logical_drive_source_buffer_accepts_exact_maximum_and_rejects_next(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    roots = tuple(f"{chr(ord('A') + index)}:\\" for index in range(26))
+    multistring = "\x00".join(roots) + "\x00\x00"
+    assert len(multistring) == 105
+
+    class Kernel32:
+        result = 104
+        calls = 0
+
+        def GetLogicalDriveStringsW(self, size, buffer):
+            self.calls += 1
+            assert size == len(multistring)
+            if self.result >= size:
+                return self.result
+            for index, character in enumerate(multistring):
+                buffer[index] = character
+            return self.result
+
+    kernel32 = Kernel32()
+    monkeypatch.setattr(disk_topology, "_IS_WINDOWS", True)
+    monkeypatch.setattr(ctypes, "WinDLL", lambda *_args, **_kwargs: kernel32)
+
+    assert logical_drive_roots() == roots
+    assert kernel32.calls == 1
+
+    kernel32.result = 105
+    with pytest.raises(OSError, match="fixed source bound"):
+        logical_drive_roots()
+    assert kernel32.calls == 2

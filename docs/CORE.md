@@ -86,9 +86,11 @@ only. `core/pathing.py` stays purely lexical and does not re-export native ancho
 or volume probes from `core/root_authority.py`; the architecture locator owns
 the remaining file/symbol inventory.
 
-`core/disk_topology.py` is the stateless read of which physical disks back one
-local volume: the volume's GUID name, its disk extents, and each disk's bus type
-and seek-penalty property. It opens only zero-access handles with
+`core/disk_topology.py` is the stateless read of the current drive letters and
+of which physical disks back one local volume: the volume's GUID name, its disk
+extents, and each disk's bus type and seek-penalty property.
+`logical_drive_roots` only lists the letters, bounded at 26, and resolves none
+of them; inventory's volume resolver and the scheduling reader share it. It opens only zero-access handles with
 `FILE_ANY_ACCESS` queries, so no volume data is read or written. Before any
 call that can perform I/O, `volume_name` reads the root's own drive letter
 lexically and resolves it with `QueryDosDeviceW`, an object-namespace lookup

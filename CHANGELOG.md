@@ -40,6 +40,9 @@ first schema change. M2_PLAN owns checkpoint scope and gates.
 - Fixed BUG-0325: an inventory or integrity task whose drive had moved to a
   new letter ran unordered; it is now ordered by the disk at its current
   letter.
+- The drive-letter list now comes from core and is shared with inventory's
+  volume resolver. A task still at its recorded letter no longer lists every
+  drive letter on each scheduler pass, and its volume is looked up once.
 
 #### Pause all and Resume all (2026-11-27)
 

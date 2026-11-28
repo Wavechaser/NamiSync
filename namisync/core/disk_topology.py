@@ -1,13 +1,14 @@
-"""Stateless native reads of which physical disks back one local volume.
+"""Stateless native reads of drive letters and the physical disks behind them.
 
-Every call observes Windows afresh and keeps nothing: disk numbers and volume
-names are scheduling evidence for the current attempt, never persisted. All
-handles are opened with zero access (no data can be read or written) and only
-``FILE_ANY_ACCESS`` control codes are issued.
+Every call observes Windows afresh and keeps nothing: drive letters, disk
+numbers and volume names are evidence for the current caller, never persisted.
+All handles are opened with zero access (no data can be read or written) and
+only ``FILE_ANY_ACCESS`` control codes are issued.
 
 Platform convention: the non-Windows fallback exists only to keep portable
-development and tests usable. ``disk_facts`` returns no facts there, and
-``volume_name`` raises ``OSError`` because no volume GUID name exists.
+development and tests usable. ``logical_drive_roots`` and ``disk_facts``
+return nothing there, and ``volume_name`` raises ``OSError`` because no volume
+GUID name exists.
 """
 
 from __future__ import annotations
@@ -20,8 +21,10 @@ from ctypes import wintypes
 from dataclasses import dataclass
 
 from .root_authority import current_volume_anchor
+from .scalars import require_utf16_path
 
 
+MAX_LOGICAL_DRIVE_ROOTS = 26
 BUS_TYPE_UNKNOWN = 0
 BUS_TYPE_USB = 7
 
@@ -54,6 +57,9 @@ _BUS_TYPE_OFFSET = 28
 _SEEK_PENALTY_OFFSET = 8
 
 _DOS_DEVICE_BUFFER_CHARS = 1024
+# The zero-buffer GetLogicalDriveStringsW result includes the final MULTI_SZ
+# terminator: 26 drive roots at four characters each, plus one trailing NUL.
+_LOGICAL_DRIVE_STRING_CHARS = MAX_LOGICAL_DRIVE_ROOTS * 4 + 1
 # The object-namespace target of every local volume's drive letter;
 # redirector, Mup and subst (``\??\``) targets differ.
 _LOCAL_VOLUME_DEVICE = "\\Device\\HarddiskVolume"
@@ -86,6 +92,31 @@ def counts_as_spinning(fact: DiskFact) -> bool:
         fact.bus_type not in (None, BUS_TYPE_UNKNOWN, BUS_TYPE_USB)
         and fact.incurs_seek_penalty is False
     )
+
+
+def logical_drive_roots() -> tuple[str, ...]:
+    """Return the drive-letter roots Windows lists now, such as ``C:\\``.
+
+    Only the letter list is read; no letter is resolved, opened or probed, so
+    a mapped network letter costs nothing here. Raises ``OSError`` when the
+    list cannot be read or exceeds its fixed bound. Returns none off Windows.
+    """
+
+    if not _IS_WINDOWS:
+        return ()
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    buffer = ctypes.create_unicode_buffer(_LOGICAL_DRIVE_STRING_CHARS)
+    length = kernel32.GetLogicalDriveStringsW(len(buffer), buffer)
+    if length <= 0:
+        raise OSError(ctypes.get_last_error(), "GetLogicalDriveStringsW failed")
+    if length >= len(buffer):
+        raise OSError("logical-drive enumeration exceeded its fixed source bound")
+    roots = tuple(value for value in buffer[:length].split("\x00") if value)
+    if len(roots) > MAX_LOGICAL_DRIVE_ROOTS:
+        raise OSError("logical-drive enumeration exceeded its fixed source bound")
+    for root in roots:
+        require_utf16_path(root, "logical drive root")
+    return roots
 
 
 def volume_name(anchor: str) -> str:
