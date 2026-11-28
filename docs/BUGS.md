@@ -4,9 +4,11 @@ Substantive defects with real behavioral consequences. Cosmetic and style-only
 issues are excluded.
 
 Each entry records `SEVERITY - STATUS (YYYY-MM-DD)`, a reusable causal failure
-class, the observed behavior and consequence, `Cause: why`, and, when fixed,
-the corrective change. Write it as one compact paragraph rather than labels for
-symptom, cause, and fix.
+class, the observed behavior and consequence, `Cause: why` naming the broken
+invariant and its owner, and, when fixed, the corrective change with its level
+and the siblings checked ([DEFENSE §2.6](DEFENSE.md#26-fix-placement)).
+Write it as one compact paragraph rather than labels for symptom, cause, and
+fix.
 
 - **Severity:** SEVERE (plausible data loss/corruption, a security-boundary
   escape, an indefinite hang or crash, a core workflow unusable, or materially

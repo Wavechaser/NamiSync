@@ -483,7 +483,7 @@ Product, test and documentation reductions removed repeated machinery while
 preserving operational safety, externally visible contracts and independent
 behavioral evidence.
 
-#### Split agent procedures and reorganize development tools (2026-11-23 – 2026-11-27)
+#### Split agent procedures and reorganize development tools (2026-11-23 – 2026-11-28)
 
 - Condense AGENTS to always-on rules (269 to 137 lines) with a trigger table
   for new `docs/procedures/` SCOPE, CLOSEOUT and DOCUMENTS. Move evidence
@@ -513,6 +513,11 @@ behavioral evidence.
   as unknown or not run. SCOPE now owns deferred work: the row that will do it
   holds the record, CLOSEOUT moves each session's deferrals there, and the
   row's expansion rechecks, consolidates or returns them to the user.
+- Adopted DEFENSE §2.6, fix placement: a warranted fix goes to the owner of the
+  invariant the defect broke, counting sibling paths and facets, and takes the
+  owner fix when it costs about the same or less over the defect's life.
+  BUGS entries name the invariant, owner and level. Reopen triggers are now
+  §2.7.
 
 #### Survey and clear post-M1 cleanup candidates (2026-11-11 – 2026-11-17)
 

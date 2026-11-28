@@ -73,7 +73,8 @@ Use the relevant route, not a mandatory full-document reading sequence:
   import law and contract-to-source locator. Exact shared shapes are source-owned
   under core; prefer explicit dataclasses and typed functions.
 - Safety, bugfix boundaries or quantitative claims: [DEFENSE.md](docs/DEFENSE.md).
-  Under §2.5 a new defense needs a demonstrably plausible trigger. Under §7,
+  Under §2.5 a new defense needs a demonstrably plausible trigger; under §2.6 a
+  fix goes to the broken invariant's owner. Under §7,
   classify consequence and enforceability before choosing the lowest sufficient
   evidence tier; a measured diagnostic, target or drift guard is not acceptance,
   and observations stay separate from contracts/validators.

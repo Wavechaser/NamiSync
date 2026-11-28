@@ -441,7 +441,8 @@ layers as disclosure, not to backend refusal.
 This principle decides the supported baseline and the mechanism, never whether
 a supported-use hard-wall crossing needs a fix (§2.4). Existing defenses are
 not grandfathered: one that fails this test is retired or frozen by recording
-that decision here, which is a scope decision for the user.
+that decision here, which is a scope decision for the user. Where a warranted
+fix goes is §2.6.
 
 #### 2.5.1 Plan fidelity bound
 
@@ -595,7 +596,47 @@ below that it answers yes:
 3 and 4; that list is their disposition. Work deferred to a later checkpoint
 is not such a limit and stays with [M2_PLAN](M2_PLAN.md).
 
-### 2.6 Reopen triggers
+### 2.6 Fix placement
+
+§2.5 decides whether a fix is warranted and how heavy it may be; this section
+decides where a warranted fix goes. A fix below the broken invariant's owner
+patches the reported path and leaves the cause to return by another. A fix past
+the owner reaches into a layer that lacks the facts. The first defers its cost
+to the next review; the second overbuilds.
+
+1. **Name the invariant.** State in one sentence, in product terms, what the
+   defect broke, such as "a started session's terminal result accounts for the
+   work its continuation holds". A sentence that only restates the symptom
+   means the cause is not found yet.
+2. **Find its owner:** the code that holds the facts needed to keep the
+   invariant. When those facts are split across layers, the owner is the
+   contract between them, placed by the import law in
+   [ARCHITECTURE](ARCHITECTURE.md).
+3. **Count siblings on two axes:** other paths that produce the wrong value,
+   and other facets of the same value, such as status, counts, recording,
+   durable rows and released resources. A reachable sibling is in scope; an
+   unreachable one is recorded under §2.5, not defended.
+4. **Close it at the owner.** If the owner can still produce or represent the
+   wrong state, close that there. A consumer that compensates by re-deriving,
+   filtering or relabeling the owner's output shows the fix sits too low;
+   remove the compensation when the owner fix lands.
+5. **Go to the owner, never past it.** Higher is not the aim: the owner may be a
+   core contract, a seam or a lower module.
+6. **Weigh cost over the defect's life.** Take the owner fix when it costs about
+   the same as the local one, or more now but less over time: fewer sibling
+   fixes, deleted workarounds, one place to review. When it is considerably
+   larger, or changes a public contract or architectural ownership, it is a
+   scope decision for the user ([SCOPE](procedures/SCOPE.md)). A local fix
+   shipped meanwhile must be one the owner fix can delete, and its record
+   names the owner cause as open.
+7. **Record the placement.** The BUGS entry's cause names the invariant and its
+   owner; its fix names the level chosen and the siblings checked or excluded.
+
+A review that finds the same invariant broken by another path or facet shows
+the earlier fix sat too low. That is a second instance of one causal mechanism
+under the [recurrence pause](procedures/SCOPE.md#recurrence-pause).
+
+### 2.7 Reopen triggers
 
 This model must be reviewed before introducing:
 
