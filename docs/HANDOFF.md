@@ -1,6 +1,18 @@
-# Latest session — fix placement, BUG-0327 residuals, A8 consolidation, 2026-11-28
+# Latest session — fix placement, BUG-0327 residuals, A8 consolidation, suite servicing, 2026-11-28
 
 ## Changes
+
+- **Venv rebuilt on the release interpreter.** CPython 3.15.2 was installed
+  with `pymanager`, which also made it the default `python3` alias. `.venv`
+  now has pythonnet 3.2.1, xxhash 4.1.0 and the locked setuptools 84.1.0. The
+  seven interpreter-bound failures pass. The old 3.13 venv is kept at
+  `build\venv-cp313-old` until the user clears it.
+- **Shorter suite** — `e22263f9`, `b78ca28f`, `db945852`. The Plan review scale
+  tests share each fixture variant and its projection per module, 57 s to
+  23 s. Parallel runs are an opt-in ([TESTS](TESTS.md#4-ordinary-repository)):
+  `pytest -n auto --dist worksteal`, 79 s against 400 s serially, with a
+  worker-only escape for lone surrogates in reports. The README setup now
+  installs the locked bootstrap, as CI does.
 
 - **Fix placement policy** — `9a6e0c9d`. [DEFENSE §2.6](DEFENSE.md#26-fix-placement)
   says where a warranted fix goes: name the broken invariant, fix it at its
@@ -40,9 +52,17 @@
 - A8: disk topology, scheduling (including the real `J:`/`M:` reference
   test) and inventory workflow tests passed, 235 in all; 13 import contracts
   kept.
-- Full ordinary suite at `222b89b7`: 7606 passed, 4 skipped, 7 failed. The
-  failures are the known interpreter-bound ones: six transport-custody tests
-  and the native-gate test.
+- Full ordinary suite at `222b89b7` on the old venv: 7606 passed, 4 skipped,
+  7 failed, all interpreter-bound. On the rebuilt venv, the suite passed
+  serially: 7613 passed, 4 skipped. The final serial run, after the opt-in,
+  had one failure in `test_copied_dispatcher_partial_pause_and_terminal_reconciliation[1-resume]`:
+  the terminal record wasn't drained within 8 × 0.1 s. It then passed 20 out
+  of 20 isolated runs. This is a pre-existing timing flake, recorded and not
+  fixed.
+- Parallel: eleven full runs at 8 to 24 workers, under both load and
+  worksteal, were green once the surrogate escape was in place. Timings come
+  from runs with the bytecode cache warm. The agent shell sets
+  `PYTHONDONTWRITEBYTECODE=1`, which makes collection about 3× slower.
 - The user re-checked both A5 and A8 and accepted them. The user's probe then
   found a latent overwrite after a guard-refused finish. It is traced and
   recorded as an A5 residual, not fixed. By inspection it is unreachable in
@@ -63,13 +83,9 @@
   custom database paths).
 - Fixtures kept: `J:\NamiSyncSpike\stop-latency` (read only) and
   `M:\NamiSyncA8` (384 files, 52 MB, seed 20261127), until the user decides.
-- The local `.venv` is CPython 3.13.17, not the release interpreter 3.15.2,
-  and has `xxhash` 3.8.1 where 4.1.0 or newer is required. Six custody tests
-  and one native-gate test (pythonnet 3.1.0 vs 3.2.1) fail locally because of
-  it; rebuild the venv per TOOLS before relying on them.
 - The copied-dispatcher pause, resume and cancel cases in
-  `tests/interfaces/web/test_drain.py` miss their deadlines under heavy
-  parallel load (from A3).
+  `tests/interfaces/web/test_drain.py` missed their deadlines under heavy
+  load in A3. They passed in all eleven xdist runs.
 - `evidence/EV-0045` scripts import `migrate_database_pair`, which no longer
   exists; they run only at their recorded revision.
 - For M2-R1's release notes: a v0.1.0 binary pointed at a migrated database
@@ -83,5 +99,5 @@
   - Frozen `sh_g_8_*` artifacts must not move.
   - Keep `F:\NamiSyncExecutorBenchSource`, `H:\test_dir`, `dist/v0.1.0/` and
     `build/inventory-cold/`.
-- This session wrote nothing to `build/`. Nothing was pushed; `milestone2`
-  carries the commits above.
+- This session's only `build/` output is `build\venv-cp313-old`. Nothing was
+  pushed; `milestone2` carries the commits above.
