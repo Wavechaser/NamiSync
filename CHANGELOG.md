@@ -485,6 +485,14 @@ Product, test and documentation reductions removed repeated machinery while
 preserving operational safety, externally visible contracts and independent
 behavioral evidence.
 
+#### Shorten the ordinary suite (2026-11-28)
+
+- The Plan review scale tests now build each 120k/240k fixture and its
+  projection once per module. Before, they built the fixture 11 times and the
+  projection 10 times. The module drops from 57 s to 23 s.
+  `make_plan_review_state` accepts an already-built projection. The
+  `build_fixture_manifest` helper, which only these tests used, is removed.
+
 #### Split agent procedures and reorganize development tools (2026-11-23 – 2026-11-28)
 
 - Condense AGENTS to always-on rules (269 to 137 lines) with a trigger table

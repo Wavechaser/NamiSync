@@ -206,14 +206,6 @@ def build_diagnostic_plan_fixture() -> PlanArtifact:
     return PlanArtifact(request, source_scan, target_scan, plan, Verdict(True, (), observed))
 
 
-def build_fixture_manifest(*, information_heavy: bool) -> dict[str, object]:
-    """Derive a compact manifest from the realized artifact and projection."""
-
-    artifact = build_plan_fixture(information_heavy=information_heavy)
-    projection = build_plan_projection(artifact.request.request_id, artifact)
-    return fixture_manifest(artifact, projection)
-
-
 def fixture_manifest(
     artifact: PlanArtifact,
     projection: PlanProjection,
@@ -268,10 +260,18 @@ def fixture_manifest(
     }
 
 
-def make_plan_review_state(artifact: PlanArtifact) -> PlanReviewState:
-    """Construct the actual server-side view from one already-built artifact."""
+def make_plan_review_state(
+    artifact: PlanArtifact,
+    *,
+    projection: PlanProjection | None = None,
+) -> PlanReviewState:
+    """Construct the actual server-side view from one already-built artifact.
 
-    projection = build_plan_projection(artifact.request.request_id, artifact)
+    ``projection`` reuses that artifact's immutable projection when given.
+    """
+
+    if projection is None:
+        projection = build_plan_projection(artifact.request.request_id, artifact)
     selection = derive_execution_selection(artifact.plan)
     return PlanReviewState(
         task_id="task-" + "1" * 32,

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from copy import deepcopy
 from dataclasses import asdict
 from datetime import datetime, timezone
@@ -26,10 +27,12 @@ from namisync.interfaces.web.drain import TaskDrainView
 from namisync.interfaces.web.task_snapshot import TaskPresentationState
 from namisync.workflows.views import session_event_view
 from tools.performance import plan as benchmark
-from tools.performance.plan import build_fixture_manifest, build_plan_fixture
+from tools.performance.plan import build_plan_fixture
 from namisync.interfaces.web import drain as drain_module
+from namisync.workflows.models import PlanArtifact
 from namisync.workflows.plan_projection import (
-    PlanSortColumn, SortDirection, build_plan_projection, sort_plan_projection,
+    PlanProjection, PlanSortColumn, SortDirection, build_plan_projection,
+    sort_plan_projection,
 )
 from namisync.workflows.selection import apply_selection_mutation, derive_execution_selection
 
@@ -37,9 +40,33 @@ CONTRACT_PATH = Path(__file__).parents[3] / "tools" / "performance" / "plan_cont
 FIXTURE_MANIFESTS_PATH = Path(__file__).parents[2] / "assets" / "plan_fixture_manifests.json"
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
 RUNNER_PATH = REPOSITORY_ROOT / "tools" / "performance" / "plan.py"
-def test_scoped_selection_120k_server_mutation_cost() -> None:
-    artifact = build_plan_fixture(information_heavy=False)
-    state = benchmark.make_plan_review_state(artifact)
+PlanFixtures = Callable[[bool], tuple[PlanArtifact, PlanProjection]]
+
+
+@pytest.fixture(scope="module")
+def plan_fixtures() -> PlanFixtures:
+    """Build each fixture variant and its projection once for this module.
+
+    Both values are immutable; each test still builds its own review state.
+    """
+
+    built: dict[bool, tuple[PlanArtifact, PlanProjection]] = {}
+
+    def get(information_heavy: bool) -> tuple[PlanArtifact, PlanProjection]:
+        if information_heavy not in built:
+            artifact = build_plan_fixture(information_heavy=information_heavy)
+            built[information_heavy] = (
+                artifact,
+                build_plan_projection(artifact.request.request_id, artifact),
+            )
+        return built[information_heavy]
+
+    return get
+
+
+def test_scoped_selection_120k_server_mutation_cost(plan_fixtures: PlanFixtures) -> None:
+    artifact, projection = plan_fixtures(False)
+    state = benchmark.make_plan_review_state(artifact, projection=projection)
     initial = state.window(expected_revision=0, offset=0, limit=256)
     assert initial["total"] == len(state.current_sequence.visible_positions) - 1
     assert initial["rows"][0]["node_id"] != state.projection.nodes[0].node_id
@@ -86,9 +113,9 @@ def test_scoped_selection_120k_server_mutation_cost() -> None:
 
 
 
-def test_highlighted_selection_120k_server_mutation_cost() -> None:
-    artifact = build_plan_fixture(information_heavy=False)
-    state = benchmark.make_plan_review_state(artifact)
+def test_highlighted_selection_120k_server_mutation_cost(plan_fixtures: PlanFixtures) -> None:
+    artifact, projection = plan_fixtures(False)
+    state = benchmark.make_plan_review_state(artifact, projection=projection)
     window = state.window(expected_revision=0, offset=0, limit=256)
     row = next(row for row in window["rows"] if row["operation_id"] is not None)
     highlighted = state.mutate_highlight(
@@ -520,16 +547,18 @@ def _synthetic_fixture_manifests() -> dict[str, object]:
 
 
 
-def _live_fixture_manifests() -> dict[str, object]:
+def _live_fixture_manifests(plan_fixtures: PlanFixtures) -> dict[str, object]:
     return {
-        "base": build_fixture_manifest(information_heavy=False),
-        "information-heavy": build_fixture_manifest(information_heavy=True),
+        "base": benchmark.fixture_manifest(*plan_fixtures(False)),
+        "information-heavy": benchmark.fixture_manifest(*plan_fixtures(True)),
     }
 
 
 @pytest.mark.parametrize("information_heavy", (False, True))
-def test_plan_fixture_recase_operations_have_genuine_prior_case(information_heavy: bool) -> None:
-    artifact = build_plan_fixture(information_heavy=information_heavy)
+def test_plan_fixture_recase_operations_have_genuine_prior_case(
+    information_heavy: bool, plan_fixtures: PlanFixtures,
+) -> None:
+    artifact, _projection = plan_fixtures(information_heavy)
     operations = artifact.plan.operations
     assert operations[3].kind is OperationKind.NOOP
     assert operations[3].target_rel_path == r"witness\0"
@@ -546,8 +575,10 @@ def test_plan_fixture_recase_operations_have_genuine_prior_case(information_heav
 
 
 
-def test_plan_review_fixture_realizes_exact_counts_depth_duplicates_and_orders() -> None:
-    manifests = _live_fixture_manifests()
+def test_plan_review_fixture_realizes_exact_counts_depth_duplicates_and_orders(
+    plan_fixtures: PlanFixtures,
+) -> None:
+    manifests = _live_fixture_manifests(plan_fixtures)
     expected = _synthetic_fixture_manifests()
     for case in ("base", "information-heavy"):
         for field in manifests[case].keys() - {"artifact_digest", "plan_fingerprint"}:
@@ -609,11 +640,12 @@ def test_plan_review_fixture_realizes_exact_counts_depth_duplicates_and_orders()
 
 
 
-def test_plan_review_fixture_expected_orders_match_actual_sibling_sort() -> None:
-    artifact = build_plan_fixture(information_heavy=False)
-    projection = build_plan_projection(artifact.request.request_id, artifact)
+def test_plan_review_fixture_expected_orders_match_actual_sibling_sort(
+    plan_fixtures: PlanFixtures,
+) -> None:
+    artifact, projection = plan_fixtures(False)
     witnesses = _synthetic_fixture_manifests()["base"]["raw_key_witnesses"]
-    assert build_fixture_manifest(information_heavy=False)["raw_key_witnesses"] == witnesses
+    assert benchmark.fixture_manifest(artifact, projection)["raw_key_witnesses"] == witnesses
     witness_ids = set(witnesses["canonical_ids"])
 
     for column in (PlanSortColumn.FILENAME, PlanSortColumn.SIZE, PlanSortColumn.MTIME):
@@ -633,11 +665,12 @@ def test_plan_review_fixture_expected_orders_match_actual_sibling_sort() -> None
 
 
 
-def test_plan_review_fixture_folder_sizes_match_independent_path_facts_and_survive_selection() -> None:
+def test_plan_review_fixture_folder_sizes_match_independent_path_facts_and_survive_selection(
+    plan_fixtures: PlanFixtures,
+) -> None:
     """Finite GUI-M2 witness: one retained 120k fixture, no rescan or timing gate."""
     started = perf_counter()
-    artifact = build_plan_fixture(information_heavy=False)
-    projection = build_plan_projection(artifact.request.request_id, artifact)
+    artifact, projection = plan_fixtures(False)
 
     def stat_for(operation):
         return operation.intended or operation.source_expected or operation.target_expected or operation.prior_target_expected
@@ -676,7 +709,7 @@ def test_plan_review_fixture_folder_sizes_match_independent_path_facts_and_survi
     assert root.size is None
     assert "overflow" in (root.notice or "")
 
-    state = benchmark.make_plan_review_state(artifact)
+    state = benchmark.make_plan_review_state(artifact, projection=projection)
     before = {
         node.node_id: node.size for node in state.projection.nodes
         if not node.row_kind.startswith("prior-") and (
@@ -737,9 +770,11 @@ def test_diagnostic_children_emit_distinct_actual_process_receipts(tmp_path: Pat
     assert receipts[0]["process_identity"] != receipts[1]["process_identity"]
 
 
-def test_current_rootless_plan_window_and_visible_folder_collapse() -> None:
-    artifact = build_plan_fixture(information_heavy=True)
-    state = benchmark.make_plan_review_state(artifact)
+def test_current_rootless_plan_window_and_visible_folder_collapse(
+    plan_fixtures: PlanFixtures,
+) -> None:
+    artifact, projection = plan_fixtures(True)
+    state = benchmark.make_plan_review_state(artifact, projection=projection)
     assert state.window(expected_revision=0, offset=0, limit=256)["total"] == 239_999
 
     state.update(
@@ -750,7 +785,7 @@ def test_current_rootless_plan_window_and_visible_folder_collapse() -> None:
     )
     assert state.window(expected_revision=1, offset=0, limit=256)["total"] == 2
 
-    state = benchmark.make_plan_review_state(artifact)
+    state = benchmark.make_plan_review_state(artifact, projection=projection)
     prior = next(
         (index, state.projection.nodes[position])
         for index, position in enumerate(state.current_sequence.visible_positions)
@@ -770,8 +805,10 @@ def test_current_rootless_plan_window_and_visible_folder_collapse() -> None:
     assert window["rows"][0]["node_id"] == prior[1].node_id
 
 
-def test_large_plan_task_snapshot_does_not_publish_an_outcome_map() -> None:
-    artifact = build_plan_fixture(information_heavy=True)
+def test_large_plan_task_snapshot_does_not_publish_an_outcome_map(
+    plan_fixtures: PlanFixtures,
+) -> None:
+    artifact, _projection = plan_fixtures(True)
     assert len(artifact.plan.operations) == 100_000
     session_id = "c2" * 16
     state = TaskPresentationState("task-" + "b1" * 16, session_id, supports_pause=True)
