@@ -867,7 +867,7 @@ class LocalWorkflowRuntime:
         self,
         checkpoint: object,
         disposition: Disposition,
-        failure: FailureDetail,
+        failure: FailureDetail | None,
     ) -> OperationResult:
         """Settle a started execution that failed before running again."""
 
@@ -898,7 +898,7 @@ class LocalWorkflowRuntime:
         self,
         checkpoint: object,
         disposition: Disposition,
-        failure: FailureDetail,
+        failure: FailureDetail | None,
     ) -> OperationResult:
         """Settle a started integrity session that failed before running again."""
 

@@ -61,7 +61,9 @@ first schema change. M2_PLAN owns checkpoint scope and gates.
   said execution did not start, though files had already been copied
   (BUG-0323); Pause all could let a waiting task start while it waited
   (BUG-0324); a resumed run that failed before running again lost the work
-  its earlier attempts finished from History, now kept (BUG-0327); Pause all
+  its earlier attempts finished from History, now kept even when its error
+  message is too long to show, and a ledger that then refuses to finish the
+  run now reads as degraded recording (BUG-0327); Pause all
   now acts at one moment when a task is resumed or added while it waits
   (BUG-0328); and a task waiting to
   start read as scanning or running, now "Waiting to start" (BUG-0326).

@@ -71,10 +71,12 @@ class WorkflowRegistration:
 
     ``settle_failed``, when present, finishes a session that has already run
     but failed before running again (custody, ``open`` or worker start), from
-    its checkpoint and the failure, so the result keeps its completed work. It
-    must return a result projecting to ``FAILED`` with the given disposition;
-    otherwise, or if it raises, the generic failure stands with the callback
-    failure appended.
+    its checkpoint and the failure, so the result keeps its completed work and
+    its recording evidence. The failure is ``None`` when its diagnostic was
+    omitted under the result bound; dispatcher adds that omission to the
+    returned result's ``omitted_detail_count``. It must return a result
+    projecting to ``FAILED`` with the given disposition; otherwise, or if it
+    raises, the generic failure stands with the callback failure appended.
 
     ``read_scheduling_keys``, when present, is called with the current
     checkpoint on the scheduler thread, outside every dispatcher lock, on
@@ -94,7 +96,8 @@ class WorkflowRegistration:
     supports_pause: bool = False
     settle_canceled: Callable[[object, Disposition], OperationResult] | None = None
     settle_failed: (
-        Callable[[object, Disposition, FailureDetail], OperationResult] | None
+        Callable[[object, Disposition, FailureDetail | None], OperationResult]
+        | None
     ) = None
     read_scheduling_keys: Callable[[object], frozenset[Hashable]] | None = None
 

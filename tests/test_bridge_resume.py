@@ -543,19 +543,34 @@ def test_br_g_10_dispatcher_pause_resume_reopens_the_same_run(
     assert row[1] == SessionState.COMPLETED.value
 
 
-@pytest.mark.parametrize("bulk", [False, True])
+@pytest.mark.parametrize(
+    ("bulk", "case"),
+    [
+        (False, "plain"),
+        (True, "plain"),
+        (False, "finish refused"),
+        (False, "long diagnostic"),
+    ],
+)
 def test_a_resume_failing_before_it_runs_keeps_its_completed_work(
     tmp_path,
     bulk: bool,
+    case: str,
 ) -> None:
-    """A copy finished before a pause in Verify stays in History and the ledger."""
+    """A copy finished before a pause in Verify stays in History and the ledger.
+
+    So it does when the ledger then refuses the settlement's finish, which the
+    result must report, and when the failure's diagnostic is too long to keep.
+    """
+
+    message = "x" * 1025 if case == "long diagnostic" else "reacquisition failed"
 
     class LockProvider(InProcessResourceLockProvider):
         failing = False
 
         def acquire(self, resources, canceled):
             if self.failing:
-                raise PermissionError("reacquisition failed")
+                raise PermissionError(message)
             return super().acquire(resources, canceled)
 
     source, target = tmp_path / "source", tmp_path / "target"
@@ -591,6 +606,14 @@ def test_a_resume_failing_before_it_runs_keeps_its_completed_work(
             assert monotonic() < deadline
             sleep(0.01)
         provider.failing = True
+        if case == "finish refused":
+
+            def refuse_finish(*args):
+                raise sqlite3.OperationalError("ledger refused the finish")
+
+            runtime._deps = replace(
+                runtime._deps, finish_existing_recording=refuse_finish
+            )
         if bulk:
             assert dispatcher.resume_all().resumed == 1
         else:
@@ -614,13 +637,32 @@ def test_a_resume_failing_before_it_runs_keeps_its_completed_work(
     ended_at, filesystem_status = _ledger_rows(
         tmp_path / "ledger.db", "runs", "ended_at, filesystem_status"
     )[0]
-    assert ended_at is not None
-    assert filesystem_status == SessionState.COMPLETED.value
     phases = _ledger_rows(tmp_path / "history.db", "history_phases")
     assert [row[2:8] for row in phases] == [
         ("execute", "completed", 1, 1, 26, 26),
         ("verify", "incomplete", 0, 1, 0, 26),
     ]
+    (history_recording,) = _ledger_rows(
+        tmp_path / "history.db", "history_runs", "recording_status"
+    )[0]
+    if case == "finish refused":
+        assert ended_at is None
+        assert result.recording is RecordingStatus.DEGRADED
+        assert [issue.reason for issue in result.recording_issues] == [
+            TaskRecordingIssueReason.FINISH_FAILED
+        ]
+        assert history_recording == RecordingStatus.DEGRADED.value
+    else:
+        assert ended_at is not None
+        assert filesystem_status == SessionState.COMPLETED.value
+        assert result.recording is RecordingStatus.OK
+        assert history_recording == RecordingStatus.OK.value
+    if case == "long diagnostic":
+        assert result.error is None
+        assert result.omitted_detail_count == 1
+    else:
+        assert result.error is not None
+        assert result.omitted_detail_count == 0
 
 
 def _ledger_rows(ledger, table: str, columns: str = "*") -> list[tuple]:

@@ -3058,6 +3058,72 @@ def test_a_resumed_session_failing_before_it_runs_again_still_reports_ran(
         assert dispatcher.shutdown(2).complete
 
 
+@pytest.mark.parametrize("settlement", ["kept", "raises"])
+def test_a_failure_whose_diagnostic_is_omitted_is_still_settled(
+    settlement: str,
+) -> None:
+    """Settlement follows the failure, not whether its diagnostic fit the bound.
+
+    The omitted diagnostic reaches the settlement as ``None`` and is counted
+    once in the settled result.
+    """
+
+    failing = Event()
+    entered = Event()
+    settled: list[tuple[object, Disposition, FailureDetail | None]] = []
+
+    class LockProvider(InProcessResourceLockProvider):
+        def acquire(self, resources, canceled):
+            if failing.is_set():
+                raise PermissionError("x" * 1025)
+            return super().acquire(resources, canceled)
+
+    def settle_failed(checkpoint, disposition, failure):
+        settled.append((checkpoint, disposition, failure))
+        if settlement == "raises":
+            raise OSError("settlement broke")
+        return OperationResult(
+            SessionState.FAILED,
+            disposition=disposition,
+            bytes_done=26,
+            bytes_total=26,
+            error=failure,
+        )
+
+    work = replace(
+        registration(
+            lambda payload: checkpoint_loop(entered),
+            supports_pause=True,
+            resources=(unique_resource("omitted-pre-run"),),
+        ),
+        settle_failed=settle_failed,
+    )
+    dispatcher = Dispatcher({"work": work}, lock_provider=LockProvider())
+    try:
+        session_id = dispatcher.submit("work", b"payload")
+        assert entered.wait(2)
+        assert dispatcher.pause(session_id).accepted
+        wait_for(dispatcher, session_id, SessionState.PAUSED)
+        failing.set()
+        assert dispatcher.resume(session_id).accepted
+        result = wait_for(dispatcher, session_id, SessionState.FAILED).result
+        assert settled == [(b"continued", Disposition.RAN, None)]
+        assert result is not None
+        assert result.disposition is Disposition.RAN
+        assert result.omitted_detail_count == 1
+        if settlement == "kept":
+            assert result.bytes_done == 26
+            assert result.error is None
+        else:
+            assert result.bytes_done == 0
+            assert result.error == FailureDetail(
+                "OSError", "settlement also failed: OSError: settlement broke"
+            )
+    finally:
+        failing.clear()
+        assert dispatcher.shutdown(2).complete
+
+
 @pytest.mark.parametrize("hold_first", [False, True])
 def test_pause_all_and_a_failed_settlement_never_both_act(hold_first: bool) -> None:
     """Either the hold wins and nothing is settled, or the settlement wins.

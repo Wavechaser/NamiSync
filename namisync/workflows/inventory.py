@@ -2252,9 +2252,12 @@ def settle_canceled_integrity(
 def settle_failed_integrity(
     request: IntegrityWorkflowRequest,
     disposition: Disposition,
-    failure: FailureDetail,
+    failure: FailureDetail | None,
 ) -> OperationResult:
-    """Settle one started integrity session that failed before running again."""
+    """Settle one started integrity session that failed before running again.
+
+    ``failure`` is ``None`` when its diagnostic was omitted under the bound.
+    """
 
     if disposition is not Disposition.RAN:
         raise ValueError("started integrity failure must retain RAN disposition")

@@ -1882,14 +1882,15 @@ class Dispatcher:
         (``None``), ``result`` stands. So it does when Pause all has already
         held the session: that attempt settles nothing. Otherwise the attempt
         is marked settling under the session's publication lock, so a later
-        Pause all leaves it alone, before the callback runs. A callback that
-        raises or answers out of contract leaves ``result`` with the callback
-        failure appended.
+        Pause all leaves it alone, before the callback runs. Eligibility is the
+        failure itself, not its diagnostic: one omitted under the result bound
+        is passed as ``None`` and its omission counted in the settled result.
+        A callback that raises or answers out of contract leaves ``result``
+        with the callback failure appended.
         """
 
         if (
             result is None
-            or result.error is None
             or record.started_at is None
             or record.checkpoint is None
             or registration.settle_failed is None
@@ -1919,18 +1920,22 @@ class Dispatcher:
                 raise ValueError(
                     "failed settlement must project to FAILED with its disposition"
                 )
+            if result.omitted_detail_count:
+                settled = replace(
+                    settled,
+                    omitted_detail_count=settled.omitted_detail_count
+                    + result.omitted_detail_count,
+                )
         except Exception as error:
             detail = retired_failure_detail(error)
+            message = f"settlement also failed: {detail.type_name}: {detail.message}"
+            type_name = detail.type_name
+            if result.error is not None:
+                type_name = result.error.type_name
+                message = f"{result.error.message}; {message}"
             try:
                 return normalize_result_diagnostics(
-                    replace(
-                        result,
-                        error=FailureDetail(
-                            result.error.type_name,
-                            f"{result.error.message}; settlement also failed: "
-                            f"{detail.type_name}: {detail.message}",
-                        ),
-                    )
+                    replace(result, error=FailureDetail(type_name, message))
                 )
             except Exception as diagnostic_error:
                 retire_exception_graph(diagnostic_error)

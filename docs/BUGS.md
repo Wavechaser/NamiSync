@@ -824,21 +824,22 @@ entries to fit a batch; use explicit record offsets/limits.
 
 - MODERATE - FIXED (2026-11-28). Resumed pre-run failure work loss. A sync
   run that copied a 26-byte file, was paused during Verify and failed custody
-  reacquisition after Resume all ended `FAILED+RAN` correctly, but History
-  recorded 0/0 bytes and no phases, the ledger run stayed unfinished and the
-  runtime kept the run's start token. The target bytes were intact. Cause: a
-  resumed session's custody, `open` or worker-start failure was settled by
-  the dispatcher with a generic failure result, and no registration hook
-  could settle it from its checkpoint, as `settle_canceled` does for
-  cancellation. Found by independent re-review of the BUG-0323 fix. Fixed by
-  an optional `settle_failed` registration callback that execution and
-  integrity supply, reusing the workflow's settlement for a resume refused at
-  preflight, so the result keeps the completed phases and bytes, the run is
-  finished and the token released. The settlement begins only once the
-  attempt is marked settling under its publication lock, and Pause all leaves
-  such a session alone. Failing-first regressions cover the dispatcher seam on
-  all three paths, both orders of a race with Pause all, and the real service
-  through History.
+  reacquisition after Resume ended `FAILED+RAN`, but History recorded 0/0
+  bytes and no phases, the ledger run stayed unfinished and the runtime kept
+  its start token; the target bytes were intact. Cause: the invariant that a
+  started session's failed settlement accounts for its whole continuation
+  belongs to the dispatcher–workflow settlement seam, and that seam had no
+  hook for a custody, `open` or worker-start failure. Fixed there by an
+  optional `settle_failed` callback that reuses the workflow's resume-preflight
+  settlement, begun only once the attempt is marked settling, so Pause all
+  leaves it alone. A second re-review found two facets still open: a ledger
+  refusing the settlement's finish read recording `ok`, because the callback
+  skipped the projection that attaches the execution set's witnesses, and a
+  1025-byte failure message skipped settlement, because eligibility keyed on
+  the bounded diagnostic. Both now follow the ordinary projection and the
+  `FAILED` result; an omitted diagnostic is passed as `None` and counted once.
+  Cancel and integrity settlements already carried their witnesses. Core's
+  collapse of an unexplained `DEGRADED` claim to `ok` is an A5 residual.
 
 <a id="bug-0328"></a>
 

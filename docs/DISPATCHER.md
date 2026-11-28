@@ -119,7 +119,11 @@ A second optional callback,
 work that already has a start time but failed before running again: custody
 reacquisition, `open` or worker start after a resume. Dispatcher passes the
 opaque checkpoint, the generic disposition (`RAN`) and the failure, and
-requires the result to project to `FAILED` with that disposition. A callback
+requires the result to project to `FAILED` with that disposition. Eligibility
+is the failure, not its diagnostic: a failure whose detail the result bound
+omitted is passed as `None`, and dispatcher adds that omission to the settled
+result's `omitted_detail_count`. The result carries the workflow's recording
+evidence, so a refused ledger finish reads degraded. A callback
 that raises or answers otherwise leaves the generic failure, with the callback
 failure appended to its message. Sessions that never started and canceled
 sessions do not reach it. The callback starts only after the attempt is

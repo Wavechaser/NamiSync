@@ -2048,7 +2048,7 @@ def settle_canceled_execution(
 def settle_failed_execution(
     continuation: ExecutionContinuation,
     disposition: Disposition,
-    failure: FailureDetail,
+    failure: FailureDetail | None,
     deps: SyncDependencies,
 ) -> OperationResult:
     """Finish a started execution that failed before it could run again.
@@ -2057,7 +2057,9 @@ def settle_failed_execution(
     finished, as when a resumed run fails its own preflight; no domain work
     and no outcome is emitted. The session did not run again, so the result is
     ``FAILED`` even when the ledger records a completed filesystem outcome
-    before an unfinished verification.
+    before an unfinished verification. The result carries the execution set's
+    recording evidence, including a refused finish. ``failure`` is ``None``
+    when its diagnostic was omitted; the phase then names no error.
     """
 
     if disposition is not Disposition.RAN:
@@ -2068,12 +2070,14 @@ def settle_failed_execution(
         continuation = _exact_verify_continuation(continuation)
     validate_execution_set(continuation.execution_set)
     if isinstance(continuation, VerifyContinuation):
-        return replace(
+        result = replace(
             _settle_verify_incomplete(continuation, deps, failure),
             status=SessionState.FAILED,
             canceled=False,
         )
-    return _finish_execute_resume_failure(continuation, deps, failure, ())
+    else:
+        result = _finish_execute_resume_failure(continuation, deps, failure, ())
+    return _result_with_execution_recording(result, continuation.execution_set)
 
 
 def _settle_canceled_execution_admitted(
@@ -3171,7 +3175,7 @@ def _settle_execute_resume_failure(
 def _finish_execute_resume_failure(
     continuation: ExecuteContinuation,
     deps: SyncDependencies,
-    error: FailureDetail,
+    error: FailureDetail | None,
     items: tuple[ItemOutcome, ...],
 ) -> OperationResult:
     """Project and record the failed end of a started execute continuation."""
@@ -3179,7 +3183,7 @@ def _finish_execute_resume_failure(
     phase = _execute_continuation_phase(
         continuation.execution_set,
         PhaseStatus.FAILED,
-        f"{error.type_name}: {error.message}",
+        None if error is None else f"{error.type_name}: {error.message}",
     )
     terminal = OperationResult(
         status=SessionState.FAILED,
@@ -3219,7 +3223,7 @@ def _finish_execute_resume_failure(
 def _settle_verify_incomplete(
     continuation: VerifyContinuation,
     deps: SyncDependencies,
-    error: FailureDetail,
+    error: FailureDetail | None,
 ) -> OperationResult:
     candidate_authority = snapshot_post_copy_selection_authority(
         continuation.candidates
@@ -3227,7 +3231,7 @@ def _settle_verify_incomplete(
     phase = _verify_phase(
         continuation,
         incomplete=True,
-        error=f"{error.type_name}: {error.message}",
+        error=None if error is None else f"{error.type_name}: {error.message}",
     )
     recording_status = _combined_recording(
         continuation.execution_set.recording,

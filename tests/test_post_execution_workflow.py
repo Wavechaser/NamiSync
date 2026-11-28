@@ -1311,6 +1311,42 @@ def test_failed_settlement_keeps_completed_work_and_finishes_the_run(
         )
 
 
+@pytest.mark.parametrize("verify_after_execute", [False, True])
+def test_failed_settlement_reports_a_refused_finish_and_an_omitted_failure(
+    verify_after_execute: bool,
+) -> None:
+    operation = _operation(4020, 4)
+    xset = _execution_set(operation)
+    xset.status[operation.op_id] = Outcome.SUCCEEDED
+    dependencies = _deps(
+        executor=lambda *args: pytest.fail("executor unexpectedly started"),
+        verifier=lambda *args: pytest.fail("verifier unexpectedly started"),
+        recordings=[],
+    )
+
+    def refuse_finish(*args):
+        raise OSError("ledger refused the finish")
+
+    dependencies.finish_existing_recording = refuse_finish
+
+    result = settle_failed_execution(
+        ExecuteContinuation(xset, verify_after_execute=verify_after_execute),
+        Disposition.RAN,
+        None,
+        dependencies,
+    )
+
+    assert result.status is SessionState.FAILED
+    assert result.error is None
+    assert result.bytes_done == operation.content_bytes
+    assert all(phase.error is None for phase in result.phases)
+    assert result.recording is RecordingStatus.DEGRADED
+    assert [issue.reason for issue in result.recording_issues] == [
+        TaskRecordingIssueReason.FINISH_FAILED
+    ]
+    assert result.recording_issues == xset.recording_issues
+
+
 def test_nested_resumed_cancellation_reuses_ingress_validation(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
